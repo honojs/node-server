@@ -9,7 +9,9 @@
   ],
   "scripts": {
     "test": "jest",
-    "build": "rimraf dist && tsc"
+    "build": "rimraf dist && tsc",
+    "prerelease": "yarn build && yarn test",
+    "release": "np"
   },
   "license": "MIT",
   "repository": {
@@ -27,6 +29,7 @@
     "@types/supertest": "^2.0.12",
     "hono": "^2.1.4",
     "jest": "^29.0.3",
+    "np": "^7.6.2",
     "rimraf": "^3.0.2",
     "supertest": "^6.2.4",
     "ts-jest": "^29.0.0",
