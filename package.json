@@ -1,6 +1,6 @@
 {
   "name": "@honojs/node-server",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "description": "HTTP Server for Hono on Node.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,6 +20,10 @@
   },
   "homepage": "https://github.com/honojs/node-server",
   "author": "Yusuke Wada <yusuke@kamawada.com> (https://github.com/yusukebe)",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
   "dependencies": {
     "undici": "^5.10.0"
   },
