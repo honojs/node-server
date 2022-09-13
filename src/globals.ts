@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import {
   ReadableStream as NodeReadableStream,
   WritableStream as NodeWritableStream,
@@ -35,6 +36,8 @@ declare global {
 
       ReadableStream: typeof ReadableStream
       WritableStream: typeof WritableStream
+
+      crypto: Crypto
     }
   }
 }
@@ -54,6 +57,8 @@ export function installGlobals() {
 
   global.ReadableStream = NodeReadableStream
   global.WritableStream = NodeWritableStream
+
+  global.crypto = crypto as Crypto
 }
 
 /**
