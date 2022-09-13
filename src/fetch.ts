@@ -1,8 +1,3 @@
-/**
- * Credits:
- *   - https://github.com/remix-run/remix/blob/e77e2eb/packages/remix-node/fetch.ts
- */
-
 import type { Readable } from 'node:stream'
 import {
   fetch as webFetch,
@@ -63,3 +58,8 @@ export const fetch: typeof webFetch = (info: NodeRequestInfo, init?: NodeRequest
 
   return webFetch(info, init as RequestInit)
 }
+
+/**
+ * Credits:
+ *   - https://github.com/remix-run/remix/blob/e77e2eb/packages/remix-node/fetch.ts
+ */

@@ -1,8 +1,3 @@
-/**
- * Credits:
- *   - https://github.com/remix-run/remix/blob/e77e2eb/packages/remix-node/globals.ts
- */
-
 import {
   ReadableStream as NodeReadableStream,
   WritableStream as NodeWritableStream,
@@ -60,3 +55,8 @@ export function installGlobals() {
   global.ReadableStream = NodeReadableStream
   global.WritableStream = NodeWritableStream
 }
+
+/**
+ * Credits:
+ *   - https://github.com/remix-run/remix/blob/e77e2eb/packages/remix-node/globals.ts
+ */
