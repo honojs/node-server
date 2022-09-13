@@ -25,7 +25,9 @@
     "access": "public"
   },
   "dependencies": {
-    "undici": "^5.10.0"
+    "@remix-run/web-fetch": "^4.2.0",
+    "@remix-run/web-file": "^3.0.2",
+    "@remix-run/web-stream": "^1.0.3"
   },
   "devDependencies": {
     "@types/jest": "^29.0.1",

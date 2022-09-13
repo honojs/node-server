@@ -1,9 +1,8 @@
-import { Server, IncomingMessage, ServerResponse } from 'node:http'
-import type { Response } from 'undici'
-import { createServer } from 'node:http'
-import { mock } from './mock'
+import { createServer, Server, IncomingMessage, ServerResponse } from 'node:http'
+import { Response } from './fetch'
+import { installGlobals } from './globals'
 
-mock()
+installGlobals()
 
 type FetchCallback = (request: any) => Promise<any>
 
