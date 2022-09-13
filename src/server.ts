@@ -32,16 +32,33 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
     const url = `http://${incoming.headers.host}${incoming.url}`
 
     const headerRecord: Record<string, string> = {}
-    for (const [k, v] of incoming.rawHeaders) {
-      headerRecord[k] = v
+    const len = incoming.rawHeaders.length
+    for (let i = 0; i < len; i++) {
+      if (i % 2 === 0) {
+        const key = incoming.rawHeaders[i]
+        headerRecord[key] = incoming.rawHeaders[i + 1]
+      }
     }
 
-    const res: Response = await fetchCallback(
-      new Request(url.toString(), {
-        method: method,
-        headers: headerRecord,
-      })
-    )
+    const init = {
+      method: method,
+      headers: headerRecord,
+    } as {
+      method: string
+      headers: Record<string, string>
+      body?: Buffer
+    }
+
+    if (!(method === ('GET' || 'HEAD'))) {
+      const buffers = []
+      for await (const chunk of incoming) {
+        buffers.push(chunk)
+      }
+      const buffer = Buffer.concat(buffers)
+      init['body'] = buffer
+    }
+
+    const res: Response = await fetchCallback(new Request(url.toString(), init))
 
     const contentType = res.headers.get('content-type') || ''
 
