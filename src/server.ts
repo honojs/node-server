@@ -1,9 +1,10 @@
-import { Server, IncomingMessage, ServerResponse } from 'node:http'
-import type { Response } from 'undici'
-import { createServer } from 'node:http'
-import { mock } from './mock'
+import { createServer, Server, IncomingMessage, ServerResponse } from 'node:http'
 
-mock()
+import { Response } from './fetch'
+import { writeReadableStreamToWritable } from './stream'
+import { installGlobals } from './globals'
+
+installGlobals()
 
 type FetchCallback = (request: any) => Promise<any>
 
@@ -73,10 +74,7 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
       } else if (contentType.startsWith('application/json')) {
         outgoing.end(await res.text())
       } else {
-        for await (const chunk of res.body) {
-          outgoing.write(chunk)
-        }
-        outgoing.end()
+        await writeReadableStreamToWritable(res.body, outgoing)
       }
     } else {
       outgoing.end()
