@@ -24,15 +24,16 @@ export type {
 
 class NodeRequest extends WebRequest {
   constructor(info: NodeRequestInfo, init?: NodeRequestInit) {
-    super(info, init as RequestInit)
+    super(info as any, init as RequestInit)
   }
 
   public get headers(): WebHeaders {
     return super.headers as WebHeaders
   }
 
+  // @ts-ignore
   public clone(): NodeRequest {
-    return super.clone() as NodeRequest
+    return new NodeRequest(this)
   }
 }
 
@@ -56,7 +57,7 @@ export const fetch: typeof webFetch = (info: NodeRequestInfo, init?: NodeRequest
     ...init,
   }
 
-  return webFetch(info, init as RequestInit)
+  return webFetch(info as any, init as RequestInit)
 }
 
 /**
