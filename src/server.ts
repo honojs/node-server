@@ -44,11 +44,7 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
     const init = {
       method: method,
       headers: headerRecord,
-    } as {
-      method: string
-      headers: Record<string, string>
-      body?: Buffer
-    }
+    } as RequestInit
 
     if (!(method === ('GET' || 'HEAD'))) {
       const buffers = []
