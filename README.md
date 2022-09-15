@@ -8,7 +8,7 @@ Hono is ultrafast web framework for Cloudflare Workers, Deno, and Bun.
 
 Hono is ultra fast, but not so fast on Node.js, because there is an overhead to adapt Hono's API to Node.js.
 
-By the way, it is 2.0 times faster than Express.
+By the way, it is 2.x times faster than Express.
 
 ## Install
 
@@ -55,7 +55,7 @@ serve({
 
 ## Related projects
 
-- Hono - <https://honojs.dev/>
+- Hono - <https://honojs.dev>
 - Hono GitHub repository - <https://github.com/honojs/hono>
 
 ## Author
