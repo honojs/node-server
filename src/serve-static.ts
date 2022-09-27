@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs'
 import type { MiddlewareHandler } from 'hono/src/hono'
-import { getFilePath } from 'hono/utils/filepath'
-import { getMimeType } from 'hono/utils/mime'
+import { getFilePath } from 'hono/src/utils/filepath'
+import { getMimeType } from 'hono/src/utils/mime'
 
 export type ServeStaticOptions = {
   root?: string
