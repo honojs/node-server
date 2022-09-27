@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'fs'
-import type { Handler } from 'hono/dist/hono'
+import type { Handler } from 'hono'
 import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
 
