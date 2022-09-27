@@ -36,7 +36,7 @@ describe('Basic', () => {
   it('Should return 302 response - POST /posts', async () => {
     const res = await request(server).post('/posts')
     expect(res.status).toBe(302)
-    expect(res.headers['location']).toMatch(/.+\/posts$/)
+    expect(res.headers['location']).toBe('/posts')
   })
 
   it('Should return 201 response - DELETE /posts/123', async () => {
