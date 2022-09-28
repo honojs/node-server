@@ -1,5 +1,6 @@
+import type { Next } from 'hono'
+import { Context } from 'hono/dist/context'
 import { existsSync, readFileSync } from 'fs'
-import type { Handler } from 'hono'
 import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
 
@@ -9,8 +10,8 @@ export type ServeStaticOptions = {
   index?: string // default is 'index.html'
 }
 
-export const serveStatic = (options: ServeStaticOptions = { root: '' }): Handler => {
-  return async (c, next): Promise<Response | undefined> => {
+export const serveStatic = (options: ServeStaticOptions = { root: '' }) => {
+  return async (c: Context, next: Next): Promise<Response | undefined> => {
     // Do nothing if Response is already set
     if (c.res && c.finalized) {
       await next()
