@@ -37,7 +37,7 @@ describe('Serve Static Middleware', () => {
     expect(res.body).toEqual({
       id: 1,
       name: 'Foo Bar',
-      isBot: true,
+      flag: true,
     })
     expect(res.headers['content-type']).toBe('application/json; charset=utf-8')
   })

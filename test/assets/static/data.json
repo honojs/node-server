@@ -1,5 +1,5 @@
 {
     "id": 1,
     "name": "Foo Bar",
-    "isBot": true
+    "flag": true
 }
