@@ -3,21 +3,6 @@ import { Hono } from 'hono'
 import request from 'supertest'
 import { serveStatic } from './../src/'
 
-// Mock
-// const store: Record<string, string> = {
-//   'assets/static/plain.abcdef.txt': 'This is plain.txt',
-//   'assets/static/hono.abcdef.html': '<h1>Hono!</h1>',
-//   'assets/static/top/index.abcdef.html': '<h1>Top</h1>',
-//   'static-no-root/plain.abcdef.txt': 'That is plain.txt',
-//   'assets/static/options/foo.abcdef.txt': 'With options',
-// }
-// const manifest = JSON.stringify({
-//   'assets/static/plain.txt': 'assets/static/plain.abcdef.txt',
-//   'assets/static/hono.html': 'assets/static/hono.abcdef.html',
-//   'assets/static/top/index.html': 'assets/static/top/index.abcdef.html',
-//   'static-no-root/plain.txt': 'static-no-root/plain.abcdef.txt',
-// })
-
 describe('Serve Static Middleware', () => {
   const app = new Hono()
 
@@ -50,9 +35,9 @@ describe('Serve Static Middleware', () => {
     const res = await request(server).get('/static/data.json')
     expect(res.status).toBe(200)
     expect(res.body).toEqual({
-      id: '1',
+      id: 1,
       name: 'Foo Bar',
-      isBot: 'true',
+      isBot: true,
     })
     expect(res.headers['content-type']).toBe('application/json; charset=utf-8')
   })
