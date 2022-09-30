@@ -1,7 +1,8 @@
-# HTTP server for Hono on Node.js
+# Hono on Node.js
 
 **This project is still experimental.**
 
+This is **HTTP Server for Hono on Node.js**.
 Hono is ultrafast web framework for Cloudflare Workers, Deno, and Bun.
 **It's not for Node.js**.
 **BUT**, there may be a case that you really want to run on Node.js. This library is an adaptor server that connects Hono and Node.js.
@@ -12,13 +13,13 @@ By the way, it is 2.x times faster than Express.
 
 ## Install
 
-You can install from npm registry:
+You can install from npm registry with `npm` command:
 
 ```
 npm install @honojs/node-server
 ```
 
-Or
+Or use `yarn`:
 
 ```
 yarn add @honojs/node-server
@@ -26,7 +27,8 @@ yarn add @honojs/node-server
 
 ## Usage
 
-The code:
+Just import `@honojs/node-server` at the top and write the code as usual.
+The same code that runs on Cloudflare Workers, Deno, and Bun will work.
 
 ```ts
 import { serve } from '@honojs/node-server' // Write above `Hono`
@@ -38,19 +40,51 @@ app.get('/', (c) => c.text('Hono meets Node.js'))
 serve(app)
 ```
 
-And, run:
+For example, run it using `ts-node`. Then an HTTP server will be launched. The default port is `3000`.
 
 ```
 ts-node ./index.ts
 ```
+
+Open `http://localhost:3000` with your browser.
 
 ## Options
 
 ```ts
 serve({
   fetch: app.fetch,
-  port: 8787,
+  port: 8787, // Port number, default is 3000
 })
+```
+
+## Middleware
+
+Most built-in middleware also works with Node.js.
+Read [the documentation](https://honojs.dev/docs/builtin-middleware/) and use the Middleware of your liking.
+
+```ts
+import { serve } from '@honojs/node-server'
+import { Hono } from 'hono'
+import { prettyJSON } from 'hono/pretty-json'
+
+const app = new Hono()
+
+app.get('*', prettyJSON())
+app.get('/', (c) => c.json({ 'Hono meets': 'Node.js' }))
+
+serve(app)
+```
+
+### Serve Static Middleware
+
+Use Serve Static Middleware that has been created for Node.js.
+
+```ts
+import { serve, serveStatic } from '@honojs/node-server'
+
+//...
+
+app.use('/static/*', serveStatic({ root: './' }))
 ```
 
 ## Related projects
