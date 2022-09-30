@@ -13,7 +13,7 @@ export type ServeStaticOptions = {
 export const serveStatic = (options: ServeStaticOptions = { root: '' }) => {
   return async (c: Context, next: Next): Promise<Response | undefined> => {
     // Do nothing if Response is already set
-    if (c.res && c.finalized) {
+    if (c.finalized) {
       await next()
     }
     const url = new URL(c.req.url)
@@ -30,7 +30,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }) => {
       if (content) {
         const mimeType = getMimeType(path)
         if (mimeType) {
-          c.res.headers.set('Content-Type', mimeType)
+          c.header('Content-Type', mimeType)
         }
         // Return Response object
         return c.body(content)
