@@ -6,7 +6,7 @@ import { installGlobals } from './globals'
 
 installGlobals()
 
-type FetchCallback = (request: any) => Promise<any>
+type FetchCallback = (request: Request) => Promise<unknown> | unknown
 
 type Options = {
   fetch: FetchCallback
@@ -55,7 +55,7 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
       init['body'] = buffer
     }
 
-    const res: Response = await fetchCallback(new Request(url.toString(), init))
+    const res = (await fetchCallback(new Request(url.toString(), init))) as Response
 
     const contentType = res.headers.get('content-type') || ''
 
