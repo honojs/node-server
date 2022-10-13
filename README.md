@@ -5,7 +5,7 @@
 This is **HTTP Server for Hono on Node.js**.
 Hono is ultrafast web framework for Cloudflare Workers, Deno, and Bun.
 **It's not for Node.js**.
-**BUT**, there may be a case that you really want to run on Node.js. This library is an adaptor server that connects Hono and Node.js.
+**BUT**, there may be a case that you really want to run on Node.js. This library is an adapter server that connects Hono and Node.js.
 
 Hono is ultra fast, but not so fast on Node.js, because there is an overhead to adapt Hono's API to Node.js.
 
