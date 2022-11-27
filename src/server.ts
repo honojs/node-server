@@ -60,7 +60,11 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
     const contentType = res.headers.get('content-type') || ''
 
     for (const [k, v] of res.headers) {
-      outgoing.setHeader(k, v)
+      if (k === 'set-cookie') {
+        outgoing.setHeader(k, res.headers.getAll(k))
+      } else {
+        outgoing.setHeader(k, v)
+      }
     }
     outgoing.statusCode = res.status
 
