@@ -46,7 +46,7 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
       headers: headerRecord,
     } as RequestInit
 
-    if (!(method === ('GET' || 'HEAD'))) {
+    if (!(method === 'GET' || method === 'HEAD')) {
       const buffers = []
       for await (const chunk of incoming) {
         buffers.push(chunk)
