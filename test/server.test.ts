@@ -201,6 +201,11 @@ describe('Error handling', () => {
     expect(res.status).toBe(500)
     expect(res.text).toBe('Custom Error!')
   })
+
+  it('Should return 500 response - PURGE method', async () => {
+    const res = await request(server).purge('/')
+    expect(res.status).toBe(500)
+  })
 })
 
 describe('Basic Auth Middleware', () => {
