@@ -55,7 +55,13 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
       init['body'] = buffer
     }
 
-    const res = (await fetchCallback(new Request(url.toString(), init))) as Response
+    let res: Response
+
+    try {
+      res = (await fetchCallback(new Request(url.toString(), init))) as Response
+    } catch {
+      res = new Response(null, { status: 500 })
+    }
 
     const contentType = res.headers.get('content-type') || ''
 
