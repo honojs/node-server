@@ -64,6 +64,7 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
     }
 
     const contentType = res.headers.get('content-type') || ''
+    const contentEncoding = res.headers.get('content-encoding')
 
     for (const [k, v] of res.headers) {
       if (k === 'set-cookie') {
@@ -75,9 +76,9 @@ const getRequestListener = (fetchCallback: FetchCallback) => {
     outgoing.statusCode = res.status
 
     if (res.body) {
-      if (contentType.startsWith('text')) {
+      if (!contentEncoding && contentType.startsWith('text')) {
         outgoing.end(await res.text())
-      } else if (contentType.startsWith('application/json')) {
+      } else if (!contentEncoding && contentType.startsWith('application/json')) {
         outgoing.end(await res.text())
       } else {
         await writeReadableStreamToWritable(res.body, outgoing)
