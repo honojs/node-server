@@ -16,9 +16,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hono/node-server.git"
+    "url": "https://github.com/honojs/node-server.git"
   },
-  "homepage": "https://github.com/hono/node-server",
+  "homepage": "https://github.com/honojs/node-server",
   "author": "Yusuke Wada <yusuke@kamawada.com> (https://github.com/yusukebe)",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
