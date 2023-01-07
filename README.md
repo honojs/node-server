@@ -1,6 +1,8 @@
 # Hono on Node.js
 
-**This project is still experimental.**
+**`@honojs/node-server` is renamed to `@hono/node-serer` !!**
+
+---
 
 This is **HTTP Server for Hono on Node.js**.
 Hono is ultrafast web framework for Cloudflare Workers, Deno, and Bun.
@@ -16,22 +18,22 @@ By the way, it is 2.x times faster than Express.
 You can install from npm registry with `npm` command:
 
 ```
-npm install @honojs/node-server
+npm install @hono/node-server
 ```
 
 Or use `yarn`:
 
 ```
-yarn add @honojs/node-server
+yarn add @hono/node-server
 ```
 
 ## Usage
 
-Just import `@honojs/node-server` at the top and write the code as usual.
+Just import `@hono/node-server` at the top and write the code as usual.
 The same code that runs on Cloudflare Workers, Deno, and Bun will work.
 
 ```ts
-import { serve } from '@honojs/node-server' // Write above `Hono`
+import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 
 const app = new Hono()
@@ -63,7 +65,7 @@ Most built-in middleware also works with Node.js.
 Read [the documentation](https://honojs.dev/docs/builtin-middleware/) and use the Middleware of your liking.
 
 ```ts
-import { serve } from '@honojs/node-server'
+import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { prettyJSON } from 'hono/pretty-json'
 
@@ -80,7 +82,7 @@ serve(app)
 Use Serve Static Middleware that has been created for Node.js.
 
 ```ts
-import { serve, serveStatic } from '@honojs/node-server'
+import { serve, serveStatic } from '@hono/node-server'
 
 //...
 
