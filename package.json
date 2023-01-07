@@ -7,6 +7,17 @@
   "files": [
     "dist"
   ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./serve-static": "./dist/serve-static.js"
+  },
+  "typesVersions": {
+    "*": {
+      "serve-static": [
+        "./dist/serve-static.d.ts"
+      ]
+    }
+  },
   "scripts": {
     "test": "jest",
     "build": "rimraf dist && tsc",
