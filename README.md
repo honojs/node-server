@@ -82,7 +82,7 @@ serve(app)
 Use Serve Static Middleware that has been created for Node.js.
 
 ```ts
-import { serve, serveStatic } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
 
 //...
 
