@@ -1,6 +1,6 @@
 {
   "name": "@hono/node-server",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "HTTP Server for Hono on Node.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
