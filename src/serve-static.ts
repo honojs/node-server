@@ -1,5 +1,5 @@
 import type { Next } from 'hono'
-import { Context } from 'hono/dist/context'
+import { Context } from 'hono'
 import { existsSync, readFileSync } from 'fs'
 import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
