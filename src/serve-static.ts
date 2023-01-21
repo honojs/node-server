@@ -69,7 +69,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Handler
 
                c.header('Content-Range', `bytes ${start}-${end}/${stat.size}`);
 
-               c.status(206);
+               c.status(range ? 206 : 200);
 
                const body = new ReadableStream({
 
