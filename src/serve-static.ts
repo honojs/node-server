@@ -19,7 +19,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Handler
           const url = new URL(c.req.url);
 
           let path = getFilePath({
-               filename: options.path ?? url.pathname,
+               filename: options.path ?? decodeURIComponent(url.pathname),
                root: options.root,
                defaultDocument: options.index ?? 'index.html',
           })
