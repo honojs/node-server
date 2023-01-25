@@ -58,7 +58,9 @@ export function installGlobals() {
   global.ReadableStream = NodeReadableStream
   global.WritableStream = NodeWritableStream
 
-  global.crypto = crypto as Crypto
+  if (typeof global.crypto === "undefined") {
+    global.crypto = crypto as Crypto
+  }
 }
 
 /**
