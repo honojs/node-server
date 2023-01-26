@@ -24,7 +24,7 @@ export const createAdaptorServer = (options: Options): Server => {
 
 export const serve = (options: Options): Server => {
   const server = createAdaptorServer(options)
-  server.listen(options.port || 3000, options.hostname || 'localhost')
+  server.listen(options.port || 3000, options.hostname || '0.0.0.0')
   return server
 }
 
