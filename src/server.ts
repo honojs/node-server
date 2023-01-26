@@ -11,6 +11,7 @@ type FetchCallback = (request: Request) => Promise<unknown> | unknown
 type Options = {
   fetch: FetchCallback
   port?: number
+  hostname?: string
   serverOptions?: Object
 }
 
@@ -23,7 +24,7 @@ export const createAdaptorServer = (options: Options): Server => {
 
 export const serve = (options: Options): Server => {
   const server = createAdaptorServer(options)
-  server.listen(options.port || 3000)
+  server.listen(options.port || 3000, options.hostname || 'localhost')
   return server
 }
 
