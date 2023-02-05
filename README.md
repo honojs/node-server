@@ -1,6 +1,6 @@
 # Hono on Node.js
 
-**`@honojs/node-server` is renamed to `@hono/node-serer` !!**
+**`@honojs/node-server` is renamed to `@hono/node-server` !!**
 
 ---
 
