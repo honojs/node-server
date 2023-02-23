@@ -1,6 +1,6 @@
 import request from 'supertest'
 import { Hono } from 'hono'
-import { handle } from '../src/next'
+import { handle } from '../src/nextjs'
 
 describe('Basic', () => {
   const app = new Hono()
