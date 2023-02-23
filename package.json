@@ -9,12 +9,16 @@
   ],
   "exports": {
     ".": "./dist/index.js",
-    "./serve-static": "./dist/serve-static.js"
+    "./serve-static": "./dist/serve-static.js",
+    "./nextjs": "./dist/nextjs.js"
   },
   "typesVersions": {
     "*": {
       "serve-static": [
         "./dist/serve-static.d.ts"
+      ],
+      "nextjs": [
+        "./dist/nextjs.d.ts"
       ]
     }
   },
