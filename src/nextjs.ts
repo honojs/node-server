@@ -1,10 +1,11 @@
-import type { NextApiHandler } from 'next/types'
-import { installGlobals } from './globals'
+import { Hono } from 'hono'
 import { getRequestListener } from './listener'
-import { NextHandlerOption } from './types'
+import { HandleInterface } from './types'
 
-installGlobals()
-
-export function handle(app: NextHandlerOption): NextApiHandler {
-  return getRequestListener(app.fetch)
+// <E extends Hono<any, any>
+export const handle: HandleInterface = <E extends Hono<any, any>>(
+  subApp: E,
+  path: string = '/'
+) => {
+  return getRequestListener(new Hono().route(path, subApp).fetch)
 }
