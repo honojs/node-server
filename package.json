@@ -9,12 +9,16 @@
   ],
   "exports": {
     ".": "./dist/index.js",
-    "./serve-static": "./dist/serve-static.js"
+    "./serve-static": "./dist/serve-static.js",
+    "./nextjs": "./dist/nextjs.js"
   },
   "typesVersions": {
     "*": {
       "serve-static": [
         "./dist/serve-static.d.ts"
+      ],
+      "nextjs": [
+        "./dist/nextjs.d.ts"
       ]
     }
   },
@@ -46,6 +50,7 @@
     "@types/supertest": "^2.0.12",
     "hono": "^2.7.1",
     "jest": "^29.0.3",
+    "next": "13.1.6",
     "np": "^7.6.2",
     "rimraf": "^3.0.2",
     "supertest": "^6.2.4",
