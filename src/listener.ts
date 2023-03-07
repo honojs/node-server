@@ -23,12 +23,15 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     } as RequestInit
 
     if (!(method === 'GET' || method === 'HEAD')) {
-      const buffers = []
-      for await (const chunk of incoming) {
-        buffers.push(chunk)
-      }
-      const buffer = Buffer.concat(buffers)
-      init['body'] = buffer
+      // lazy-consume request body
+      init.body = new ReadableStream<Uint8Array>({
+        start: async controller => {
+          for await (const chunk of incoming) {
+            controller.enqueue(chunk)
+          }
+          controller.close()
+        }
+      })
     }
 
     let res: Response
