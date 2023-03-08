@@ -89,6 +89,8 @@ import { serveStatic } from '@hono/node-server/serve-static'
 app.use('/static/*', serveStatic({ root: './' }))
 ```
 
+Note that `root` must be *relative* to the current working directory - absolute paths are not supported.
+
 ## Related projects
 
 - Hono - <https://honojs.dev>
