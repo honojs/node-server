@@ -1,4 +1,4 @@
-import type { Handler } from 'hono'
+import type { MiddlewareHandler } from 'hono'
 import { createReadStream, existsSync, lstatSync } from 'fs'
 import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
@@ -9,7 +9,7 @@ export type ServeStaticOptions = {
   index?: string // default is 'index.html'
 }
 
-export const serveStatic = (options: ServeStaticOptions = { root: '' }): Handler => {
+export const serveStatic = (options: ServeStaticOptions = { root: '' }): MiddlewareHandler => {
   return async (c, next) => {
     // Do nothing if Response is already set
     if (c.finalized) return next()
