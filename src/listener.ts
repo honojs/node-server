@@ -38,12 +38,22 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
 
     try {
       res = (await fetchCallback(new Request(url.toString(), init))) as Response
-    } catch {
+    } catch (e: unknown) {
       res = new Response(null, { status: 500 })
+      if (e instanceof Error) {
+        // timeout error emits 504 timeout
+        if (e.name === 'TimeoutError' || e.constructor.name === 'TimeoutError') {
+          res = new Response(null, { status: 504 })
+        }
+      }
     }
 
     const contentType = res.headers.get('content-type') || ''
+    // nginx buffering variant
+    const buffering = res.headers.get('x-accel-buffering') || ''
     const contentEncoding = res.headers.get('content-encoding')
+    const contentLength = res.headers.get('content-length')
+    const transferEncoding = res.headers.get('transfer-encoding')
 
     for (const [k, v] of res.headers) {
       if (k === 'set-cookie') {
@@ -55,12 +65,34 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     outgoing.statusCode = res.status
 
     if (res.body) {
-      if (!contentEncoding && contentType.startsWith('text')) {
-        outgoing.end(await res.text())
-      } else if (!contentEncoding && contentType.startsWith('application/json')) {
-        outgoing.end(await res.text())
-      } else {
-        await writeReadableStreamToWritable(res.body, outgoing)
+      try {
+        /**
+         * If content-encoding is set, we assume that the response should be not decoded.
+         * Else if transfer-encoding is set, we assume that the response should be streamed.
+         * Else if content-length is set, we assume that the response content has been taken care of.
+         * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
+         * Else if content-type is not application/json nor text/* but can be text/event-stream,
+         * we assume that the response should be streamed.
+         */
+        if (
+          contentEncoding ||
+          transferEncoding ||
+          contentLength ||
+          /^no$/i.test(buffering) ||
+          !/^(application\/json\b|text\/(?!event-stream\b))/i.test(contentType)
+        ) {
+          await writeReadableStreamToWritable(res.body, outgoing)
+        } else {
+          const text = await res.text()
+          outgoing.setHeader('Content-Length', Buffer.byteLength(text))
+          outgoing.end(text)
+        }
+      } catch (e: unknown) {
+        // try to catch any error, to avoid crash
+        console.error(e)
+        const err = e instanceof Error ? e : new Error('unknown error', { cause: e })
+        // destroy error must accept an instance of Error
+        outgoing.destroy(err)
       }
     } else {
       outgoing.end()

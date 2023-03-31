@@ -257,3 +257,89 @@ describe('Basic Auth Middleware', () => {
     expect(res.text).toBe('auth')
   })
 })
+
+describe('Stream and non-stream response', () => {
+  const app = new Hono()
+
+  app.get('/json', (c) => c.json({ foo: 'bar' }))
+  app.get('/text', (c) => c.text('Hello!'))
+  app.get('/json-stream', (c) => {
+    c.header('x-accel-buffering', 'no')
+    return c.json({ foo: 'bar' })
+  })
+  app.get('/stream', (c) => {
+    const stream = new ReadableStream({
+      async start(controller) {
+        controller.enqueue('data: Hello!\n\n')
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        controller.enqueue('data: end\n\n')
+        controller.close()
+      }
+    })
+
+    c.header('Content-Type', 'text/event-stream; charset=utf-8')
+    return c.body(stream)
+  })
+
+  app.get('/error-stream', (c) => {
+    const stream = new ReadableStream({
+      async start(controller) {
+        controller.enqueue('data: Hello!\n\n')
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        controller.enqueue('data: end\n\n')
+        controller.error(new Error('test'))
+      }
+    })
+
+    c.header('Content-Type', 'text/event-stream; charset=utf-8')
+    return c.body(stream)
+  })
+
+  const server = createAdaptorServer(app)
+
+  it('Should return JSON body', async () => {
+    const res = await request(server).get('/json')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-length']).toMatch('13')
+    expect(res.headers['content-type']).toMatch(/application\/json/)
+    expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+  })
+
+  it('Should return text body', async () => {
+    const res = await request(server).get('/text')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-length']).toMatch('6')
+    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.text).toBe('Hello!')
+  })
+
+  it('Should return JSON body - stream', async () => {
+    const res = await request(server).get('/json-stream')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-length']).toBeUndefined()
+    expect(res.headers['content-type']).toMatch(/application\/json/)
+    expect(res.headers['transfer-encoding']).toMatch(/chunked/)
+    expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+  })
+
+  it('Should return text body - stream', async () => {
+    const res = await request(server).get('/stream').parse((res, fn) => {
+      const chunks: string[] = ['data: Hello!\n\n', 'data: end\n\n']
+      let index = 0
+      res.on('data', (chunk) => {
+        const str = chunk.toString()
+        expect(str).toBe(chunks[index++])
+      })
+      res.on('end', () => fn(null, ''))
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers['content-length']).toBeUndefined()
+    expect(res.headers['content-type']).toMatch(/text\/event-stream/)
+    expect(res.headers['transfer-encoding']).toMatch(/chunked/)
+  })
+
+  it('Should return error - stream without app crashing', async () => {
+    const result = request(server).get('/error-stream')
+    await expect(result).rejects.toThrow('aborted')
+  })
+})
