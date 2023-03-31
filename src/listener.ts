@@ -52,7 +52,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     // nginx buffering variant
     const buffering = res.headers.get('x-accel-buffering') || ''
     const contentEncoding = res.headers.get('content-encoding')
-    const contentLenegth = res.headers.get('content-length')
+    const contentLength = res.headers.get('content-length')
     const transferEncoding = res.headers.get('transfer-encoding')
 
     for (const [k, v] of res.headers) {
@@ -71,13 +71,13 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
          * Else if transfer-encoding is set, we assume that the response should be streamed.
          * Else if content-length is set, we assume that the response content has been taken care of.
          * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
-         * Else if content-type is not application/json or text/* but can be text/event-stream,
+         * Else if content-type is not application/json nor text/* but can be text/event-stream,
          * we assume that the response should be streamed.
          */
         if (
           contentEncoding ||
           transferEncoding ||
-          contentLenegth ||
+          contentLength ||
           /^no$/i.test(buffering) ||
           !/^(application\/json\b|text\/(?!event-stream\b))/i.test(contentType)
         ) {
