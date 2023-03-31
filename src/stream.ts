@@ -83,7 +83,7 @@ export function nodeReadableToWebReadableStream(readable: Readable) {
       chunk = new Uint8Array(chunk)
     }
     controller.enqueue(chunk)
-    if (controller.desiredSize && controller.desiredSize <= 0) {
+    if (controller.desiredSize !== null && controller.desiredSize <= 0) {
       readable.pause()
     }
   }
