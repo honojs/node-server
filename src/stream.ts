@@ -1,30 +1,27 @@
 import type { Writable } from 'node:stream'
 
 export async function writeReadableStreamToWritable(stream: ReadableStream, writable: Writable) {
-  let reader = stream.getReader()
+  const reader = stream.getReader()
 
-  async function read() {
-    let { done, value } = await reader.read()
-
-    if (done) {
-      writable.end()
-      return
-    }
-
-    writable.write(value)
-
-    await read()
+  function onClose() {
+    reader.cancel(new Error('Response writer closed'))
   }
+
+  writable.once('close', onClose)
 
   try {
-    await read()
-  } catch (error: any) {
-    writable.destroy(error)
-    throw error
+    while (true) {
+      const { done, value } = await reader.read()
+
+      if (done) {
+        writable.end()
+        return
+      }
+
+      writable.write(value)
+    }
+  } finally {
+    writable.off('close', onClose)
+    reader.releaseLock()
   }
 }
-
-/**
- * Credits:
- *   - https://github.com/remix-run/remix/blob/e77e2eb/packages/remix-node/stream.ts
- */
