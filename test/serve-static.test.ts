@@ -8,6 +8,13 @@ describe('Serve Static Middleware', () => {
 
   app.use('/static/*', serveStatic({ root: './test/assets' }))
   app.use('/favicon.ico', serveStatic({ path: './test/assets/favicon.ico' }))
+  app.use(
+    '/dot-static/*',
+    serveStatic({
+      root: './test/assets',
+      rewriteRequestPath: (path) => path.replace(/^\/dot-static/, '/.static'),
+    })
+  )
 
   const server = createAdaptorServer(app)
 
@@ -54,5 +61,17 @@ describe('Serve Static Middleware', () => {
     expect(res.status).toBe(404)
     expect(res.headers['content-type']).toBe('text/plain;charset=UTF-8')
     expect(res.text).toBe('404 Not Found')
+  })
+
+  it('Should return 200 with rewriteRequestPath', async () => {
+    const res = await request(server).get('/dot-static/plain.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.text).toBe('This is plain.txt')
+  })
+
+  it('Should return 404 with rewriteRequestPath', async () => {
+    const res = await request(server).get('/dot-static/does-no-exists.txt')
+    expect(res.status).toBe(404)
   })
 })

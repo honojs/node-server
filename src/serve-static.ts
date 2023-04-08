@@ -11,6 +11,7 @@ export type ServeStaticOptions = {
   root?: string
   path?: string
   index?: string // default is 'index.html'
+  rewriteRequestPath?: (path: string) => string
 }
 
 export const serveStatic = (options: ServeStaticOptions = { root: '' }) => {
@@ -21,8 +22,9 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }) => {
     }
     const url = new URL(c.req.url)
 
+    const filename = options.path ?? url.pathname
     let path = getFilePath({
-      filename: options.path ?? url.pathname,
+      filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
       root: options.root,
       defaultDocument: options.index ?? 'index.html',
     })
