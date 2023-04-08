@@ -159,7 +159,7 @@ describe('Response body', () => {
 })
 
 describe('Middleware', () => {
-  const app = new Hono()
+  const app = new Hono<{ Variables: { foo: string } }>()
   app.use('*', poweredBy())
   app.use('*', async (c, next) => {
     c.set('foo', 'bar')
@@ -274,7 +274,7 @@ describe('Stream and non-stream response', () => {
         await new Promise((resolve) => setTimeout(resolve, 100))
         controller.enqueue('data: end\n\n')
         controller.close()
-      }
+      },
     })
 
     c.header('Content-Type', 'text/event-stream; charset=utf-8')
@@ -288,7 +288,7 @@ describe('Stream and non-stream response', () => {
         await new Promise((resolve) => setTimeout(resolve, 100))
         controller.enqueue('data: end\n\n')
         controller.error(new Error('test'))
-      }
+      },
     })
 
     c.header('Content-Type', 'text/event-stream; charset=utf-8')
@@ -323,15 +323,17 @@ describe('Stream and non-stream response', () => {
   })
 
   it('Should return text body - stream', async () => {
-    const res = await request(server).get('/stream').parse((res, fn) => {
-      const chunks: string[] = ['data: Hello!\n\n', 'data: end\n\n']
-      let index = 0
-      res.on('data', (chunk) => {
-        const str = chunk.toString()
-        expect(str).toBe(chunks[index++])
+    const res = await request(server)
+      .get('/stream')
+      .parse((res, fn) => {
+        const chunks: string[] = ['data: Hello!\n\n', 'data: end\n\n']
+        let index = 0
+        res.on('data', (chunk) => {
+          const str = chunk.toString()
+          expect(str).toBe(chunks[index++])
+        })
+        res.on('end', () => fn(null, ''))
       })
-      res.on('end', () => fn(null, ''))
-    })
     expect(res.status).toBe(200)
     expect(res.headers['content-length']).toBeUndefined()
     expect(res.headers['content-type']).toMatch(/text\/event-stream/)
