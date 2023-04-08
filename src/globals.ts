@@ -43,10 +43,10 @@ declare global {
 }
 
 export function installGlobals() {
-  global.atob = atob
-  global.btoa = btoa
+  if (typeof atob === 'undefined') global.atob = atob
+  if (typeof btoa === 'undefined') global.btoa = btoa
 
-  global.Blob = NodeBlob
+  if (typeof Blob === 'undefined') global.Blob = NodeBlob
   global.File = NodeFile
 
   global.Headers = NodeHeaders as typeof Headers
