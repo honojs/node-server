@@ -52,7 +52,7 @@ describe('Serve Static Middleware', () => {
   it('Should return 404 for non-existent files', async () => {
     const res = await request(server).get('/static/does-not-exist.html')
     expect(res.status).toBe(404)
-    expect(res.headers['content-type']).toBe('text/plain; charset=UTF-8')
+    expect(res.headers['content-type']).toBe('text/plain;charset=UTF-8')
     expect(res.text).toBe('404 Not Found')
   })
 })
