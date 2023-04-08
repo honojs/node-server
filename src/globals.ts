@@ -6,6 +6,7 @@ import {
 
 import { atob, btoa } from './base64'
 import {
+  // @ts-ignore
   Blob as NodeBlob,
   File as NodeFile,
   FormData as NodeFormData,
@@ -43,10 +44,10 @@ declare global {
 }
 
 export function installGlobals() {
-  global.atob = atob
-  global.btoa = btoa
+  if (typeof atob === 'undefined') global.atob = atob
+  if (typeof btoa === 'undefined') global.btoa = btoa
 
-  global.Blob = NodeBlob
+  if (typeof Blob === 'undefined') global.Blob = Blob
   global.File = NodeFile
 
   global.Headers = NodeHeaders as typeof Headers
