@@ -77,7 +77,7 @@ app.get('/', (c) => c.json({ 'Hono meets': 'Node.js' }))
 serve(app)
 ```
 
-### Serve Static Middleware
+## Serve Static Middleware
 
 Use Serve Static Middleware that has been created for Node.js.
 
@@ -89,7 +89,23 @@ import { serveStatic } from '@hono/node-server/serve-static'
 app.use('/static/*', serveStatic({ root: './' }))
 ```
 
-Note that `root` must be *relative* to the current working directory - absolute paths are not supported.
+Note that `root` must be _relative_ to the current working directory - absolute paths are not supported.
+
+### Options
+
+#### `rewriteRequestPath`
+
+If you want to serve files in `./.foojs` with the request path `/__foo/*`, you can write like the following.
+
+```ts
+app.use(
+  '/__foo/*',
+  serveStatic({
+    root: './.foojs/',
+    rewriteRequestPath: (path: string) => path.replace(/^\/__foo/, ''),
+  })
+)
+```
 
 ## Related projects
 
