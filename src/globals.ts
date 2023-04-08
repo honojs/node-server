@@ -58,8 +58,14 @@ export function installGlobals() {
   global.ReadableStream = NodeReadableStream
   global.WritableStream = NodeWritableStream
 
-  if (typeof global.crypto === "undefined") {
-    global.crypto = crypto as Crypto
+  if (typeof global.crypto === 'undefined') {
+    // If crypto.subtle is undefined, we're in a Node.js v16 environment
+    if (typeof (crypto as Crypto).subtle === 'undefined') {
+      // We can use the webcrypto polyfill
+      global.crypto = require('crypto').webcrypto as Crypto
+    } else {
+      global.crypto = crypto as Crypto
+    }
   }
 }
 
