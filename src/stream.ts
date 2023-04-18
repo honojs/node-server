@@ -1,5 +1,4 @@
-import { Writable, Readable } from 'node:stream'
-import { pipeline } from 'node:stream'
+import { Writable, Readable, pipeline, finished } from 'node:stream'
 import { promisify } from 'node:util'
 
 const pipelinePromise = promisify(pipeline)
@@ -64,4 +63,66 @@ export function webReadableStreamToNodeReadable(
   )
 
   return readable
+}
+
+export function nodeReadableToWebReadableStream(readable: Readable) {
+  if (readable.destroyed) {
+    const stream = new ReadableStream<Uint8Array>()
+    stream.cancel()
+    return stream
+  }
+
+  const highWaterMark = readable.readableHighWaterMark
+  const strategy = { highWaterMark }
+
+  let controller: ReadableStreamDefaultController<Uint8Array>
+
+  const onData = (chunk: Buffer | Uint8Array) => {
+    // Copy the Buffer to detach it from the pool.
+    if (Buffer.isBuffer(chunk)) {
+      chunk = new Uint8Array(chunk)
+    }
+    controller.enqueue(chunk)
+    if (controller.desiredSize && controller.desiredSize <= 0) {
+      readable.pause()
+    }
+  }
+
+  readable.pause()
+
+  const cleanup = finished(readable, error => {
+    if (error?.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+      const err = new Error(undefined, { cause: error })
+      Object.defineProperty(err, 'name', 'AbortError')
+      error = err
+    }
+
+    cleanup()
+
+    // This is a protection against non-standard, legacy streams
+    // that happen to emit an error event again after finished is called.
+    readable.on('error', () => {})
+    if (error) {
+      return controller.error(error)
+    }
+
+    controller.close()
+  })
+
+  readable.on('data', onData)
+
+  return new ReadableStream<Uint8Array>(
+    {
+      start(c) {
+        controller = c
+      },
+      pull() {
+        readable.resume()
+      },
+      cancel(reason) {
+        readable.destroy(reason)
+      },
+    },
+    strategy
+  )
 }

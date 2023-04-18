@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { Response } from './fetch'
-import { writeReadableStreamToWritable } from './stream'
+import { nodeReadableToWebReadableStream, writeReadableStreamToWritable } from './stream'
 import { FetchCallback } from './types'
 
 export const getRequestListener = (fetchCallback: FetchCallback) => {
@@ -20,18 +20,12 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     const init = {
       method: method,
       headers: headerRecord,
+      // duplex: 'half', should used in nodejs 18
     } as RequestInit
 
     if (!(method === 'GET' || method === 'HEAD')) {
       // lazy-consume request body
-      init.body = new ReadableStream<Uint8Array>({
-        start: async controller => {
-          for await (const chunk of incoming) {
-            controller.enqueue(chunk)
-          }
-          controller.close()
-        }
-      })
+      init.body = nodeReadableToWebReadableStream(incoming)
     }
 
     let res: Response
