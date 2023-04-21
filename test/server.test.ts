@@ -3,6 +3,8 @@ import request from 'supertest'
 import { Hono } from 'hono'
 import { poweredBy } from 'hono/powered-by'
 import { basicAuth } from 'hono/basic-auth'
+import { createServer as createServerHTTPS } from 'node:https'
+import fs from 'node:fs'
 
 describe('Basic', () => {
   const app = new Hono()
@@ -343,5 +345,26 @@ describe('Stream and non-stream response', () => {
   it('Should return error - stream without app crashing', async () => {
     const result = request(server).get('/error-stream')
     await expect(result).rejects.toThrow('aborted')
+  })
+})
+
+describe('SSL', () => {
+  const app = new Hono()
+  app.get('/', (c) => c.text('Hello! Node!'))
+
+  const server = createAdaptorServer({
+    fetch: app.fetch,
+    creteServer: createServerHTTPS,
+    serverOptions: {
+      key: fs.readFileSync('test/fixtures/keys/agent1-key.pem'),
+      cert: fs.readFileSync('test/fixtures/keys/agent1-cert.pem'),
+    },
+  })
+
+  it('Should return 200 response - GET /', async () => {
+    const res = await request(server).get('/').trustLocalhost()
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.text).toBe('Hello! Node!')
   })
 })

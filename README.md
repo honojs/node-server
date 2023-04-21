@@ -52,10 +52,30 @@ Open `http://localhost:3000` with your browser.
 
 ## Options
 
+### `port`
+
 ```ts
 serve({
   fetch: app.fetch,
   port: 8787, // Port number, default is 3000
+})
+```
+
+### `createServer`
+
+```ts
+import { createServer } from 'node:https'
+import fs from 'node:fs'
+
+//...
+
+serve({
+  fetch: app.fetch,
+  createServer: createServer,
+  serverOptions: {
+    key: fs.readFileSync('../test/fixtures/keys/agent1-key.pem'),
+    cert: fs.readFileSync('../test/fixtures/keys/agent1-cert.pem'),
+  },
 })
 ```
 
