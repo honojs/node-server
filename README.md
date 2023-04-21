@@ -73,8 +73,8 @@ serve({
   fetch: app.fetch,
   createServer: createServer,
   serverOptions: {
-    key: fs.readFileSync('../test/fixtures/keys/agent1-key.pem'),
-    cert: fs.readFileSync('../test/fixtures/keys/agent1-cert.pem'),
+    key: fs.readFileSync('test/fixtures/keys/agent1-key.pem'),
+    cert: fs.readFileSync('test/fixtures/keys/agent1-cert.pem'),
   },
 })
 ```
