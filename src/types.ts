@@ -13,7 +13,7 @@ export type Options = {
   port?: number
   hostname?: string
   serverOptions?: Object
-  creteServer?: typeof createServer
+  createServer?: typeof createServer
 }
 
 export interface HandleInterface {

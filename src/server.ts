@@ -9,7 +9,7 @@ installGlobals()
 export const createAdaptorServer = (options: Options): Server => {
   const fetchCallback = options.fetch
   const requestListener = getRequestListener(fetchCallback)
-  const createServer = options.creteServer || createServerHTTP
+  const createServer = options.createServer || createServerHTTP
   const server: Server = createServer(options.serverOptions || {}, requestListener)
   return server
 }
