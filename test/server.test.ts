@@ -354,7 +354,7 @@ describe('SSL', () => {
 
   const server = createAdaptorServer({
     fetch: app.fetch,
-    creteServer: createServerHTTPS,
+    createServer: createServerHTTPS,
     serverOptions: {
       key: fs.readFileSync('test/fixtures/keys/agent1-key.pem'),
       cert: fs.readFileSync('test/fixtures/keys/agent1-cert.pem'),
