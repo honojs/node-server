@@ -1,4 +1,4 @@
-import { createServer, Server } from 'node:http'
+import { createServer as createServerHTTP, Server } from 'node:http'
 
 import { installGlobals } from './globals'
 import { Options } from './types'
@@ -9,6 +9,7 @@ installGlobals()
 export const createAdaptorServer = (options: Options): Server => {
   const fetchCallback = options.fetch
   const requestListener = getRequestListener(fetchCallback)
+  const createServer = options.createServer || createServerHTTP
   const server: Server = createServer(options.serverOptions || {}, requestListener)
   return server
 }
