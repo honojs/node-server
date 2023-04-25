@@ -2,6 +2,9 @@ import crypto from 'node:crypto'
 import {
   ReadableStream as NodeReadableStream,
   WritableStream as NodeWritableStream,
+  TransformStream as NodeTransformStream,
+  TextDecoderStream as NodeTextDecoderStream,
+  TextEncoderStream as NodeTextEncoderStream,
 } from '@remix-run/web-stream'
 
 import { atob, btoa } from './base64'
@@ -36,6 +39,9 @@ declare global {
 
       ReadableStream: typeof ReadableStream
       WritableStream: typeof WritableStream
+      TransformStream: typeof TransformStream
+      TextDecoderStream: typeof TextDecoderStream
+      TextEncoderStream: typeof TextEncoderStream
 
       crypto: Crypto
     }
@@ -57,6 +63,9 @@ export function installGlobals() {
 
   global.ReadableStream = NodeReadableStream
   global.WritableStream = NodeWritableStream
+  global.TransformStream = NodeTransformStream
+  global.TextDecoderStream = NodeTextDecoderStream
+  global.TextEncoderStream = NodeTextEncoderStream
 
   if (typeof global.crypto === 'undefined') {
     // If crypto.subtle is undefined, we're in a Node.js v16 environment
