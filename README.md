@@ -97,6 +97,14 @@ app.get('/', (c) => c.json({ 'Hono meets': 'Node.js' }))
 serve(app)
 ```
 
+## Listening Listener
+
+```ts
+serve(app, (info) => {
+  console.log(`Listening on http://localhost:${info.port}`); // Listening on http://localhost:3000
+});
+```
+
 ## Serve Static Middleware
 
 Use Serve Static Middleware that has been created for Node.js.

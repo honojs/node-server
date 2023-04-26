@@ -15,13 +15,11 @@ export const createAdaptorServer = (options: Options): Server => {
   return server
 }
 
-export const serve = (options: Options, listeningListener?: (port: number) => void): Server => {
+export const serve = (options: Options, listeningListener?: (info: AddressInfo) => void): Server => {
   const server = createAdaptorServer(options);
-  const initialPort = options?.port ?? 3000;
-  server.listen(initialPort, options.hostname || '0.0.0.0', () => {
+  server.listen(options?.port ?? 3000, options.hostname ?? '0.0.0.0', () => {
     const serverInfo = server.address() as AddressInfo;
-    const port = serverInfo?.port ?? initialPort;
-    listeningListener && listeningListener(port);
+    listeningListener && listeningListener(serverInfo);
   })
   return server
 }
