@@ -1,9 +1,5 @@
 # Hono on Node.js
 
-**`@honojs/node-server` is renamed to `@hono/node-server` !!**
-
----
-
 This is **HTTP Server for Hono on Node.js**.
 Hono is ultrafast web framework for Cloudflare Workers, Deno, and Bun.
 **It's not for Node.js**.
@@ -40,8 +36,8 @@ const app = new Hono()
 app.get('/', (c) => c.text('Hono meets Node.js'))
 
 serve(app, (info) => {
-  console.log(`Listening on http://localhost:${info.port}`); // Listening on http://localhost:3000
-});
+  console.log(`Listening on http://localhost:${info.port}`) // Listening on http://localhost:3000
+})
 ```
 
 For example, run it using `ts-node`. Then an HTTP server will be launched. The default port is `3000`.
