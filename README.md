@@ -39,7 +39,9 @@ import { Hono } from 'hono'
 const app = new Hono()
 app.get('/', (c) => c.text('Hono meets Node.js'))
 
-serve(app)
+serve(app, (info) => {
+  console.log(`Listening on http://localhost:${info.port}`); // Listening on http://localhost:3000
+});
 ```
 
 For example, run it using `ts-node`. Then an HTTP server will be launched. The default port is `3000`.
