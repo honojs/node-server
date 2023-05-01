@@ -1,6 +1,7 @@
 import { createAdaptorServer } from '../src/server'
 import request from 'supertest'
 import { Hono } from 'hono'
+import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
 import { basicAuth } from 'hono/basic-auth'
 import { createServer as createServerHTTPS } from 'node:https'
@@ -366,5 +367,27 @@ describe('SSL', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/text\/plain/)
     expect(res.text).toBe('Hello! Node!')
+  })
+})
+
+describe('Hono compression', () => {
+  const app = new Hono()
+  app.use('*', compress())
+
+  app.get('/one', async (c) => {
+    let body = 'one'
+
+    for (let index = 0; index < 1000 * 1000; index++) {
+      body += ' one'
+    }
+    return c.text(body)
+  })
+
+  it('Should return 200 response - GET /one', async () => {
+    const server = createAdaptorServer(app)
+    const res = await request(server).get('/one')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-encoding']).toMatch(/gzip/)
   })
 })

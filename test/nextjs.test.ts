@@ -1,9 +1,6 @@
 import request from 'supertest'
 import { Hono } from 'hono'
 import { handle } from '../src/nextjs'
-import { installGlobals } from '../src/globals'
-
-installGlobals()
 
 describe('Basic', () => {
   const app = new Hono()

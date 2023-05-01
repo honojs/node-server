@@ -1,31 +1,31 @@
 import { IncomingMessage, ServerResponse } from 'node:http'
-import { Response } from './fetch'
-import { nodeReadableToWebReadableStream, writeReadableStreamToWritable } from './stream'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { FetchCallback } from './types'
+import './globals'
 
 export const getRequestListener = (fetchCallback: FetchCallback) => {
   return async (incoming: IncomingMessage, outgoing: ServerResponse) => {
     const method = incoming.method || 'GET'
     const url = `http://${incoming.headers.host}${incoming.url}`
 
-    const headerRecord: Record<string, string> = {}
+    const headerRecord: [string, string][] = []
     const len = incoming.rawHeaders.length
-    for (let i = 0; i < len; i++) {
-      if (i % 2 === 0) {
-        const key = incoming.rawHeaders[i]
-        headerRecord[key] = incoming.rawHeaders[i + 1]
-      }
+    for (let i = 0; i < len; i += 2) {
+      headerRecord.push([incoming.rawHeaders[i], incoming.rawHeaders[i + 1]])
     }
 
     const init = {
       method: method,
       headers: headerRecord,
-      // duplex: 'half', should used in nodejs 18
     } as RequestInit
 
     if (!(method === 'GET' || method === 'HEAD')) {
       // lazy-consume request body
-      init.body = nodeReadableToWebReadableStream(incoming)
+      init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+      // node 18 fetch needs half duplex mode when request body is stream
+      ;(init as any).duplex = 'half'
     }
 
     let res: Response
@@ -51,8 +51,11 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
 
     for (const [k, v] of res.headers) {
       if (k === 'set-cookie') {
-        outgoing.setHeader(k, res.headers.getAll(k))
+        // node native Headers.prototype has getSetCookie method
+        outgoing.setHeader(k, (res.headers as any).getSetCookie(k))
       } else {
+        // fetch response body will be decoded automatically, so we don't need to set content-encoding
+        // there for there is no need to polyfill fetch with no compress init option
         outgoing.setHeader(k, v)
       }
     }
@@ -75,7 +78,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
           /^no$/i.test(buffering) ||
           !/^(application\/json\b|text\/(?!event-stream\b))/i.test(contentType)
         ) {
-          await writeReadableStreamToWritable(res.body, outgoing)
+          await pipeline(Readable.fromWeb(res.body as NodeReadableStream), outgoing)
         } else {
           const text = await res.text()
           outgoing.setHeader('Content-Length', Buffer.byteLength(text))

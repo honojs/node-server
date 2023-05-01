@@ -1,11 +1,7 @@
 import { createServer as createServerHTTP, Server } from 'node:http'
-
-import { installGlobals } from './globals'
 import { Options } from './types'
 import { getRequestListener } from './listener'
 import type { AddressInfo } from 'node:net'
-
-installGlobals()
 
 export const createAdaptorServer = (options: Options): Server => {
   const fetchCallback = options.fetch
