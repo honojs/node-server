@@ -54,8 +54,6 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
         // node native Headers.prototype has getSetCookie method
         outgoing.setHeader(k, (res.headers as any).getSetCookie(k))
       } else {
-        // fetch response body will be decoded automatically, so we don't need to set content-encoding
-        // there for there is no need to polyfill fetch with no compress init option
         outgoing.setHeader(k, v)
       }
     }
