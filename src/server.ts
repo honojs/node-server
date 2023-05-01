@@ -3,6 +3,7 @@ import { createServer as createServerHTTP, Server } from 'node:http'
 import { installGlobals } from './globals'
 import { Options } from './types'
 import { getRequestListener } from './listener'
+import type { AddressInfo } from 'node:net'
 
 installGlobals()
 
@@ -14,8 +15,11 @@ export const createAdaptorServer = (options: Options): Server => {
   return server
 }
 
-export const serve = (options: Options): Server => {
-  const server = createAdaptorServer(options)
-  server.listen(options.port || 3000, options.hostname || '0.0.0.0')
+export const serve = (options: Options, listeningListener?: (info: AddressInfo) => void): Server => {
+  const server = createAdaptorServer(options);
+  server.listen(options?.port ?? 3000, options.hostname ?? '0.0.0.0', () => {
+    const serverInfo = server.address() as AddressInfo;
+    listeningListener && listeningListener(serverInfo);
+  })
   return server
 }
