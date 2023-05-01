@@ -2,7 +2,9 @@ import crypto from 'node:crypto'
 const webFetch = global.fetch
 
 /** jest dose not use crypto in the global, but this is OK for node 18 */
-global.crypto = crypto as Crypto
+if (typeof global.crypto === 'undefined') {
+  global.crypto = crypto as Crypto
+}
 
 global.fetch = (info, init?) => {
   init = {
