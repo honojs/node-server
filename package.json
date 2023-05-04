@@ -39,11 +39,10 @@
     "registry": "https://registry.npmjs.org",
     "access": "public"
   },
-  "dependencies": {
-    "@remix-run/web-fetch": "^4.3.2",
-    "@remix-run/web-file": "^3.0.2",
-    "@remix-run/web-stream": "^1.0.3"
+  "engines": {
+    "node": ">=18.0.0"
   },
+  "dependencies": {},
   "devDependencies": {
     "@types/jest": "^29.0.1",
     "@types/node": "^18.7.16",
