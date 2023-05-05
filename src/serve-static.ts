@@ -22,7 +22,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }) => {
     }
     const url = new URL(c.req.url)
 
-    const filename = options.path ?? url.pathname
+    const filename = options.path ?? decodeURI(url.pathname)
     let path = getFilePath({
       filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
       root: options.root,
