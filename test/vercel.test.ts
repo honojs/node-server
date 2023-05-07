@@ -1,6 +1,6 @@
 import request from 'supertest'
 import { Hono } from 'hono'
-import { handle } from '../src/nextjs'
+import { handle } from '../src/vercel'
 
 describe('Basic', () => {
   const app = new Hono().basePath('/api')
