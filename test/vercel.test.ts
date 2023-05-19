@@ -1,12 +1,9 @@
 import request from 'supertest'
 import { Hono } from 'hono'
-import { handle } from '../src/nextjs'
-import { installGlobals } from '../src/globals'
-
-installGlobals()
+import { handle } from '../src/vercel'
 
 describe('Basic', () => {
-  const app = new Hono()
+  const app = new Hono().basePath('/api')
   app.get('/', (c) => c.text('Hello! Node!'))
 
   app.get('/posts', (c) => {
@@ -19,7 +16,7 @@ describe('Basic', () => {
     return c.text(`DELETE ${c.req.param('id')}`)
   })
 
-  const server = handle(app, '/api')
+  const server = handle(app)
 
   it('Should return 200 response - GET /api', async () => {
     const res = await request(server).get('/api')
@@ -49,36 +46,38 @@ describe('Basic', () => {
 
 describe('Routing', () => {
   describe('Nested Route', () => {
-    const book = new Hono()
-    book.get('/', (c) => c.text('get /book'))
+    const book = new Hono().basePath('/api')
+    book.get('/', (c) => c.text('get /api'))
     book.get('/:id', (c) => {
-      return c.text('get /book/' + c.req.param('id'))
+      return c.text('get /api/' + c.req.param('id'))
     })
-    book.post('/', (c) => c.text('post /book'))
+    book.post('/', (c) => c.text('post /api'))
 
     const app = new Hono()
-    app.route('/book', book)
+    app.route('/v2', book)
 
-    const server = handle(app, '/api')
+    app.showRoutes()
 
-    it('Should return responses from `/api/book/*`', async () => {
-      let res = await request(server).get('/api/book')
+    const server = handle(app)
+
+    it('Should return responses from `/v2/api/*`', async () => {
+      let res = await request(server).get('/v2/api')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`get /book`)
+      expect(res.text).toBe(`get /api`)
 
-      res = await request(server).get('/api/book/123')
+      res = await request(server).get('/v2/api/123')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`get /book/123`)
+      expect(res.text).toBe(`get /api/123`)
 
-      res = await request(server).post('/api/book')
+      res = await request(server).post('/v2/api')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`post /book`)
+      expect(res.text).toBe(`post /api`)
     })
   })
 })
 
 describe('Request body', () => {
-  const app = new Hono()
+  const app = new Hono().basePath('/api')
   app.post('/json', async (c) => {
     const data = await c.req.json()
     return c.json(data)
@@ -87,7 +86,7 @@ describe('Request body', () => {
     const data = await c.req.parseBody()
     return c.json(data)
   })
-  const server = handle(app, '/api')
+  const server = handle(app)
 
   it('Should handle JSON body', async () => {
     const res = await request(server)
@@ -107,14 +106,14 @@ describe('Request body', () => {
 })
 
 describe('Response body', () => {
-  const app = new Hono()
+  const app = new Hono().basePath('/api')
   app.get('/json', (c) => {
     return c.json({ foo: 'bar' })
   })
   app.get('/html', (c) => {
     return c.html('<h1>Hello!</h1>')
   })
-  const server = handle(app, '/api')
+  const server = handle(app)
 
   it('Should return JSON body', async () => {
     const res = await request(server).get('/api/json')
