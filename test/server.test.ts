@@ -1,4 +1,5 @@
 import { createAdaptorServer } from '../src/server'
+import { parseSetCookie } from '../dist/parse-set-cookie'
 import request from 'supertest'
 import { Hono } from 'hono'
 import { compress } from 'hono/compress'
@@ -389,5 +390,42 @@ describe('Hono compression', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/text\/plain/)
     expect(res.headers['content-encoding']).toMatch(/gzip/)
+  })
+})
+
+describe('Hono set cookie parser polyfilled', () => {
+  const app = new Hono()
+  const server = createAdaptorServer(app)
+
+  app.get('/set-cookie', (c) => {
+    c.cookie('id', 'a3fWa', { expires: new Date('Wed, 21 Oct 2015 07:28:00 GMT') })
+    c.cookie('qwerty', '219ffwef9w0f', { domain: 'somecompany.co.uk' })
+    c.cookie('__Host-id', '1', { secure: true, path: '/', domain: 'example.com' })
+    c.cookie('__Host-example', '34d8g', { secure: true, path: '/', domain: 'example.com', sameSite: 'None' })
+    c.cookie('a', 'b')
+    c.cookie('c-1', 'd')
+    return c.json({ foo: 'bar' })
+  })
+
+  const parsed = [
+    "id=a3fWa; Expires=Wed, 21 Oct 2015 07:28:00 GMT",
+    "qwerty=219ffwef9w0f; Domain=somecompany.co.uk",
+    "__Host-id=1; Domain=example.com; Path=/; Secure",
+    "__Host-example=34d8g; Domain=example.com; Path=/; Secure; SameSite=None",
+    "a=b",
+    "c-1=d",
+  ]
+
+  it('current request with set-cookie', async () => {
+    const res = await request(server).get('/set-cookie')
+    expect(res.status).toBe(200)
+    const cookies = res.get('Set-Cookie')
+    expect(cookies).toEqual(parsed)
+  })
+
+  it('mock nodejs 18 with set-cookie', async () => {
+    const res = await app.request('/set-cookie')
+    const cookies = parseSetCookie(res.headers.get('set-cookie') || '')
+    expect(cookies).toEqual(parsed)
   })
 })

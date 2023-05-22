@@ -51,8 +51,21 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
 
     for (const [k, v] of res.headers) {
       if (k === 'set-cookie') {
-        // node native Headers.prototype has getSetCookie method
-        outgoing.setHeader(k, (res.headers as any).getSetCookie(k))
+        let cookies: string[]
+        /**
+         * In node 18 latest release, `Headers.prototype`
+         * has `getSetCookie` method natively
+         */
+        if (typeof (res.headers as any).getSetCookie === 'function') {
+          cookies = (res.headers as any).getSetCookie()
+        } else {
+          /**
+           * And this is just a polyfill method for older nodejs like `18.0.0`.
+           * Compatible with esmodule/commonjs for nodejs
+           */
+          cookies = require('./parse-set-cookie.js').parseSetCookie(v)
+        }
+        outgoing.setHeader(k, cookies)
       } else {
         outgoing.setHeader(k, v)
       }
