@@ -1,13 +1,14 @@
-# Hono on Node.js
+# Node.js Adapter for Hono
 
-This is **HTTP Server for Hono on Node.js**.
-Hono is ultrafast web framework for Cloudflare Workers, Deno, and Bun.
-**It's not for Node.js**.
-**BUT**, there may be a case that you really want to run on Node.js. This library is an adapter server that connects Hono and Node.js.
+This adapter allows you to run your Hono application on Node.js. Initially, Hono wasn't designed for Node.js, but with this adapter, it can now be used with Node.js. It utilizes web standard APIs implemented in Node.js version 18 or higher.
 
-Hono is ultra fast, but not so fast on Node.js, because there is an overhead to adapt Hono's API to Node.js.
+While Hono is ultra-fast, it may not be as fast on Node.js due to the overhead involved in adapting Hono's API to Node.js.
 
-By the way, it is 2.x times faster than Express.
+However, it's worth noting that it is still faster than Express.
+
+## Requirement
+
+- Node.js version 18 or higher.
 
 ## Install
 
