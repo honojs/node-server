@@ -3,7 +3,6 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { FetchCallback } from './types'
-import { parseSetCookie } from './parse-set-cookie'
 import './globals'
 
 export const getRequestListener = (fetchCallback: FetchCallback) => {
@@ -52,20 +51,8 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
 
     for (const [k, v] of res.headers) {
       if (k === 'set-cookie') {
-        let cookies: string[]
-        /**
-         * In node 18 latest release, `Headers.prototype`
-         * has `getSetCookie` method natively
-         */
-        if (typeof (res.headers as any).getSetCookie === 'function') {
-          cookies = (res.headers as any).getSetCookie()
-        } else {
-          /**
-           * In older nodejs like `18.0.0`, parse the cookie header manually
-           */
-          cookies = parseSetCookie(v)
-        }
-        outgoing.setHeader(k, cookies)
+        // getSetCookie has been polyfilled globally for earlier node versions
+        outgoing.setHeader(k, (res.headers as any).getSetCookie())
       } else {
         outgoing.setHeader(k, v)
       }
