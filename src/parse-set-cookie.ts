@@ -5,16 +5,16 @@
  * @see https://github.com/nfriedly/set-cookie-parser/blob/876f9ed639ce676342788d1f984013ee6db62284/lib/set-cookie.js#LL150C1-L221C2
  * And can pass all the tests from `set-cookie-parser`
  */
-const parSetCookieRegExp = /([^ ;,"()[?={}@:\\\/<>\]]+=(?:[^=;]*(?=;|$|,\s*[^=,;]+=)(?:;|\s*expires=(?:.*?)GMT|\s*[^= ,;"()[?={}@:\\\/<>\]]+(?:=[^,;]*)?)*|$))(?:,\s*|$)/i
+const SET_COOKIE_REGEXP = /([^ ;,"()[?={}@:\\\/<>\]]+=(?:[^=;]*(?=;|$|,\s*[^=,;]+=)(?:;|\s*expires=(?:.*?)GMT|\s*[^ ;,"()[?={}@:\\\/<>\]]+(?:=[^,;]*)?)*|$))(?:,\s*|$)/i
 
 export function parseSetCookie(setCookie: string) {
   const cookies = [] as string[]
-  let m = setCookie.match(parSetCookieRegExp)
+  let m = setCookie.match(SET_COOKIE_REGEXP)
   while (m) {
     cookies.push(m[1])
     const index = m.index || 0
     setCookie = setCookie.substring(index + m[0].length)
-    m = setCookie.match(parSetCookieRegExp)
+    m = setCookie.match(SET_COOKIE_REGEXP)
   }
   return cookies
 }
