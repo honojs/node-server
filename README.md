@@ -8,7 +8,13 @@ However, it's worth noting that it is still faster than Express.
 
 ## Requirement
 
-- Node.js version 18 or higher.
+It works on Node.js versions greater than 18.x. The specific required Node.js versions are as follows:
+
+- 18.x => 18.14.1+
+- 19.x => 19.7.0+
+- 20.x => 20.0.0+
+
+Essentially, you can simply use the latest version of each major release.
 
 ## Install
 
