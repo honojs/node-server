@@ -4,9 +4,13 @@ import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
 
 export type ServeStaticOptions = {
+  /**
+   * Root path, relative to current working directory. (absolute paths are not supported)
+   */
   root?: string
   path?: string
   index?: string // default is 'index.html'
+  rewriteRequestPath?: (path: string) => string
 }
 
 export const serveStatic = (options: ServeStaticOptions = { root: '' }): MiddlewareHandler => {

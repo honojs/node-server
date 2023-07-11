@@ -8,6 +8,13 @@ describe('Serve Static Middleware', () => {
 
   app.use('/static/*', serveStatic({ root: './test/assets' }))
   app.use('/favicon.ico', serveStatic({ path: './test/assets/favicon.ico' }))
+  app.use(
+    '/dot-static/*',
+    serveStatic({
+      root: './test/assets',
+      rewriteRequestPath: (path) => path.replace(/^\/dot-static/, '/.static'),
+    })
+  )
 
   const server = createAdaptorServer(app)
 
@@ -52,7 +59,7 @@ describe('Serve Static Middleware', () => {
   it('Should return 404 for non-existent files', async () => {
     const res = await request(server).get('/static/does-not-exist.html')
     expect(res.status).toBe(404)
-    expect(res.headers['content-type']).toBe('text/plain; charset=UTF-8')
+    expect(res.headers['content-type']).toBe('text/plain;charset=UTF-8')
     expect(res.text).toBe('404 Not Found')
   })
 
@@ -74,4 +81,3 @@ describe('Serve Static Middleware', () => {
     expect(res.text).toBe('ain.txt')
   })
 })
-
