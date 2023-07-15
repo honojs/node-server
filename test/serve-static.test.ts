@@ -63,6 +63,18 @@ describe('Serve Static Middleware', () => {
     expect(res.text).toBe('404 Not Found')
   })
 
+  it('Should return 200 with rewriteRequestPath', async () => {
+    const res = await request(server).get('/dot-static/plain.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.text).toBe('This is plain.txt')
+  })
+
+  it('Should return 404 with rewriteRequestPath', async () => {
+    const res = await request(server).get('/dot-static/does-no-exists.txt')
+    expect(res.status).toBe(404)
+  })
+
   it('Should return 200 response to HEAD request', async () => {
     const res = await request(server).head('/static/plain.txt')
     expect(res.status).toBe(200)

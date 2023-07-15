@@ -39,8 +39,9 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
 
     const url = new URL(c.req.url)
 
+    const filename = options.path ?? decodeURIComponent(url.pathname)
     let path = getFilePath({
-      filename: options.path ?? decodeURIComponent(url.pathname),
+      filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
       root: options.root,
       defaultDocument: options.index ?? 'index.html',
     })
