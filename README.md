@@ -134,7 +134,7 @@ app.use(
 
 ## Related projects
 
-- Hono - <https://honojs.dev>
+- Hono - <https://hono.dev>
 - Hono GitHub repository - <https://github.com/honojs/hono>
 
 ## Author
