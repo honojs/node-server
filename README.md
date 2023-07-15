@@ -87,7 +87,7 @@ serve({
 ## Middleware
 
 Most built-in middleware also works with Node.js.
-Read [the documentation](https://honojs.dev/docs/builtin-middleware/) and use the Middleware of your liking.
+Read [the documentation](https://hono.dev/middleware/builtin/basic-auth) and use the Middleware of your liking.
 
 ```ts
 import { serve } from '@hono/node-server'
