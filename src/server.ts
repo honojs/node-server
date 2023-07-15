@@ -1,7 +1,7 @@
-import { createServer as createServerHTTP, Server } from 'node:http'
-import { Options } from './types'
-import { getRequestListener } from './listener'
+import { createServer as createServerHTTP, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import type { Options } from './types'
+import { getRequestListener } from './listener'
 
 export const createAdaptorServer = (options: Options): Server => {
   const fetchCallback = options.fetch
