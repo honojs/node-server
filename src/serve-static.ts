@@ -1,8 +1,8 @@
-import type { Next } from 'hono'
-import { Context } from 'hono'
-import { existsSync, readFileSync } from 'fs'
+import type { MiddlewareHandler } from 'hono'
+import { ReadStream, createReadStream, existsSync, lstatSync } from 'fs'
 import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
+import { Readable } from 'stream'
 
 export type ServeStaticOptions = {
   /**
@@ -14,36 +14,69 @@ export type ServeStaticOptions = {
   rewriteRequestPath?: (path: string) => string
 }
 
-export const serveStatic = (options: ServeStaticOptions = { root: '' }) => {
-  return async (c: Context, next: Next): Promise<Response | undefined> => {
+export const serveStatic = (options: ServeStaticOptions = { root: '' }): MiddlewareHandler => {
+  return async (c, next) => {
     // Do nothing if Response is already set
-    if (c.finalized) {
-      await next()
-    }
+    if (c.finalized) return next()
+
     const url = new URL(c.req.url)
 
-    const filename = options.path ?? decodeURI(url.pathname)
+    const filename = options.path ?? decodeURIComponent(url.pathname)
     let path = getFilePath({
       filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
       root: options.root,
       defaultDocument: options.index ?? 'index.html',
     })
+
     path = `./${path}`
 
-    if (existsSync(path)) {
-      const content = readFileSync(path)
-      if (content) {
-        const mimeType = getMimeType(path)
-        if (mimeType) {
-          c.header('Content-Type', mimeType)
-        }
-        // Return Response object
-        return c.body(content)
-      }
+    if (!existsSync(path)) {
+      return next()
     }
 
-    console.warn(`Static file: ${path} is not found`)
-    await next()
-    return
+    const mimeType = getMimeType(path)
+    if (mimeType) {
+      c.header('Content-Type', mimeType)
+    }
+
+    const stat = lstatSync(path)
+    const size = stat.size
+
+    if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
+      c.header('Content-Length', size.toString())
+      c.status(200)
+      return c.body(null)
+    }
+
+    const range = c.req.header('range') || ''
+
+    if (!range) {
+      c.header('Content-Length', size.toString())
+      // Ignore the type mismatch. `c.body` can accept ReadableStream.
+      // @ts-ignore
+      return c.body(ReadStream.toWeb(createReadStream(path)), 200)
+    }
+
+    c.header('Accept-Ranges', 'bytes')
+    c.header('Date', stat.birthtime.toUTCString())
+
+    let start = 0
+    let end = stat.size - 1
+
+    const parts = range.replace(/bytes=/, '').split('-')
+    start = parseInt(parts[0], 10)
+    end = parts[1] ? parseInt(parts[1], 10) : end
+    if (size < end - start + 1) {
+      end = size - 1
+    }
+
+    const chunksize = end - start + 1
+    const stream = createReadStream(path, { start, end })
+
+    c.header('Content-Length', chunksize.toString())
+    c.header('Content-Range', `bytes ${start}-${end}/${stat.size}`)
+
+    // @ts-ignore
+    return c.body(Readable.toWeb(stream), 206)
   }
 }

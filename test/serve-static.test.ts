@@ -74,4 +74,40 @@ describe('Serve Static Middleware', () => {
     const res = await request(server).get('/dot-static/does-no-exists.txt')
     expect(res.status).toBe(404)
   })
+
+  it('Should return 200 response to HEAD request', async () => {
+    const res = await request(server).head('/static/plain.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.headers['content-length']).toBe('17')
+    expect(res.text).toBe(undefined)
+  })
+
+  it('Should return correct headers and data with range headers', async () => {
+    let res = await request(server).get('/static/plain.txt').set('range', '0-9')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.headers['content-length']).toBe('10')
+    expect(res.headers['content-range']).toBe('bytes 0-9/17')
+    expect(res.text.length).toBe(10)
+    expect(res.text).toBe('This is pl')
+
+    res = await request(server).get('/static/plain.txt').set('range', '10-16')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.headers['content-length']).toBe('7')
+    expect(res.headers['content-range']).toBe('bytes 10-16/17')
+    expect(res.text.length).toBe(7)
+    expect(res.text).toBe('ain.txt')
+  })
+
+  it('Should return correct headers and data if client range exceeds the data size', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', '0-20')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.headers['content-length']).toBe('17')
+    expect(res.headers['content-range']).toBe('bytes 0-16/17')
+    expect(res.text.length).toBe(17)
+    expect(res.text).toBe('This is plain.txt')
+  })
 })
