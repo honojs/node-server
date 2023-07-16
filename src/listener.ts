@@ -1,8 +1,8 @@
-import { IncomingMessage, ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
-import { FetchCallback } from './types'
+import type { FetchCallback } from './types'
 import './globals'
 
 export const getRequestListener = (fetchCallback: FetchCallback) => {
