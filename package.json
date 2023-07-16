@@ -10,10 +10,19 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
     },
-    "./serve-static": "./dist/serve-static.js",
-    "./vercel": "./dist/vercel.js"
+    "./serve-static": {
+      "types": "./dist/serve-static.d.ts",
+      "require": "./dist/serve-static.js",
+      "import": "./dist/serve-static.mjs"
+    },
+    "./vercel": {
+      "types": "./dist/vercel.d.ts",
+      "require": "./dist/vercel.js",
+      "import": "./dist/vercel.mjs"
+    }
   },
   "typesVersions": {
     "*": {
@@ -30,7 +39,7 @@
   },
   "scripts": {
     "test": "jest",
-    "build": "rimraf dist && tsc",
+    "build": "rimraf dist && tsx ./build.ts",
     "postbuild": "publint",
     "prerelease": "yarn build && yarn test",
     "release": "np"
@@ -51,9 +60,11 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@types/glob": "^8.1.0",
     "@types/jest": "^29.5.3",
     "@types/node": "^18.7.16",
     "@types/supertest": "^2.0.12",
+    "esbuild": "^0.18.13",
     "hono": "^3.3.0",
     "jest": "^29.6.1",
     "np": "^7.7.0",
@@ -61,6 +72,7 @@
     "rimraf": "^3.0.2",
     "supertest": "^6.2.4",
     "ts-jest": "^29.1.1",
+    "tsx": "^3.12.7",
     "typescript": "^4.8.3"
   }
 }
