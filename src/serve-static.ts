@@ -2,7 +2,6 @@ import type { MiddlewareHandler } from 'hono'
 import { ReadStream, createReadStream, existsSync, lstatSync } from 'fs'
 import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
-import { Readable } from 'stream'
 
 export type ServeStaticOptions = {
   /**
@@ -12,6 +11,24 @@ export type ServeStaticOptions = {
   path?: string
   index?: string // default is 'index.html'
   rewriteRequestPath?: (path: string) => string
+}
+
+const createStreamBody = (stream: ReadStream) => {
+  const body = new ReadableStream({
+    start(controller) {
+      stream.on('data', (chunk) => {
+        controller.enqueue(chunk)
+      })
+      stream.on('end', () => {
+        controller.close()
+      })
+    },
+
+    cancel() {
+      stream.destroy()
+    },
+  })
+  return body
 }
 
 export const serveStatic = (options: ServeStaticOptions = { root: '' }): MiddlewareHandler => {
@@ -52,9 +69,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
 
     if (!range) {
       c.header('Content-Length', size.toString())
-      // Ignore the type mismatch. `c.body` can accept ReadableStream.
-      // @ts-ignore
-      return c.body(ReadStream.toWeb(createReadStream(path)), 200)
+      return c.body(createStreamBody(createReadStream(path)), 200)
     }
 
     c.header('Accept-Ranges', 'bytes')
@@ -76,7 +91,6 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     c.header('Content-Length', chunksize.toString())
     c.header('Content-Range', `bytes ${start}-${end}/${stat.size}`)
 
-    // @ts-ignore
-    return c.body(Readable.toWeb(stream), 206)
+    return c.body(createStreamBody(stream), 206)
   }
 }
