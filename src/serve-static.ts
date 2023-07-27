@@ -45,6 +45,8 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
       defaultDocument: options.index ?? 'index.html',
     })
 
+    if (!path) return next()
+
     path = `./${path}`
 
     if (!existsSync(path)) {
