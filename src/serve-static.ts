@@ -6,7 +6,7 @@ import { getMimeType } from 'hono/utils/mime'
 
 export type ServeStaticOptions = {
   /**
-   * Root path, relative to current working directory. (absolute paths are not supported)
+   * Root path, relative to current working directory or absolte path.
    */
   root?: string
   path?: string
