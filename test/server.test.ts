@@ -4,7 +4,8 @@ import { Hono } from 'hono'
 import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
 import { basicAuth } from 'hono/basic-auth'
-import { createServer as createServerHTTPS } from 'node:https'
+import { createServer as createHTTPSServer } from 'node:https'
+import { createServer as createHttp2Server } from 'node:http2'
 import fs from 'node:fs'
 
 describe('Basic', () => {
@@ -355,7 +356,7 @@ describe('SSL', () => {
 
   const server = createAdaptorServer({
     fetch: app.fetch,
-    createServer: createServerHTTPS,
+    createServer: createHTTPSServer,
     serverOptions: {
       key: fs.readFileSync('test/fixtures/keys/agent1-key.pem'),
       cert: fs.readFileSync('test/fixtures/keys/agent1-cert.pem'),
@@ -364,6 +365,24 @@ describe('SSL', () => {
 
   it('Should return 200 response - GET /', async () => {
     const res = await request(server).get('/').trustLocalhost()
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.text).toBe('Hello! Node!')
+  })
+})
+
+describe('HTTP2', () => {
+  const app = new Hono()
+  app.get('/', (c) => c.text('Hello! Node!'))
+
+  const server = createAdaptorServer({
+    fetch: app.fetch,
+    createServer: createHttp2Server,
+  })
+
+  it('Should return 200 response - GET /', async () => {
+    // @ts-expect-error: @types/supertest is not updated yet
+    const res = await request(server, { http2: true }).get('/').trustLocalhost()
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/text\/plain/)
     expect(res.text).toBe('Hello! Node!')

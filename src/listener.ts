@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
@@ -6,7 +7,10 @@ import type { FetchCallback } from './types'
 import './globals'
 
 export const getRequestListener = (fetchCallback: FetchCallback) => {
-  return async (incoming: IncomingMessage, outgoing: ServerResponse) => {
+  return async (
+    incoming: IncomingMessage | Http2ServerRequest,
+    outgoing: ServerResponse | Http2ServerResponse
+  ) => {
     const method = incoming.method || 'GET'
     const url = `http://${incoming.headers.host}${incoming.url}`
 
