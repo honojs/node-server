@@ -89,9 +89,6 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
       } catch (e: unknown) {
         // try to catch any error, to avoid crash
         console.error(e)
-        const err = e instanceof Error ? e : new Error('unknown error', { cause: e })
-        // destroy error must accept an instance of Error
-        outgoing.destroy(err)
       }
     } else {
       outgoing.end()
