@@ -87,11 +87,15 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
           outgoing.end(text)
         }
       } catch (e: unknown) {
-        // try to catch any error, to avoid crash
-        console.error(e)
-        const err = e instanceof Error ? e : new Error('unknown error', { cause: e })
-        // destroy error must accept an instance of Error
-        outgoing.destroy(err)
+        const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
+          code: string
+        }
+        if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+          console.info('The user aborted a request.')
+        } else {
+          console.error(e)
+          outgoing.destroy(err)
+        }
       }
     } else {
       outgoing.end()
