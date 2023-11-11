@@ -75,6 +75,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
           resHeaderRecord['transfer-encoding'] ||
           resHeaderRecord['content-encoding'] ||
           resHeaderRecord['content-length'] ||
+          // nginx buffering variant
           regBuffer.test(resHeaderRecord['x-accel-buffering']) ||
           !regContentType.test(resHeaderRecord['content-type'])
         ) {
