@@ -1,10 +1,9 @@
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { Readable } from 'node:stream'
-import { pipeline } from 'node:stream/promises'
-import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import type { FetchCallback } from './types'
 import './globals'
+import { writeFromReadableStream } from './util'
 
 const regBuffer = /^no$/i
 const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
@@ -38,7 +37,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     let res: Response
 
     try {
-      res = (await fetchCallback(new Request(url.toString(), init))) as Response
+      res = (await fetchCallback(new Request(url, init))) as Response
     } catch (e: unknown) {
       res = new Response(null, { status: 500 })
       if (e instanceof Error) {
@@ -49,17 +48,18 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
       }
     }
 
-    const resHeaderRecord: Record<string, string> = {}
+    const resHeaderRecord: OutgoingHttpHeaders = {}
+    const cookies = []
     for (const [k, v] of res.headers) {
-      resHeaderRecord[k] = v
       if (k === 'set-cookie') {
-        // node native Headers.prototype has getSetCookie method
-        outgoing.setHeader(k, (res.headers as any).getSetCookie(k))
+        cookies.push(v)
       } else {
-        outgoing.setHeader(k, v)
+        resHeaderRecord[k] = v
       }
     }
-    outgoing.statusCode = res.status
+    if (cookies.length > 0) {
+      resHeaderRecord['set-cookie'] = cookies
+    }
 
     if (res.body) {
       try {
@@ -76,14 +76,17 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
           resHeaderRecord['content-encoding'] ||
           resHeaderRecord['content-length'] ||
           // nginx buffering variant
-          regBuffer.test(resHeaderRecord['x-accel-buffering']) ||
-          !regContentType.test(resHeaderRecord['content-type'])
+          (resHeaderRecord['x-accel-buffering'] &&
+            regBuffer.test(resHeaderRecord['x-accel-buffering'] as string)) ||
+          !regContentType.test(resHeaderRecord['content-type'] as string)
         ) {
-          await pipeline(Readable.fromWeb(res.body as NodeReadableStream), outgoing)
+          outgoing.writeHead(res.status, resHeaderRecord)
+          await writeFromReadableStream(res.body, outgoing)
         } else {
-          const text = await res.text()
-          outgoing.setHeader('Content-Length', Buffer.byteLength(text))
-          outgoing.end(text)
+          const buffer = await res.arrayBuffer()
+          resHeaderRecord['content-length'] = buffer.byteLength
+          outgoing.writeHead(res.status, resHeaderRecord)
+          outgoing.end(new Uint8Array(buffer))
         }
       } catch (e: unknown) {
         const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
@@ -97,6 +100,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
         }
       }
     } else {
+      outgoing.writeHead(res.status, resHeaderRecord)
       outgoing.end()
     }
   }
