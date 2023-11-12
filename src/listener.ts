@@ -6,6 +6,9 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import type { FetchCallback } from './types'
 import './globals'
 
+const regBuffer = /^no$/i
+const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
+
 export const getRequestListener = (fetchCallback: FetchCallback) => {
   return async (
     incoming: IncomingMessage | Http2ServerRequest,
@@ -46,14 +49,9 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
       }
     }
 
-    const contentType = res.headers.get('content-type') || ''
-    // nginx buffering variant
-    const buffering = res.headers.get('x-accel-buffering') || ''
-    const contentEncoding = res.headers.get('content-encoding')
-    const contentLength = res.headers.get('content-length')
-    const transferEncoding = res.headers.get('transfer-encoding')
-
+    const resHeaderRecord: Record<string, string> = {}
     for (const [k, v] of res.headers) {
+      resHeaderRecord[k] = v
       if (k === 'set-cookie') {
         // node native Headers.prototype has getSetCookie method
         outgoing.setHeader(k, (res.headers as any).getSetCookie(k))
@@ -74,11 +72,12 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
          * we assume that the response should be streamed.
          */
         if (
-          contentEncoding ||
-          transferEncoding ||
-          contentLength ||
-          /^no$/i.test(buffering) ||
-          !/^(application\/json\b|text\/(?!event-stream\b))/i.test(contentType)
+          resHeaderRecord['transfer-encoding'] ||
+          resHeaderRecord['content-encoding'] ||
+          resHeaderRecord['content-length'] ||
+          // nginx buffering variant
+          regBuffer.test(resHeaderRecord['x-accel-buffering']) ||
+          !regContentType.test(resHeaderRecord['content-type'])
         ) {
           await pipeline(Readable.fromWeb(res.body as NodeReadableStream), outgoing)
         } else {
