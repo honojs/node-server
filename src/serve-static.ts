@@ -77,11 +77,10 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     c.header('Accept-Ranges', 'bytes')
     c.header('Date', stat.birthtime.toUTCString())
 
-    let start = 0
     let end = stat.size - 1
 
     const parts = range.replace(/bytes=/, '').split('-', 2)
-    start = parseInt(parts[0], 10)
+    const start = parts[0] ? parseInt(parts[0], 10) : 0
     end = parts[1] ? parseInt(parts[1], 10) : end
     if (size < end - start + 1) {
       end = size - 1
