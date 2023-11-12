@@ -13,15 +13,11 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
   writable.on('close', cancel)
   writable.on('error', cancel)
   reader.read().then(flow, cancel)
-  return reader.closed
-    .catch((err) => {
-      writable.destroy(err)
-    })
-    .finally(() => {
-      writable.off('close', cancel)
-      writable.off('error', cancel)
-      writable.off('drain', onDrain)
-    })
+  return reader.closed.finally(() => {
+    writable.off('close', cancel)
+    writable.off('error', cancel)
+    writable.off('drain', onDrain)
+  })
   function cancel(error?: any) {
     reader.cancel(error).catch(() => {})
     if (error) writable.destroy(error)
