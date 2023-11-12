@@ -35,14 +35,12 @@ export async function writeFromReadableStream(
   function onDrain() {
     reader.read().then(flow)
   }
-  async function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): Promise<void> {
+  function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void | Promise<void> {
     if (done) {
       if (!writable.writableEnded) {
         writable.end()
       }
-      return
-    }
-    if (writable.write(value) !== false) {
+    } else if (writable.write(value)) {
       return reader.read().then(flow, errorFlow)
     }
   }
