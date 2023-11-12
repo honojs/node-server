@@ -1,6 +1,6 @@
 import type { Writable } from 'node:stream'
 
-export async function writeFromReadableStream(
+export function writeFromReadableStream(
   stream: ReadableStream<Uint8Array>,
   writable: Writable
 ) {
