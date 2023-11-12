@@ -26,9 +26,6 @@ export async function writeFromReadableStream(
       writable.off('drain', onDrain)
     })
   function cancel(error?: Error) {
-    writable.off('close', cancel)
-    writable.off('error', cancel)
-    writable.off('drain', onDrain)
     reader.cancel(error).catch(() => {})
     if (error) writable.destroy(error)
   }
