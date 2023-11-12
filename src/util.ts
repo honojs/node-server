@@ -1,9 +1,6 @@
 import type { Writable } from 'node:stream'
 
-export function writeFromReadableStream(
-  stream: ReadableStream<Uint8Array>,
-  writable: Writable
-) {
+export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writable: Writable) {
   if (stream.locked) {
     throw new TypeError('ReadableStream is locked.')
   }
@@ -25,7 +22,7 @@ export function writeFromReadableStream(
       writable.off('error', cancel)
       writable.off('drain', onDrain)
     })
-  function cancel(error?: Error) {
+  function cancel(error?: any) {
     reader.cancel(error).catch(() => {})
     if (error) writable.destroy(error)
   }
@@ -37,8 +34,14 @@ export function writeFromReadableStream(
       if (!writable.writableEnded) {
         writable.end()
       }
-    } else if (writable.write(value)) {
-      return reader.read().then(flow, cancel)
+      return
+    }
+    try {
+      if (writable.write(value)) {
+        return reader.read().then(flow, cancel)
+      }
+    } catch (e: any) {
+      cancel(e)
     }
   }
 }
