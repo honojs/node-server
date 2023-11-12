@@ -15,7 +15,7 @@ export async function writeFromReadableStream(
   writable.on('drain', onDrain)
   writable.on('close', cancel)
   writable.on('error', cancel)
-  reader.read().then(flow, errorFlow)
+  reader.read().then(flow, cancel)
   return reader.closed
     .catch((err) => {
       writable.destroy(err)
@@ -30,7 +30,7 @@ export async function writeFromReadableStream(
     if (error) writable.destroy(error)
   }
   function onDrain() {
-    reader.read().then(flow, errorFlow)
+    reader.read().then(flow, cancel)
   }
   function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void | Promise<void> {
     if (done) {
@@ -38,10 +38,7 @@ export async function writeFromReadableStream(
         writable.end()
       }
     } else if (writable.write(value)) {
-      return reader.read().then(flow, errorFlow)
+      return reader.read().then(flow, cancel)
     }
-  }
-  function errorFlow(err: any) {
-    cancel(err)
   }
 }
