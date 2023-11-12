@@ -30,17 +30,13 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
     reader.read().then(flow, cancel)
   }
   function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void | Promise<void> {
-    if (done) {
-      if (!writable.writableEnded) {
-        writable.end()
-      }
-      return
-    }
     try {
-      if (writable.write(value)) {
+      if (done) {
+        writable.end()
+      } else if (writable.write(value)) {
         return reader.read().then(flow, cancel)
       }
-    } catch (e: any) {
+    } catch (e) {
       cancel(e)
     }
   }
