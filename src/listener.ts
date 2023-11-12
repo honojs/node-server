@@ -3,7 +3,7 @@ import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { Readable } from 'node:stream'
 import type { FetchCallback } from './types'
 import './globals'
-import { writeFromReadableStream } from './util'
+import { writeFromReadableStream } from './utils'
 
 const regBuffer = /^no$/i
 const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
