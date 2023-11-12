@@ -80,7 +80,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     let start = 0
     let end = stat.size - 1
 
-    const parts = range.replace(/bytes=/, '').split('-')
+    const parts = range.replace(/bytes=/, '').split('-', 2)
     start = parseInt(parts[0], 10)
     end = parts[1] ? parseInt(parts[1], 10) : end
     if (size < end - start + 1) {
