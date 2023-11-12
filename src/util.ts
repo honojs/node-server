@@ -33,7 +33,7 @@ export async function writeFromReadableStream(
     if (error) writable.destroy(error)
   }
   function onDrain() {
-    reader.read().then(flow)
+    reader.read().then(flow, errorFlow)
   }
   function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void | Promise<void> {
     if (done) {
