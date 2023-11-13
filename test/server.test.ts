@@ -15,6 +15,9 @@ describe('Basic', () => {
   app.get('/posts', (c) => {
     return c.text(`Page ${c.req.query('page')}`)
   })
+  app.get('/user-agent', (c) => {
+    return c.text(c.req.header('user-agent') as string)
+  })
   app.post('/posts', (c) => {
     return c.redirect('/posts')
   })
@@ -35,6 +38,13 @@ describe('Basic', () => {
     const res = await request(server).get('/posts?page=2')
     expect(res.status).toBe(200)
     expect(res.text).toBe('Page 2')
+  })
+
+  it('Should return 200 response - GET /user-agent', async () => {
+    const res = await request(server).get('/user-agent').set('user-agent', 'Hono')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.text).toBe('Hono')
   })
 
   it('Should return 302 response - POST /posts', async () => {
