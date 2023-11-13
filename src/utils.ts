@@ -3,12 +3,11 @@ import type { Writable } from 'node:stream'
 export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writable: Writable) {
   if (stream.locked) {
     throw new TypeError('ReadableStream is locked.')
-  }
-  const reader = stream.getReader()
-  if (writable.destroyed) {
-    reader.cancel()
+  } else if (writable.destroyed) {
+    stream.cancel();
     return
   }
+  const reader = stream.getReader()
   writable.on('drain', onDrain)
   writable.on('close', cancel)
   writable.on('error', cancel)
