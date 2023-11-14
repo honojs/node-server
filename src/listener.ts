@@ -11,8 +11,8 @@ const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
 const globalResponse = global.Response
 const responsePrototype: Record<string, any> = {
   getResponseCache() {
-    this.__cache = undefined
-    return (this.responseCache ||= new globalResponse(this.body, this.init))
+    delete this.__cache
+    return (this.responseCache ||= new globalResponse(this.__body, this.__init))
   },
   get body() {
     return this.getResponseCache().body
@@ -67,19 +67,18 @@ const responsePrototype: Record<string, any> = {
   },
 }
 
-function newResponse(body: BodyInit | null, init?: ResponseInit): Response {
-  const res = {
-    body,
-    init,
+function newResponse(this: Response, body: BodyInit | null, init?: ResponseInit) {
+  Object.assign(this, {
     status: init?.status || 200,
-    __cache:
-      typeof body === 'string'
-        ? [body, (init?.headers || {}) as Record<string, string>]
-        : undefined,
-  } as unknown as Response
-  Object.setPrototypeOf(res, responsePrototype)
-  return res
+    __body: body,
+    __init: init,
+    __cache: [body, (init?.headers || {}) as Record<string, string>],
+  })
+  if (typeof body !== 'string') {
+    delete (this as any).__cache
+  }
 }
+newResponse.prototype = responsePrototype
 Object.defineProperty(global, 'Response', {
   value: newResponse,
 })
