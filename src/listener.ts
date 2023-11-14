@@ -169,8 +169,83 @@ const requestPrototype: Record<string, any> = {
   },
 }
 
+const handleError = (e: unknown): Response =>
+  new Response(null, {
+    status:
+      e instanceof Error && (e.name === 'TimeoutError' || e.constructor.name === 'TimeoutError')
+        ? 504 // timeout error emits 504 timeout
+        : 500,
+  })
+
+const responseViaResponseObject = async (
+  res: Response | Promise<Response>,
+  outgoing: ServerResponse | Http2ServerResponse
+) => {
+  try {
+    res = await res
+  } catch (e: unknown) {
+    res = handleError(e)
+  }
+
+  const resHeaderRecord: OutgoingHttpHeaders = {}
+  const cookies = []
+  for (const [k, v] of res.headers) {
+    if (k === 'set-cookie') {
+      cookies.push(v)
+    } else {
+      resHeaderRecord[k] = v
+    }
+  }
+  if (cookies.length > 0) {
+    resHeaderRecord['set-cookie'] = cookies
+  }
+
+  if (res.body) {
+    try {
+      /**
+       * If content-encoding is set, we assume that the response should be not decoded.
+       * Else if transfer-encoding is set, we assume that the response should be streamed.
+       * Else if content-length is set, we assume that the response content has been taken care of.
+       * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
+       * Else if content-type is not application/json nor text/* but can be text/event-stream,
+       * we assume that the response should be streamed.
+       */
+      if (
+        resHeaderRecord['transfer-encoding'] ||
+        resHeaderRecord['content-encoding'] ||
+        resHeaderRecord['content-length'] ||
+        // nginx buffering variant
+        (resHeaderRecord['x-accel-buffering'] &&
+          regBuffer.test(resHeaderRecord['x-accel-buffering'] as string)) ||
+        !regContentType.test(resHeaderRecord['content-type'] as string)
+      ) {
+        outgoing.writeHead(res.status, resHeaderRecord)
+        await writeFromReadableStream(res.body, outgoing)
+      } else {
+        const buffer = await res.arrayBuffer()
+        resHeaderRecord['content-length'] = buffer.byteLength
+        outgoing.writeHead(res.status, resHeaderRecord)
+        outgoing.end(new Uint8Array(buffer))
+      }
+    } catch (e: unknown) {
+      const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
+        code: string
+      }
+      if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+        console.info('The user aborted a request.')
+      } else {
+        console.error(e)
+        outgoing.destroy(err)
+      }
+    }
+  } else {
+    outgoing.writeHead(res.status, resHeaderRecord)
+    outgoing.end()
+  }
+}
+
 export const getRequestListener = (fetchCallback: FetchCallback) => {
-  return async (
+  return (
     incoming: IncomingMessage | Http2ServerRequest,
     outgoing: ServerResponse | Http2ServerResponse
   ) => {
@@ -182,79 +257,19 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     } as unknown as Request
     Object.setPrototypeOf(req, requestPrototype)
     try {
-      res = (await fetchCallback(req)) as Response
+      res = fetchCallback(req) as Response | Promise<Response>
+      if ("__cache" in res) {
+        // response via cache
+        const [body, header] = (res as any).__cache
+        header['content-length'] ||= '' + Buffer.byteLength(body)
+        outgoing.writeHead((res as Response).status, header)
+        outgoing.end(body)
+        return
+      }
     } catch (e: unknown) {
-      res = new Response(null, { status: 500 })
-      if (e instanceof Error) {
-        // timeout error emits 504 timeout
-        if (e.name === 'TimeoutError' || e.constructor.name === 'TimeoutError') {
-          res = new Response(null, { status: 504 })
-        }
-      }
+      res = handleError(e)
     }
 
-    if ((res as any).__cache) {
-      const [body, header] = (res as any).__cache
-      header['content-length'] ||= '' + Buffer.byteLength(body)
-      outgoing.writeHead(res.status, header)
-      outgoing.end(body)
-      return
-    }
-
-    const resHeaderRecord: OutgoingHttpHeaders = {}
-    const cookies = []
-    for (const [k, v] of res.headers) {
-      if (k === 'set-cookie') {
-        cookies.push(v)
-      } else {
-        resHeaderRecord[k] = v
-      }
-    }
-    if (cookies.length > 0) {
-      resHeaderRecord['set-cookie'] = cookies
-    }
-
-    if (res.body) {
-      try {
-        /**
-         * If content-encoding is set, we assume that the response should be not decoded.
-         * Else if transfer-encoding is set, we assume that the response should be streamed.
-         * Else if content-length is set, we assume that the response content has been taken care of.
-         * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
-         * Else if content-type is not application/json nor text/* but can be text/event-stream,
-         * we assume that the response should be streamed.
-         */
-        if (
-          resHeaderRecord['transfer-encoding'] ||
-          resHeaderRecord['content-encoding'] ||
-          resHeaderRecord['content-length'] ||
-          // nginx buffering variant
-          (resHeaderRecord['x-accel-buffering'] &&
-            regBuffer.test(resHeaderRecord['x-accel-buffering'] as string)) ||
-          !regContentType.test(resHeaderRecord['content-type'] as string)
-        ) {
-          outgoing.writeHead(res.status, resHeaderRecord)
-          await writeFromReadableStream(res.body, outgoing)
-        } else {
-          const buffer = await res.arrayBuffer()
-          resHeaderRecord['content-length'] = buffer.byteLength
-          outgoing.writeHead(res.status, resHeaderRecord)
-          outgoing.end(new Uint8Array(buffer))
-        }
-      } catch (e: unknown) {
-        const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
-          code: string
-        }
-        if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
-          console.info('The user aborted a request.')
-        } else {
-          console.error(e)
-          outgoing.destroy(err)
-        }
-      }
-    } else {
-      outgoing.writeHead(res.status, resHeaderRecord)
-      outgoing.end()
-    }
+    return responseViaResponseObject(res, outgoing)
   }
 }
