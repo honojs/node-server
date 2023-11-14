@@ -8,22 +8,80 @@ import { writeFromReadableStream } from './utils'
 const regBuffer = /^no$/i
 const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
 
-class CustomResponse extends global.Response {
-  public __cache: [string, Record<string, string>] | undefined
-  constructor(body: BodyInit | null, init?: ResponseInit) {
-    super(body, init)
-    if (typeof body === 'string' && !(init?.headers instanceof Headers)) {
-      this.__cache = [body, (init?.headers || {}) as Record<string, string>]
-    }
-  }
-  get headers() {
-    // discard cache if headers are retrieved as they may change
+const globalResponse = global.Response
+const responsePrototype: Record<string, any> = {
+  getResponseCache() {
     this.__cache = undefined
-    return super.headers
-  }
+    return (this.responseCache ||= new globalResponse(this.body, this.init))
+  },
+  get body() {
+    return this.getResponseCache().body
+  },
+  get bodyUsed() {
+    return this.getResponseCache().bodyUsed
+  },
+  get headers() {
+    return this.getResponseCache().headers
+  },
+  get ok() {
+    return this.getResponseCache().ok
+  },
+  get redirected() {
+    return this.getResponseCache().redirected
+  },
+  get statusText() {
+    return this.getResponseCache().statusText
+  },
+  get trailers() {
+    return this.getResponseCache().trailers
+  },
+  get type() {
+    return this.getResponseCache().type
+  },
+  get url() {
+    return this.getResponseCache().url
+  },
+  arrayBuffer() {
+    return this.getResponseCache().arrayBuffer()
+  },
+  blob() {
+    return this.getResponseCache().blob()
+  },
+  clone() {
+    return this.getResponseCache().clone()
+  },
+  error() {
+    return this.getResponseCache().error()
+  },
+  formData() {
+    return this.getResponseCache().formData()
+  },
+  json() {
+    return this.getResponseCache().json()
+  },
+  redirect() {
+    return this.getResponseCache().redirect()
+  },
+  text() {
+    return this.getResponseCache().text()
+  },
+}
+
+function newResponse(body: BodyInit | null, init?: ResponseInit): Response {
+  const res = {
+    body,
+    init,
+    status: init?.status || 200,
+    __cache:
+      typeof body === 'string'
+        ? [body, (init?.headers || {}) as Record<string, string>]
+        : undefined,
+  } as unknown as Response
+  Object.setPrototypeOf(res, responsePrototype)
+  return res
 }
 Object.defineProperty(global, 'Response', {
-  value: CustomResponse,
+  value: newResponse,
 })
 
 function newRequestFromIncoming(
@@ -53,62 +111,62 @@ function newRequestFromIncoming(
 }
 
 const requestPrototype: Record<string, any> = {
-  request() {
+  getRequestCache() {
     return (this.requestCache ||= newRequestFromIncoming(this.method, this.url, this.incoming))
   },
   get body() {
-    return this.request().body
+    return this.getRequestCache().body
   },
   get bodyUsed() {
-    return this.request().bodyUsed
+    return this.getRequestCache().bodyUsed
   },
   get cache() {
-    return this.request().cache
+    return this.getRequestCache().cache
   },
   get credentials() {
-    return this.request().credentials
+    return this.getRequestCache().credentials
   },
   get destination() {
-    return this.request().destination
+    return this.getRequestCache().destination
   },
   get headers() {
-    return this.request().headers
+    return this.getRequestCache().headers
   },
   get integrity() {
-    return this.request().integrity
+    return this.getRequestCache().integrity
   },
   get mode() {
-    return this.request().mode
+    return this.getRequestCache().mode
   },
   get redirect() {
-    return this.request().redirect
+    return this.getRequestCache().redirect
   },
   get referrer() {
-    return this.request().referrer
+    return this.getRequestCache().referrer
   },
   get referrerPolicy() {
-    return this.request().referrerPolicy
+    return this.getRequestCache().referrerPolicy
   },
   get signal() {
-    return this.request().signal
+    return this.getRequestCache().signal
   },
   arrayBuffer() {
-    return this.request().arrayBuffer()
+    return this.getRequestCache().arrayBuffer()
   },
   blob() {
-    return this.request().blob()
+    return this.getRequestCache().blob()
   },
   clone() {
-    return this.request().clone()
+    return this.getRequestCache().clone()
   },
   formData() {
-    return this.request().formData()
+    return this.getRequestCache().formData()
   },
   json() {
-    return this.request().json()
+    return this.getRequestCache().json()
   },
   text() {
-    return this.request().text()
+    return this.getRequestCache().text()
   },
 }
 
@@ -117,7 +175,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     incoming: IncomingMessage | Http2ServerRequest,
     outgoing: ServerResponse | Http2ServerResponse
   ) => {
-    let res: CustomResponse
+    let res
     const req = {
       method: incoming.method || 'GET',
       url: `http://${incoming.headers.host}${incoming.url}`,
@@ -125,19 +183,19 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     } as unknown as Request
     Object.setPrototypeOf(req, requestPrototype)
     try {
-      res = (await fetchCallback(req)) as CustomResponse
+      res = (await fetchCallback(req)) as Response
     } catch (e: unknown) {
-      res = new CustomResponse(null, { status: 500 })
+      res = new Response(null, { status: 500 })
       if (e instanceof Error) {
         // timeout error emits 504 timeout
         if (e.name === 'TimeoutError' || e.constructor.name === 'TimeoutError') {
-          res = new CustomResponse(null, { status: 504 })
+          res = new Response(null, { status: 504 })
         }
       }
     }
 
-    if (res.__cache) {
-      const [body, header] = res.__cache
+    if ((res as any).__cache) {
+      const [body, header] = (res as any).__cache
       header['content-length'] ||= '' + Buffer.byteLength(body)
       outgoing.writeHead(res.status, header)
       outgoing.end(body)
