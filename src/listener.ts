@@ -14,58 +14,31 @@ const responsePrototype: Record<string, any> = {
     delete this.__cache
     return (this.responseCache ||= new globalResponse(this.__body, this.__init))
   },
-  get body() {
-    return this.getResponseCache().body
-  },
-  get bodyUsed() {
-    return this.getResponseCache().bodyUsed
-  },
-  get headers() {
-    return this.getResponseCache().headers
-  },
-  get ok() {
-    return this.getResponseCache().ok
-  },
-  get redirected() {
-    return this.getResponseCache().redirected
-  },
-  get statusText() {
-    return this.getResponseCache().statusText
-  },
-  get trailers() {
-    return this.getResponseCache().trailers
-  },
-  get type() {
-    return this.getResponseCache().type
-  },
-  get url() {
-    return this.getResponseCache().url
-  },
-  arrayBuffer() {
-    return this.getResponseCache().arrayBuffer()
-  },
-  blob() {
-    return this.getResponseCache().blob()
-  },
-  clone() {
-    return this.getResponseCache().clone()
-  },
-  error() {
-    return this.getResponseCache().error()
-  },
-  formData() {
-    return this.getResponseCache().formData()
-  },
-  json() {
-    return this.getResponseCache().json()
-  },
-  redirect() {
-    return this.getResponseCache().redirect()
-  },
-  text() {
-    return this.getResponseCache().text()
-  },
 }
+;[
+  'body',
+  'bodyUsed',
+  'headers',
+  'ok',
+  'redirected',
+  'statusText',
+  'trailers',
+  'type',
+  'url',
+].forEach((k) => {
+  Object.defineProperty(responsePrototype, k, {
+    get() {
+      return this.getResponseCache()[k]
+    },
+  })
+})
+;['arrayBuffer', 'blob', 'clone', 'error', 'formData', 'json', 'redirect', 'text'].forEach((k) => {
+  Object.defineProperty(responsePrototype, k, {
+    value: function () {
+      return this.getResponseCache()[k]()
+    },
+  })
+})
 
 function newResponse(this: Response, body: BodyInit | null, init?: ResponseInit) {
   Object.assign(this, {
@@ -113,61 +86,34 @@ const requestPrototype: Record<string, any> = {
   getRequestCache() {
     return (this.requestCache ||= newRequestFromIncoming(this.method, this.url, this.incoming))
   },
-  get body() {
-    return this.getRequestCache().body
-  },
-  get bodyUsed() {
-    return this.getRequestCache().bodyUsed
-  },
-  get cache() {
-    return this.getRequestCache().cache
-  },
-  get credentials() {
-    return this.getRequestCache().credentials
-  },
-  get destination() {
-    return this.getRequestCache().destination
-  },
-  get headers() {
-    return this.getRequestCache().headers
-  },
-  get integrity() {
-    return this.getRequestCache().integrity
-  },
-  get mode() {
-    return this.getRequestCache().mode
-  },
-  get redirect() {
-    return this.getRequestCache().redirect
-  },
-  get referrer() {
-    return this.getRequestCache().referrer
-  },
-  get referrerPolicy() {
-    return this.getRequestCache().referrerPolicy
-  },
-  get signal() {
-    return this.getRequestCache().signal
-  },
-  arrayBuffer() {
-    return this.getRequestCache().arrayBuffer()
-  },
-  blob() {
-    return this.getRequestCache().blob()
-  },
-  clone() {
-    return this.getRequestCache().clone()
-  },
-  formData() {
-    return this.getRequestCache().formData()
-  },
-  json() {
-    return this.getRequestCache().json()
-  },
-  text() {
-    return this.getRequestCache().text()
-  },
 }
+;[
+  'body',
+  'bodyUsed',
+  'cache',
+  'credentials',
+  'destination',
+  'headers',
+  'integrity',
+  'mode',
+  'redirect',
+  'referrer',
+  'referrerPolicy',
+  'signal',
+].forEach((k) => {
+  Object.defineProperty(requestPrototype, k, {
+    get() {
+      return this.getRequestCache()[k]
+    },
+  })
+})
+;['arrayBuffer', 'blob', 'clone', 'formData', 'json', 'text'].forEach((k) => {
+  Object.defineProperty(requestPrototype, k, {
+    value: function () {
+      return this.getRequestCache()[k]()
+    },
+  })
+})
 
 const handleError = (e: unknown): Response =>
   new Response(null, {
