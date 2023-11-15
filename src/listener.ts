@@ -45,9 +45,6 @@ function newResponse(this: Response, body: BodyInit | null, init?: ResponseInit)
   ;(this as any).__body = body
   ;(this as any).__init = init
   ;(this as any).__cache = [body, (init?.headers || {}) as Record<string, string>]
-  if (typeof body !== 'string') {
-    delete (this as any).__cache
-  }
 }
 newResponse.prototype = responsePrototype
 Object.defineProperty(global, 'Response', {
@@ -113,7 +110,7 @@ const requestPrototype: Record<string, any> = {
   })
 })
 
-const handleError = (e: unknown): Response =>
+const handleFetchError = (e: unknown): Response =>
   new Response(null, {
     status:
       e instanceof Error && (e.name === 'TimeoutError' || e.constructor.name === 'TimeoutError')
@@ -121,14 +118,47 @@ const handleError = (e: unknown): Response =>
         : 500,
   })
 
+const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerResponse) => {
+  const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
+    code: string
+  }
+  if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+    console.info('The user aborted a request.')
+  } else {
+    console.error(e)
+    outgoing.destroy(err)
+  }
+}
+
+const responseViaCache = (
+  res: Response,
+  outgoing: ServerResponse | Http2ServerResponse
+): undefined | Promise<undefined> => {
+  const [body, header] = (res as any).__cache
+  outgoing.writeHead((res as Response).status, header)
+  if (typeof body === 'string') {
+    header['content-length'] ||= '' + Buffer.byteLength(body)
+    outgoing.end(body)
+  } else {
+    return writeFromReadableStream(body, outgoing)?.catch(
+      (e) => handleResponseError(e, outgoing) as undefined
+    )
+  }
+}
+
 const responseViaResponseObject = async (
   res: Response | Promise<Response>,
   outgoing: ServerResponse | Http2ServerResponse
 ) => {
-  try {
-    res = await res
-  } catch (e: unknown) {
-    res = handleError(e)
+  if (res instanceof Promise) {
+    res = await res.catch(handleFetchError)
+  }
+  if ('__cache' in res) {
+    try {
+      return responseViaCache(res as Response, outgoing)
+    } catch (e: unknown) {
+      return handleResponseError(e, outgoing)
+    }
   }
 
   const resHeaderRecord: OutgoingHttpHeaders = {}
@@ -172,15 +202,7 @@ const responseViaResponseObject = async (
         outgoing.end(new Uint8Array(buffer))
       }
     } catch (e: unknown) {
-      const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
-        code: string
-      }
-      if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
-        console.info('The user aborted a request.')
-      } else {
-        console.error(e)
-        outgoing.destroy(err)
-      }
+      handleResponseError(e, outgoing)
     }
   } else {
     outgoing.writeHead(res.status, resHeaderRecord)
@@ -201,15 +223,14 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     try {
       res = fetchCallback(req) as Response | Promise<Response>
       if ('__cache' in res) {
-        // response via cache
-        const [body, header] = (res as any).__cache
-        header['content-length'] ||= '' + Buffer.byteLength(body)
-        outgoing.writeHead((res as Response).status, header)
-        outgoing.end(body)
-        return
+        return responseViaCache(res as Response, outgoing)
       }
     } catch (e: unknown) {
-      res = handleError(e)
+      if (!res) {
+        res = handleFetchError(e)
+      } else {
+        return handleResponseError(e, outgoing)
+      }
     }
 
     return responseViaResponseObject(res, outgoing)
