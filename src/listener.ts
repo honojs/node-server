@@ -194,15 +194,13 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     outgoing: ServerResponse | Http2ServerResponse
   ) => {
     let res
-    const req = {
-      method: incoming.method || 'GET',
-      url: `http://${incoming.headers.host}${incoming.url}`,
-      incoming,
-    } as unknown as Request
-    Object.setPrototypeOf(req, requestPrototype)
+    const req = Object.create(requestPrototype)
+    req.method = incoming.method || 'GET'
+    req.url = `http://${incoming.headers.host}${incoming.url}`
+    req.incoming = incoming
     try {
       res = fetchCallback(req) as Response | Promise<Response>
-      if ("__cache" in res) {
+      if ('__cache' in res) {
         // response via cache
         const [body, header] = (res as any).__cache
         header['content-length'] ||= '' + Buffer.byteLength(body)
