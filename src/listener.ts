@@ -58,7 +58,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
       }
     }
     if (cookies.length > 0) {
-      resHeaderRecord['Set-Cookie'] = cookies
+      resHeaderRecord['set-cookie'] = cookies
     }
 
     // figure out the internal body source
@@ -72,9 +72,9 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
       body = source
     }
 
-    if (length !== null && body !== null && !res.headers.get('transfer-encoding')) {
+    if (length !== null && body !== null && !resHeaderRecord['transfer-encoding']) {
       // we can directly use the internal body's source to write the response
-      resHeaderRecord['Content-Length'] = length
+      resHeaderRecord['content-length'] = length
       delete resHeaderRecord['content-encoding']
     }
 
