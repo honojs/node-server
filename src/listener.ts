@@ -79,8 +79,14 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     }
 
     // do not write response if outgoing is already finished
-    if (outgoing.destroyed || outgoing.writableEnded || outgoing.headersSent) {
+    if (outgoing.destroyed || outgoing.writableEnded) {
       console.info('The response is already finished.')
+      return
+    }
+
+    if (outgoing.headersSent) {
+      outgoing.destroy()
+      console.info('The response has already been sent.')
       return
     }
 
