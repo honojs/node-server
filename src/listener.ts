@@ -3,10 +3,7 @@ import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { Readable } from 'node:stream'
 import type { FetchCallback } from './types'
 import './globals'
-import { writeFromReadableStream } from './utils'
-
-const regBuffer = /^no$/i
-const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
+import { getResponseInternalBody, writeFromReadableStream } from './utils'
 
 export const getRequestListener = (fetchCallback: FetchCallback) => {
   return async (
@@ -34,10 +31,13 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
       ;(init as any).duplex = 'half'
     }
 
+    const request = new Request(url, init)
     let res: Response
 
     try {
-      res = (await fetchCallback(new Request(url, init))) as Response
+      const resOrPromise = fetchCallback(request) as Response | Promise<Response>
+      // in order to avoid another await for response
+      res = resOrPromise instanceof Response ? resOrPromise : await resOrPromise
     } catch (e: unknown) {
       res = new Response(null, { status: 500 })
       if (e instanceof Error) {
@@ -58,36 +58,42 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
       }
     }
     if (cookies.length > 0) {
-      resHeaderRecord['set-cookie'] = cookies
+      resHeaderRecord['Set-Cookie'] = cookies
     }
 
-    if (res.body) {
+    // figure out the internal body source
+    let body: Uint8Array | string | null = null
+    let stream = res.body
+
+    // try to get the native nodejs internal body state if we can
+    let { source = null, length = null } = getResponseInternalBody(res) || {}
+
+    if (typeof source === 'string' || source instanceof Uint8Array) {
+      body = source
+    }
+
+    if (length !== null && body !== null && !res.headers.get('transfer-encoding')) {
+      // we can directly use the internal body's source to write the response
+      resHeaderRecord['Content-Length'] = length
+      delete resHeaderRecord['content-encoding']
+    }
+
+    // do not write response if outgoing is already finished
+    if (outgoing.destroyed || outgoing.writableEnded || outgoing.headersSent) {
+      console.info('The response is already finished.')
+      return
+    }
+
+    // now we can write the response headers and status
+    outgoing.writeHead(res.status, resHeaderRecord)
+
+    if (stream === null || method === 'HEAD' || res.status === 204 || res.status === 304) {
+      outgoing.end()
+    } else if (body != null) {
+      outgoing.end(body)
+    } else {
       try {
-        /**
-         * If content-encoding is set, we assume that the response should be not decoded.
-         * Else if transfer-encoding is set, we assume that the response should be streamed.
-         * Else if content-length is set, we assume that the response content has been taken care of.
-         * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
-         * Else if content-type is not application/json nor text/* but can be text/event-stream,
-         * we assume that the response should be streamed.
-         */
-        if (
-          resHeaderRecord['transfer-encoding'] ||
-          resHeaderRecord['content-encoding'] ||
-          resHeaderRecord['content-length'] ||
-          // nginx buffering variant
-          (resHeaderRecord['x-accel-buffering'] &&
-            regBuffer.test(resHeaderRecord['x-accel-buffering'] as string)) ||
-          !regContentType.test(resHeaderRecord['content-type'] as string)
-        ) {
-          outgoing.writeHead(res.status, resHeaderRecord)
-          await writeFromReadableStream(res.body, outgoing)
-        } else {
-          const buffer = await res.arrayBuffer()
-          resHeaderRecord['content-length'] = buffer.byteLength
-          outgoing.writeHead(res.status, resHeaderRecord)
-          outgoing.end(new Uint8Array(buffer))
-        }
+        await writeFromReadableStream(stream, outgoing)
       } catch (e: unknown) {
         const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
           code: string
@@ -99,9 +105,6 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
           outgoing.destroy(err)
         }
       }
-    } else {
-      outgoing.writeHead(res.status, resHeaderRecord)
-      outgoing.end()
     }
   }
 }
