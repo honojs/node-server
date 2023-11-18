@@ -14,68 +14,38 @@ const responsePrototype: Record<string, any> = {
     delete this.__cache
     return (this.responseCache ||= new globalResponse(this.__body, this.__init))
   },
-  get body() {
-    return this.getResponseCache().body
-  },
-  get bodyUsed() {
-    return this.getResponseCache().bodyUsed
-  },
-  get headers() {
-    return this.getResponseCache().headers
-  },
-  get ok() {
-    return this.getResponseCache().ok
-  },
-  get redirected() {
-    return this.getResponseCache().redirected
-  },
-  get statusText() {
-    return this.getResponseCache().statusText
-  },
-  get trailers() {
-    return this.getResponseCache().trailers
-  },
-  get type() {
-    return this.getResponseCache().type
-  },
-  get url() {
-    return this.getResponseCache().url
-  },
-  arrayBuffer() {
-    return this.getResponseCache().arrayBuffer()
-  },
-  blob() {
-    return this.getResponseCache().blob()
-  },
-  clone() {
-    return this.getResponseCache().clone()
-  },
-  error() {
-    return this.getResponseCache().error()
-  },
-  formData() {
-    return this.getResponseCache().formData()
-  },
-  json() {
-    return this.getResponseCache().json()
-  },
-  redirect() {
-    return this.getResponseCache().redirect()
-  },
-  text() {
-    return this.getResponseCache().text()
-  },
 }
+;[
+  'body',
+  'bodyUsed',
+  'headers',
+  'ok',
+  'redirected',
+  'statusText',
+  'trailers',
+  'type',
+  'url',
+].forEach((k) => {
+  Object.defineProperty(responsePrototype, k, {
+    get() {
+      return this.getResponseCache()[k]
+    },
+  })
+})
+;['arrayBuffer', 'blob', 'clone', 'error', 'formData', 'json', 'redirect', 'text'].forEach((k) => {
+  Object.defineProperty(responsePrototype, k, {
+    value: function () {
+      return this.getResponseCache()[k]()
+    },
+  })
+})
 
 function newResponse(this: Response, body: BodyInit | null, init?: ResponseInit) {
-  Object.assign(this, {
-    status: init?.status || 200,
-    __body: body,
-    __init: init,
-    __cache: [body, (init?.headers || {}) as Record<string, string>],
-  })
-  if (typeof body !== 'string') {
-    delete (this as any).__cache
+  ;(this as any).status = init?.status || 200
+  ;(this as any).__body = body
+  ;(this as any).__init = init
+  if (typeof body === 'string' || body instanceof ReadableStream) {
+    ;(this as any).__cache = [body, (init?.headers || {}) as Record<string, string>]
   }
 }
 newResponse.prototype = responsePrototype
@@ -113,63 +83,36 @@ const requestPrototype: Record<string, any> = {
   getRequestCache() {
     return (this.requestCache ||= newRequestFromIncoming(this.method, this.url, this.incoming))
   },
-  get body() {
-    return this.getRequestCache().body
-  },
-  get bodyUsed() {
-    return this.getRequestCache().bodyUsed
-  },
-  get cache() {
-    return this.getRequestCache().cache
-  },
-  get credentials() {
-    return this.getRequestCache().credentials
-  },
-  get destination() {
-    return this.getRequestCache().destination
-  },
-  get headers() {
-    return this.getRequestCache().headers
-  },
-  get integrity() {
-    return this.getRequestCache().integrity
-  },
-  get mode() {
-    return this.getRequestCache().mode
-  },
-  get redirect() {
-    return this.getRequestCache().redirect
-  },
-  get referrer() {
-    return this.getRequestCache().referrer
-  },
-  get referrerPolicy() {
-    return this.getRequestCache().referrerPolicy
-  },
-  get signal() {
-    return this.getRequestCache().signal
-  },
-  arrayBuffer() {
-    return this.getRequestCache().arrayBuffer()
-  },
-  blob() {
-    return this.getRequestCache().blob()
-  },
-  clone() {
-    return this.getRequestCache().clone()
-  },
-  formData() {
-    return this.getRequestCache().formData()
-  },
-  json() {
-    return this.getRequestCache().json()
-  },
-  text() {
-    return this.getRequestCache().text()
-  },
 }
+;[
+  'body',
+  'bodyUsed',
+  'cache',
+  'credentials',
+  'destination',
+  'headers',
+  'integrity',
+  'mode',
+  'redirect',
+  'referrer',
+  'referrerPolicy',
+  'signal',
+].forEach((k) => {
+  Object.defineProperty(requestPrototype, k, {
+    get() {
+      return this.getRequestCache()[k]
+    },
+  })
+})
+;['arrayBuffer', 'blob', 'clone', 'formData', 'json', 'text'].forEach((k) => {
+  Object.defineProperty(requestPrototype, k, {
+    value: function () {
+      return this.getRequestCache()[k]()
+    },
+  })
+})
 
-const handleError = (e: unknown): Response =>
+const handleFetchError = (e: unknown): Response =>
   new Response(null, {
     status:
       e instanceof Error && (e.name === 'TimeoutError' || e.constructor.name === 'TimeoutError')
@@ -177,14 +120,47 @@ const handleError = (e: unknown): Response =>
         : 500,
   })
 
+const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerResponse) => {
+  const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
+    code: string
+  }
+  if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+    console.info('The user aborted a request.')
+  } else {
+    console.error(e)
+    outgoing.destroy(err)
+  }
+}
+
+const responseViaCache = (
+  res: Response,
+  outgoing: ServerResponse | Http2ServerResponse
+): undefined | Promise<undefined> => {
+  const [body, header] = (res as any).__cache
+  outgoing.writeHead((res as Response).status, header)
+  if (typeof body === 'string') {
+    header['content-length'] ||= '' + Buffer.byteLength(body)
+    outgoing.end(body)
+  } else {
+    return writeFromReadableStream(body, outgoing)?.catch(
+      (e) => handleResponseError(e, outgoing) as undefined
+    )
+  }
+}
+
 const responseViaResponseObject = async (
   res: Response | Promise<Response>,
   outgoing: ServerResponse | Http2ServerResponse
 ) => {
-  try {
-    res = await res
-  } catch (e: unknown) {
-    res = handleError(e)
+  if (res instanceof Promise) {
+    res = await res.catch(handleFetchError)
+  }
+  if ('__cache' in res) {
+    try {
+      return responseViaCache(res as Response, outgoing)
+    } catch (e: unknown) {
+      return handleResponseError(e, outgoing)
+    }
   }
 
   const resHeaderRecord: OutgoingHttpHeaders = {}
@@ -228,15 +204,7 @@ const responseViaResponseObject = async (
         outgoing.end(new Uint8Array(buffer))
       }
     } catch (e: unknown) {
-      const err = (e instanceof Error ? e : new Error('unknown error', { cause: e })) as Error & {
-        code: string
-      }
-      if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
-        console.info('The user aborted a request.')
-      } else {
-        console.error(e)
-        outgoing.destroy(err)
-      }
+      handleResponseError(e, outgoing)
     }
   } else {
     outgoing.writeHead(res.status, resHeaderRecord)
@@ -250,24 +218,21 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     outgoing: ServerResponse | Http2ServerResponse
   ) => {
     let res
-    const req = {
-      method: incoming.method || 'GET',
-      url: `http://${incoming.headers.host}${incoming.url}`,
-      incoming,
-    } as unknown as Request
-    Object.setPrototypeOf(req, requestPrototype)
+    const req = Object.create(requestPrototype)
+    req.method = incoming.method || 'GET'
+    req.url = `http://${incoming.headers.host}${incoming.url}`
+    req.incoming = incoming
     try {
       res = fetchCallback(req) as Response | Promise<Response>
-      if ("__cache" in res) {
-        // response via cache
-        const [body, header] = (res as any).__cache
-        header['content-length'] ||= '' + Buffer.byteLength(body)
-        outgoing.writeHead((res as Response).status, header)
-        outgoing.end(body)
-        return
+      if ('__cache' in res) {
+        return responseViaCache(res as Response, outgoing)
       }
     } catch (e: unknown) {
-      res = handleError(e)
+      if (!res) {
+        res = handleFetchError(e)
+      } else {
+        return handleResponseError(e, outgoing)
+      }
     }
 
     return responseViaResponseObject(res, outgoing)
