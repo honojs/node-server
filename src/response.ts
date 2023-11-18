@@ -37,7 +37,10 @@ function newResponse(this: Response, body: BodyInit | null, init?: ResponseInit)
   ;(this as any).__body = body
   ;(this as any).__init = init
   if (typeof body === 'string' || body instanceof ReadableStream) {
-    ;(this as any).__cache = [body, (init?.headers || {}) as Record<string, string>]
+    ;(this as any).__cache = [
+      body,
+      (init?.headers || { 'content-type': 'text/plain;charset=UTF-8' }) as Record<string, string>,
+    ]
   }
 }
 newResponse.prototype = responsePrototype
