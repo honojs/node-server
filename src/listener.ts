@@ -4,7 +4,7 @@ import type { FetchCallback } from './types'
 import './globals'
 import './response'
 import { requestPrototype } from './request'
-import { writeFromReadableStream } from './utils'
+import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 
 const regBuffer = /^no$/i
 const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
@@ -61,18 +61,7 @@ const responseViaResponseObject = async (
     }
   }
 
-  const resHeaderRecord: OutgoingHttpHeaders = {}
-  const cookies = []
-  for (const [k, v] of res.headers) {
-    if (k === 'set-cookie') {
-      cookies.push(v)
-    } else {
-      resHeaderRecord[k] = v
-    }
-  }
-  if (cookies.length > 0) {
-    resHeaderRecord['set-cookie'] = cookies
-  }
+  const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
 
   if (res.body) {
     try {
