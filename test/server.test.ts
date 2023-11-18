@@ -279,7 +279,10 @@ describe('Stream and non-stream response', () => {
   app.get('/text', (c) => c.text('Hello!'))
   app.get('/json-stream', (c) => {
     c.header('x-accel-buffering', 'no')
-    return c.json({ foo: 'bar' })
+    c.header('content-type', 'application/json')
+    return c.stream(async (stream) => {
+      stream.write(JSON.stringify({ foo: 'bar' }))
+    })
   })
   app.get('/stream', (c) => {
     const stream = new ReadableStream({
