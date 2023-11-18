@@ -1,116 +1,13 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
-import { Readable } from 'node:stream'
 import type { FetchCallback } from './types'
 import './globals'
+import './response'
+import { requestPrototype } from './request'
 import { writeFromReadableStream } from './utils'
 
 const regBuffer = /^no$/i
 const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
-
-const globalResponse = global.Response
-const responsePrototype: Record<string, any> = {
-  getResponseCache() {
-    delete this.__cache
-    return (this.responseCache ||= new globalResponse(this.__body, this.__init))
-  },
-}
-;[
-  'body',
-  'bodyUsed',
-  'headers',
-  'ok',
-  'redirected',
-  'statusText',
-  'trailers',
-  'type',
-  'url',
-].forEach((k) => {
-  Object.defineProperty(responsePrototype, k, {
-    get() {
-      return this.getResponseCache()[k]
-    },
-  })
-})
-;['arrayBuffer', 'blob', 'clone', 'error', 'formData', 'json', 'redirect', 'text'].forEach((k) => {
-  Object.defineProperty(responsePrototype, k, {
-    value: function () {
-      return this.getResponseCache()[k]()
-    },
-  })
-})
-
-function newResponse(this: Response, body: BodyInit | null, init?: ResponseInit) {
-  ;(this as any).status = init?.status || 200
-  ;(this as any).__body = body
-  ;(this as any).__init = init
-  if (typeof body === 'string' || body instanceof ReadableStream) {
-    ;(this as any).__cache = [body, (init?.headers || {}) as Record<string, string>]
-  }
-}
-newResponse.prototype = responsePrototype
-Object.defineProperty(global, 'Response', {
-  value: newResponse,
-})
-
-function newRequestFromIncoming(
-  method: string,
-  url: string,
-  incoming: IncomingMessage | Http2ServerRequest
-): Request {
-  const headerRecord: [string, string][] = []
-  const len = incoming.rawHeaders.length
-  for (let i = 0; i < len; i += 2) {
-    headerRecord.push([incoming.rawHeaders[i], incoming.rawHeaders[i + 1]])
-  }
-
-  const init = {
-    method: method,
-    headers: headerRecord,
-  } as RequestInit
-
-  if (!(method === 'GET' || method === 'HEAD')) {
-    // lazy-consume request body
-    init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
-    // node 18 fetch needs half duplex mode when request body is stream
-    ;(init as any).duplex = 'half'
-  }
-
-  return new Request(url, init)
-}
-
-const requestPrototype: Record<string, any> = {
-  getRequestCache() {
-    return (this.requestCache ||= newRequestFromIncoming(this.method, this.url, this.incoming))
-  },
-}
-;[
-  'body',
-  'bodyUsed',
-  'cache',
-  'credentials',
-  'destination',
-  'headers',
-  'integrity',
-  'mode',
-  'redirect',
-  'referrer',
-  'referrerPolicy',
-  'signal',
-].forEach((k) => {
-  Object.defineProperty(requestPrototype, k, {
-    get() {
-      return this.getRequestCache()[k]
-    },
-  })
-})
-;['arrayBuffer', 'blob', 'clone', 'formData', 'json', 'text'].forEach((k) => {
-  Object.defineProperty(requestPrototype, k, {
-    value: function () {
-      return this.getRequestCache()[k]()
-    },
-  })
-})
 
 const handleFetchError = (e: unknown): Response =>
   new Response(null, {
@@ -218,10 +115,14 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     outgoing: ServerResponse | Http2ServerResponse
   ) => {
     let res
+
+    // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
+    // so generate a pseudo Request object with only the minimum required information.
     const req = Object.create(requestPrototype)
     req.method = incoming.method || 'GET'
     req.url = `http://${incoming.headers.host}${incoming.url}`
     req.incoming = incoming
+
     try {
       res = fetchCallback(req) as Response | Promise<Response>
       if ('__cache' in res) {
