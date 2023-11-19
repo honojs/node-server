@@ -116,6 +116,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     try {
       res = fetchCallback(req) as Response | Promise<Response>
       if ('__cache' in res) {
+        // synchronous, cacheable response
         return responseViaCache(res as Response, outgoing)
       }
     } catch (e: unknown) {
