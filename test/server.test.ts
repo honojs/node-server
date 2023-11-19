@@ -148,27 +148,81 @@ describe('Request body', () => {
 })
 
 describe('Response body', () => {
-  const app = new Hono()
-  app.get('/json', (c) => {
-    return c.json({ foo: 'bar' })
-  })
-  app.get('/html', (c) => {
-    return c.html('<h1>Hello!</h1>')
-  })
-  const server = createAdaptorServer(app)
+  describe('Cached Response', () => {
+    const app = new Hono()
+    app.get('/json', (c) => {
+      return c.json({ foo: 'bar' })
+    })
+    app.get('/json-async', async (c) => {
+      return c.json({ foo: 'async' })
+    })
+    app.get('/html', (c) => {
+      return c.html('<h1>Hello!</h1>')
+    })
+    app.get('/html-async', async (c) => {
+      return c.html('<h1>Hello!</h1>')
+    })
+    const server = createAdaptorServer(app)
 
-  it('Should return JSON body', async () => {
-    const res = await request(server).get('/json')
-    expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/application\/json/)
-    expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+    it('Should return JSON body', async () => {
+      const res = await request(server).get('/json')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+    })
+
+    it('Should return JSON body from /json-async', async () => {
+      const res = await request(server).get('/json-async')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(JSON.parse(res.text)).toEqual({ foo: 'async' })
+    })
+
+    it('Should return HTML', async () => {
+      const res = await request(server).get('/html')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch(/text\/html/)
+      expect(res.text).toBe('<h1>Hello!</h1>')
+    })
+
+    it('Should return HTML from /html-async', async () => {
+      const res = await request(server).get('/html-async')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch(/text\/html/)
+      expect(res.text).toBe('<h1>Hello!</h1>')
+    })
   })
 
-  it('Should return HTML', async () => {
-    const res = await request(server).get('/html')
-    expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/html/)
-    expect(res.text).toBe('<h1>Hello!</h1>')
+  describe('Fallback to global.Response', () => {
+    const app = new Hono()
+
+    app.get('/json-blob', async () => {
+      return new Response(new Blob([JSON.stringify({ foo: 'blob' })]), {
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    app.get('/json-buffer', async () => {
+      return new Response(new TextEncoder().encode(JSON.stringify({ foo: 'buffer' })).buffer, {
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const server = createAdaptorServer(app)
+
+    it('Should return JSON body from /json-blob', async () => {
+      const res = await request(server).get('/json-blob')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(JSON.parse(res.text)).toEqual({ foo: 'blob' })
+    })
+
+    it('Should return JSON body from /json-buffer', async () => {
+      const res = await request(server).get('/json-buffer')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(JSON.parse(res.text)).toEqual({ foo: 'buffer' })
+    })
   })
 })
 
