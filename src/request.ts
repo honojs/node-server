@@ -32,10 +32,19 @@ const newRequestFromIncoming = (
 
 const getRequestCache = Symbol('getRequestCache')
 const requestCache = Symbol('requestCache')
+const incomingKey = Symbol('incomingKey')
 
-export const requestPrototype: Record<string | symbol, any> = {
+const requestPrototype: Record<string | symbol, any> = {
+  get method() {
+    return this[incomingKey].method || 'GET'
+  },
+
+  get url() {
+    return `http://${this[incomingKey].headers.host}${this[incomingKey].url}`
+  },
+
   [getRequestCache]() {
-    return (this[requestCache] ||= newRequestFromIncoming(this.method, this.url, this.incoming))
+    return (this[requestCache] ||= newRequestFromIncoming(this.method, this.url, this[incomingKey]))
   },
 }
 ;[
@@ -65,3 +74,10 @@ export const requestPrototype: Record<string | symbol, any> = {
     },
   })
 })
+Object.setPrototypeOf(requestPrototype, global.Request.prototype)
+
+export const newRequest = (incoming: IncomingMessage | Http2ServerRequest) => {
+  const req = Object.create(requestPrototype)
+  req[incomingKey] = incoming
+  return req
+};

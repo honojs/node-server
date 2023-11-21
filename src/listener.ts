@@ -3,7 +3,7 @@ import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import type { FetchCallback } from './types'
 import './globals'
 import { cacheKey } from './response'
-import { requestPrototype } from './request'
+import { newRequest } from './request'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 
 const regBuffer = /^no$/i
@@ -108,10 +108,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
 
     // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
     // so generate a pseudo Request object with only the minimum required information.
-    const req = Object.create(requestPrototype)
-    req.method = incoming.method || 'GET'
-    req.url = `http://${incoming.headers.host}${incoming.url}`
-    req.incoming = incoming
+    const req = newRequest(incoming)
 
     try {
       res = fetchCallback(req) as Response | Promise<Response>
