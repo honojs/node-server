@@ -30,9 +30,12 @@ const newRequestFromIncoming = (
   return new Request(url, init)
 }
 
-export const requestPrototype: Record<string, any> = {
-  getRequestCache() {
-    return (this.requestCache ||= newRequestFromIncoming(this.method, this.url, this.incoming))
+const getRequestCache = Symbol('getRequestCache')
+const requestCache = Symbol('requestCache')
+
+export const requestPrototype: Record<string | symbol, any> = {
+  [getRequestCache]() {
+    return (this[requestCache] ||= newRequestFromIncoming(this.method, this.url, this.incoming))
   },
 }
 ;[
@@ -51,14 +54,14 @@ export const requestPrototype: Record<string, any> = {
 ].forEach((k) => {
   Object.defineProperty(requestPrototype, k, {
     get() {
-      return this.getRequestCache()[k]
+      return this[getRequestCache]()[k]
     },
   })
 })
 ;['arrayBuffer', 'blob', 'clone', 'formData', 'json', 'text'].forEach((k) => {
   Object.defineProperty(requestPrototype, k, {
     value: function () {
-      return this.getRequestCache()[k]()
+      return this[getRequestCache]()[k]()
     },
   })
 })

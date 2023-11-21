@@ -3,19 +3,23 @@
 import type { OutgoingHttpHeaders } from 'node:http'
 import { buildOutgoingHttpHeaders } from './utils'
 
+const responseCache = Symbol('responseCache')
+export const cacheKey = Symbol('cache')
+
 export const globalResponse = global.Response
 export class Response {
-  getResponseCache() {
-    delete (this as any).__cache
-    return ((this as any).responseCache ||= new globalResponse(
-      (this as any).__body,
-      (this as any).__init
-    ))
+  #body?: BodyInit | null
+  #init?: ResponseInit;
+
+  // @ts-ignore
+  private get cache(): typeof globalResponse {
+    delete (this as any)[cacheKey]
+    return ((this as any)[responseCache] ||= new globalResponse(this.#body, this.#init))
   }
 
-  constructor(body: BodyInit | null, init?: ResponseInit) {
-    ;(this as any).__body = body
-    ;(this as any).__init = init
+  constructor(body?: BodyInit | null, init?: ResponseInit) {
+    this.#body = body
+    this.#init = init
 
     if (typeof body === 'string' || body instanceof ReadableStream) {
       let headers = (init?.headers || { 'content-type': 'text/plain;charset=UTF-8' }) as
@@ -26,7 +30,7 @@ export class Response {
         headers = buildOutgoingHttpHeaders(headers)
       }
 
-      ;(this as any).__cache = [init?.status || 200, body, headers]
+      (this as any)[cacheKey] = [init?.status || 200, body, headers]
     }
   }
 }
@@ -44,14 +48,14 @@ export class Response {
 ].forEach((k) => {
   Object.defineProperty(Response.prototype, k, {
     get() {
-      return this.getResponseCache()[k]
+      return this.cache[k]
     },
   })
 })
 ;['arrayBuffer', 'blob', 'clone', 'formData', 'json', 'text'].forEach((k) => {
   Object.defineProperty(Response.prototype, k, {
     value: function () {
-      return this.getResponseCache()[k]()
+      return this.cache[k]()
     },
   })
 })

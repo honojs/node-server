@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import type { FetchCallback } from './types'
 import './globals'
-import './response'
+import { cacheKey } from './response'
 import { requestPrototype } from './request'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 
@@ -33,7 +33,7 @@ const responseViaCache = (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
 ): undefined | Promise<undefined> => {
-  const [status, body, header] = (res as any).__cache
+  const [status, body, header] = (res as any)[cacheKey]
   if (typeof body === 'string') {
     header['content-length'] ||= '' + Buffer.byteLength(body)
     outgoing.writeHead(status, header)
@@ -53,7 +53,7 @@ const responseViaResponseObject = async (
   if (res instanceof Promise) {
     res = await res.catch(handleFetchError)
   }
-  if ('__cache' in res) {
+  if (cacheKey in res) {
     try {
       return responseViaCache(res as Response, outgoing)
     } catch (e: unknown) {
@@ -115,7 +115,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
 
     try {
       res = fetchCallback(req) as Response | Promise<Response>
-      if ('__cache' in res) {
+      if (cacheKey in res) {
         // synchronous, cacheable response
         return responseViaCache(res as Response, outgoing)
       }
