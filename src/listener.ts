@@ -33,13 +33,13 @@ const responseViaCache = (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
 ): undefined | Promise<undefined> => {
-  const [body, header] = (res as any).__cache
+  const [status, body, header] = (res as any).__cache
   if (typeof body === 'string') {
     header['content-length'] ||= '' + Buffer.byteLength(body)
-    outgoing.writeHead((res as Response).status, header)
+    outgoing.writeHead(status, header)
     outgoing.end(body)
   } else {
-    outgoing.writeHead((res as Response).status, header)
+    outgoing.writeHead(status, header)
     return writeFromReadableStream(body, outgoing)?.catch(
       (e) => handleResponseError(e, outgoing) as undefined
     )
