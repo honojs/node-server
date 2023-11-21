@@ -4,7 +4,7 @@ import type { OutgoingHttpHeaders } from 'node:http'
 import { buildOutgoingHttpHeaders } from './utils'
 
 export const globalResponse = global.Response
-class Response {
+export class Response {
   getResponseCache() {
     delete (this as any).__cache
     return ((this as any).responseCache ||= new globalResponse(
