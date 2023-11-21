@@ -33,11 +33,11 @@ describe('Response', () => {
     expect(Response.name).toEqual('Response')
 
     // response prototype chain not changed
-    expect(new Response() instanceof globalResponse).toBe(true)
+    expect(new Response()).toBeInstanceOf(globalResponse)
 
     // `fetch()` and `Response` are not changed
     const fetchRes = await fetch(`http://localhost:${port}`)
-    expect(new Response() instanceof fetchRes.constructor).toBe(true)
+    expect(new Response()).toBeInstanceOf(fetchRes.constructor)
     const resJson = await fetchRes.json()
     expect(fetchRes.headers.get('content-type')).toEqual('application/json charset=UTF-8')
     expect(resJson).toEqual({ status: 'ok' })
@@ -53,6 +53,6 @@ describe('Response', () => {
     expect(Response.redirect).toEqual(expect.any(Function))
 
     // support other class to extends from Response
-    expect(NextResponse.prototype).toBeInstanceOf(Response)
+    expect(new NextResponse()).toBeInstanceOf(Response)
   })
 })
