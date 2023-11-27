@@ -1,4 +1,5 @@
 import type { Writable } from 'node:stream'
+import type { OutgoingHttpHeaders } from 'node:http'
 
 export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writable: Writable) {
   if (stream.locked) {
@@ -35,4 +36,23 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
       cancel(e)
     }
   }
+}
+
+export const buildOutgoingHttpHeaders = (headers: Headers): OutgoingHttpHeaders => {
+  const res: OutgoingHttpHeaders = {}
+
+  const cookies = []
+  for (const [k, v] of headers) {
+    if (k === 'set-cookie') {
+      cookies.push(v)
+    } else {
+      res[k] = v
+    }
+  }
+  if (cookies.length > 0) {
+    res['set-cookie'] = cookies
+  }
+  res['content-type'] ??= 'text/plain;charset=UTF-8'
+
+  return res
 }
