@@ -20,5 +20,5 @@ global.fetch = (info, init?) => {
     ...init,
   } as RequestInit
 
-  return webFetch(info, init)
+  return webFetch(info as RequestInfo, init)
 }
