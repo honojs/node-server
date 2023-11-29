@@ -35,7 +35,7 @@ const responseViaCache = (
 ): undefined | Promise<undefined> => {
   const [status, body, header] = (res as any)[cacheKey]
   if (typeof body === 'string') {
-    header['content-length'] ||= '' + Buffer.byteLength(body)
+    header['Content-Length'] = Buffer.byteLength(body)
     outgoing.writeHead(status, header)
     outgoing.end(body)
   } else {
