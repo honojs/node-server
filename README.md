@@ -1,12 +1,42 @@
 # Node.js Adapter for Hono
 
-This adapter allows you to run your Hono application on Node.js. Initially, Hono wasn't designed for Node.js, but with this adapter, it can now be used with Node.js. It utilizes web standard APIs implemented in Node.js version 18 or higher.
+This adapter `@hono/node-server` allows you to run your Hono application on Node.js.
+Initially, Hono wasn't designed for Node.js, but with this adapter, you can now use Hono on Node.js.
+It utilizes web standard APIs implemented in Node.js version 18 or higher.
 
-While Hono is ultra-fast, it may not be as fast on Node.js due to the overhead involved in adapting Hono's API to Node.js.
+## Benchmarks
 
-However, it's worth noting that it is still faster than Express.
+Hono is 3.5 times faster than Express.
 
-## Requirement
+Express:
+
+```txt
+$ bombardier -d 10s --fasthttp http://localhost:3000/
+
+Statistics        Avg      Stdev        Max
+  Reqs/sec     16438.94    1603.39   19155.47
+  Latency        7.60ms     7.51ms   559.89ms
+  HTTP codes:
+    1xx - 0, 2xx - 164494, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     4.55MB/s
+```
+
+Hono + `@hono/node-server`:
+
+```txt
+$ bombardier -d 10s --fasthttp http://localhost:3000/
+
+Statistics        Avg      Stdev        Max
+  Reqs/sec     58296.56    5512.74   74403.56
+  Latency        2.14ms     1.46ms   190.92ms
+  HTTP codes:
+    1xx - 0, 2xx - 583059, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:    12.56MB/s
+```
+
+## Requirements
 
 It works on Node.js versions greater than 18.x. The specific required Node.js versions are as follows:
 
@@ -16,7 +46,7 @@ It works on Node.js versions greater than 18.x. The specific required Node.js ve
 
 Essentially, you can simply use the latest version of each major release.
 
-## Install
+## Installation
 
 You can install from npm registry with `npm` command:
 
