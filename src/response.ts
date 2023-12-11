@@ -6,13 +6,13 @@ import { buildOutgoingHttpHeaders } from './utils'
 const responseCache = Symbol('responseCache')
 export const cacheKey = Symbol('cache')
 
-export const globalResponse = global.Response
+export const GlobalResponse = global.Response
 export class Response {
   #body?: BodyInit | null
   #init?: ResponseInit;
 
   // @ts-ignore
-  private get cache(): typeof globalResponse {
+  private get cache(): typeof GlobalResponse {
     delete (this as any)[cacheKey]
     return ((this as any)[responseCache] ||= new globalResponse(this.#body, this.#init))
   }
@@ -59,8 +59,8 @@ export class Response {
     },
   })
 })
-Object.setPrototypeOf(Response, globalResponse)
-Object.setPrototypeOf(Response.prototype, globalResponse.prototype)
+Object.setPrototypeOf(Response, GlobalResponse)
+Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
 Object.defineProperty(global, 'Response', {
   value: Response,
 })
