@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import { AddressInfo } from 'node:net'
-import { globalResponse } from '../src/response'
+import { GlobalResponse } from '../src/response'
 
 class NextResponse extends Response {}
 
@@ -33,7 +33,7 @@ describe('Response', () => {
     expect(Response.name).toEqual('Response')
 
     // response prototype chain not changed
-    expect(new Response()).toBeInstanceOf(globalResponse)
+    expect(new Response()).toBeInstanceOf(GlobalResponse)
 
     // `fetch()` and `Response` are not changed
     const fetchRes = await fetch(`http://localhost:${port}`)
@@ -54,5 +54,14 @@ describe('Response', () => {
 
     // support other class to extends from Response
     expect(new NextResponse()).toBeInstanceOf(Response)
+
+    const parentResponse = new Response('OK', {
+      headers: {
+        'content-type': 'application/json',
+      }
+    })
+    const childResponse = new Response('OK', parentResponse)
+    parentResponse.headers.delete('content-type')
+    expect(childResponse.headers.get('content-type')).toEqual('application/json')
   })
 })

@@ -4,17 +4,25 @@ import type { OutgoingHttpHeaders } from 'node:http'
 import { buildOutgoingHttpHeaders } from './utils'
 
 const responseCache = Symbol('responseCache')
+const newGlobalResponseKey = Symbol('newGlobalResponse')
 export const cacheKey = Symbol('cache')
 
-export const globalResponse = global.Response
+export const GlobalResponse = global.Response
 export class Response {
   #body?: BodyInit | null
   #init?: ResponseInit;
 
+  [newGlobalResponseKey](): typeof GlobalResponse {
+    return new GlobalResponse(
+      this.#body,
+      this.#init instanceof Response ? this.#init[newGlobalResponseKey]() : (this.#init as any)
+    ) as any
+  }
+
   // @ts-ignore
-  private get cache(): typeof globalResponse {
+  private get cache(): typeof GlobalResponse {
     delete (this as any)[cacheKey]
-    return ((this as any)[responseCache] ||= new globalResponse(this.#body, this.#init))
+    return ((this as any)[responseCache] ||= this[newGlobalResponseKey]())
   }
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
@@ -59,8 +67,8 @@ export class Response {
     },
   })
 })
-Object.setPrototypeOf(Response, globalResponse)
-Object.setPrototypeOf(Response.prototype, globalResponse.prototype)
+Object.setPrototypeOf(Response, GlobalResponse)
+Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
 Object.defineProperty(global, 'Response', {
   value: Response,
 })

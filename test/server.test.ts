@@ -477,3 +477,24 @@ describe('Hono compression', () => {
     expect(res.headers['content-encoding']).toMatch(/gzip/)
   })
 })
+
+
+describe('set child response to c.res', () => {
+  const app = new Hono()
+  app.use('*', async (c, next) => {
+    await next()
+    c.res = new Response('', c.res)
+    c.res.headers // If this is set, test fails
+  })
+
+  app.get('/json', async (c) => {
+    return c.json({})
+  })
+
+  it('Should return 200 response - GET /json', async () => {
+    const server = createAdaptorServer(app)
+    const res = await request(server).get('/json')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/application\/json/)
+  })
+})
