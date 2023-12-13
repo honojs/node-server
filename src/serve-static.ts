@@ -1,5 +1,6 @@
+import type { ReadStream} from 'fs'
+import { createReadStream, existsSync, lstatSync } from 'fs'
 import type { MiddlewareHandler } from 'hono'
-import { ReadStream, createReadStream, existsSync, lstatSync } from 'fs'
 import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
 

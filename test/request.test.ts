@@ -1,4 +1,4 @@
-import { IncomingMessage } from 'node:http'
+import type { IncomingMessage } from 'node:http'
 import { newRequest } from '../src/request'
 
 describe('Request', () => {

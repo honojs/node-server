@@ -43,7 +43,9 @@
     "watch": "tsup --watch",
     "postbuild": "publint",
     "prerelease": "yarn build && yarn test",
-    "release": "np"
+    "release": "np",
+    "lint": "eslint --ext js,ts src test",
+    "lint:fix": "eslint --ext js,ts src test --fix"
   },
   "license": "MIT",
   "repository": {
@@ -60,9 +62,11 @@
     "node": ">=18.14.1"
   },
   "devDependencies": {
+    "@hono/eslint-config": "^0.0.1",
     "@types/jest": "^29.5.3",
     "@types/node": "^20.10.0",
     "@types/supertest": "^2.0.12",
+    "eslint": "^8.55.0",
     "hono": "^3.9.2",
     "jest": "^29.6.1",
     "np": "^7.7.0",

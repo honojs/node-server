@@ -1,9 +1,5 @@
 import type { createServer, Server, ServerOptions as HttpServerOptions } from 'node:http'
 import type {
-  createServer as createHttpsServer,
-  ServerOptions as HttpsServerOptions,
-} from 'node:https'
-import type {
   createSecureServer as createSecureHttp2Server,
   createServer as createHttp2Server,
   Http2Server,
@@ -11,6 +7,10 @@ import type {
   SecureServerOptions as SecureHttp2ServerOptions,
   ServerOptions as Http2ServerOptions,
 } from 'node:http2'
+import type {
+  createServer as createHttpsServer,
+  ServerOptions as HttpsServerOptions,
+} from 'node:https'
 
 export type FetchCallback = (request: Request) => Promise<unknown> | unknown
 

@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Define prototype for lightweight pseudo Request object
 
-import { Readable } from 'node:stream'
 import type { IncomingMessage } from 'node:http'
 import type { Http2ServerRequest } from 'node:http2'
+import { Readable } from 'node:stream'
 
 const newRequestFromIncoming = (
   method: string,
@@ -80,4 +81,4 @@ export const newRequest = (incoming: IncomingMessage | Http2ServerRequest) => {
   const req = Object.create(requestPrototype)
   req[incomingKey] = incoming
   return req
-};
+}

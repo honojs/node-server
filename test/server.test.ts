@@ -1,12 +1,12 @@
-import { createAdaptorServer } from '../src/server'
-import request from 'supertest'
+import fs from 'node:fs'
+import { createServer as createHttp2Server } from 'node:http2'
+import { createServer as createHTTPSServer } from 'node:https'
 import { Hono } from 'hono'
+import { basicAuth } from 'hono/basic-auth'
 import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
-import { basicAuth } from 'hono/basic-auth'
-import { createServer as createHTTPSServer } from 'node:https'
-import { createServer as createHttp2Server } from 'node:http2'
-import fs from 'node:fs'
+import request from 'supertest'
+import { createAdaptorServer } from '../src/server'
 
 describe('Basic', () => {
   const app = new Hono()
@@ -56,7 +56,7 @@ describe('Basic', () => {
   it('Should return 201 response - DELETE /posts/123', async () => {
     const res = await request(server).delete('/posts/123')
     expect(res.status).toBe(200)
-    expect(res.text).toBe(`DELETE 123`)
+    expect(res.text).toBe('DELETE 123')
   })
 })
 
@@ -77,15 +77,15 @@ describe('Routing', () => {
     it('Should return responses from `/book/*`', async () => {
       let res = await request(server).get('/book')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`get /book`)
+      expect(res.text).toBe('get /book')
 
       res = await request(server).get('/book/123')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`get /book/123`)
+      expect(res.text).toBe('get /book/123')
 
       res = await request(server).post('/book')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`post /book`)
+      expect(res.text).toBe('post /book')
     })
   })
 
@@ -106,11 +106,11 @@ describe('Routing', () => {
     it('Should return responses from `/chained/*`', async () => {
       let res = await request(server).get('/chained/abc')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`GET for abc`)
+      expect(res.text).toBe('GET for abc')
 
       res = await request(server).post('/chained/abc')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`POST for abc`)
+      expect(res.text).toBe('POST for abc')
 
       res = await request(server).put('/chained/abc')
       expect(res.status).toBe(404)

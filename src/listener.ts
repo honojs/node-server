@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
-import type { FetchCallback } from './types'
-import './globals'
-import { cacheKey } from './response'
 import { newRequest } from './request'
+import { cacheKey } from './response'
+import type { FetchCallback } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
+import './globals'
 
 const regBuffer = /^no$/i
 const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
@@ -33,6 +33,7 @@ const responseViaCache = (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
 ): undefined | Promise<undefined> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [status, body, header] = (res as any)[cacheKey]
   if (typeof body === 'string') {
     header['Content-Length'] = Buffer.byteLength(body)
