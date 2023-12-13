@@ -4,30 +4,33 @@ import type { OutgoingHttpHeaders } from 'node:http'
 import { buildOutgoingHttpHeaders } from './utils'
 
 const responseCache = Symbol('responseCache')
-const newGlobalResponseKey = Symbol('newGlobalResponse')
 export const cacheKey = Symbol('cache')
 
 export const GlobalResponse = global.Response
 export class Response {
   #body?: BodyInit | null
-  #init?: ResponseInit;
+  #init?: ResponseInit
 
-  [newGlobalResponseKey](): typeof GlobalResponse {
-    return new GlobalResponse(
-      this.#body,
-      this.#init instanceof Response ? this.#init[newGlobalResponseKey]() : (this.#init as any)
-    ) as any
-  }
-
-  // @ts-ignore
   private get cache(): typeof GlobalResponse {
     delete (this as any)[cacheKey]
-    return ((this as any)[responseCache] ||= this[newGlobalResponseKey]())
+    return ((this as any)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
   }
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
     this.#body = body
-    this.#init = init
+    if (init instanceof Response) {
+      const cachedGlobalResponse = (init as any)[responseCache]
+      if (cachedGlobalResponse) {
+        this.#init = cachedGlobalResponse
+        // instantiate GlobalResponse cache and this object always returns value from global.Response
+        this.cache
+        return
+      } else {
+        this.#init = init.#init
+      }
+    } else {
+      this.#init = init
+    }
 
     if (typeof body === 'string' || body instanceof ReadableStream) {
       let headers = (init?.headers || { 'content-type': 'text/plain;charset=UTF-8' }) as
@@ -38,7 +41,7 @@ export class Response {
         headers = buildOutgoingHttpHeaders(headers)
       }
 
-      (this as any)[cacheKey] = [init?.status || 200, body, headers]
+      ;(this as any)[cacheKey] = [init?.status || 200, body, headers]
     }
   }
 }

@@ -4,6 +4,18 @@ import { GlobalResponse } from '../src/response'
 
 class NextResponse extends Response {}
 
+class UpperCaseStream extends TransformStream {
+  constructor() {
+    super({
+      transform(chunk, controller) {
+        controller.enqueue(
+          new TextEncoder().encode(new TextDecoder().decode(chunk).toString().toUpperCase())
+        )
+      },
+    })
+  }
+}
+
 describe('Response', () => {
   let server: Server
   let port: number
@@ -54,14 +66,27 @@ describe('Response', () => {
 
     // support other class to extends from Response
     expect(new NextResponse()).toBeInstanceOf(Response)
+  })
 
+  it('Should not lose header data', async () => {
     const parentResponse = new Response('OK', {
       headers: {
         'content-type': 'application/json',
-      }
+      },
     })
     const childResponse = new Response('OK', parentResponse)
     parentResponse.headers.delete('content-type')
     expect(childResponse.headers.get('content-type')).toEqual('application/json')
+  })
+
+  it('Nested constructors should not cause an error even if ReadableStream is specified', async () => {
+    const stream = new Response('hono').body
+    const parentResponse = new Response(stream)
+    const upperCaseStream = new UpperCaseStream()
+    const childResponse = new Response(
+      parentResponse.body!.pipeThrough(upperCaseStream),
+      parentResponse
+    )
+    expect(await childResponse.text()).toEqual('HONO')
   })
 })
