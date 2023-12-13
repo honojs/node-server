@@ -62,7 +62,7 @@
     "node": ">=18.14.1"
   },
   "devDependencies": {
-    "@hono/eslint-config": "^0.0.1",
+    "@hono/eslint-config": "^0.0.2",
     "@types/jest": "^29.5.3",
     "@types/node": "^20.10.0",
     "@types/supertest": "^2.0.12",
