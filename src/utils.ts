@@ -1,11 +1,11 @@
-import type { Writable } from 'node:stream'
 import type { OutgoingHttpHeaders } from 'node:http'
+import type { Writable } from 'node:stream'
 
 export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writable: Writable) {
   if (stream.locked) {
     throw new TypeError('ReadableStream is locked.')
   } else if (writable.destroyed) {
-    stream.cancel();
+    stream.cancel()
     return
   }
   const reader = stream.getReader()
@@ -16,6 +16,7 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
     writable.off('close', cancel)
     writable.off('error', cancel)
   })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function cancel(error?: any) {
     reader.cancel(error).catch(() => {})
     if (error) writable.destroy(error)
@@ -28,7 +29,7 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
       if (done) {
         writable.end()
       } else if (!writable.write(value)) {
-        writable.once("drain", onDrain);
+        writable.once('drain', onDrain)
       } else {
         return reader.read().then(flow, cancel)
       }

@@ -1,7 +1,7 @@
-import { createAdaptorServer } from './../src/server'
 import { Hono } from 'hono'
 import request from 'supertest'
 import { serveStatic } from './../src/serve-static'
+import { createAdaptorServer } from './../src/server'
 
 describe('Serve Static Middleware', () => {
   const app = new Hono()

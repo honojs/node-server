@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http'
-import { AddressInfo } from 'node:net'
+import type { AddressInfo } from 'node:net'
 import { GlobalResponse } from '../src/response'
 
 class NextResponse extends Response {}
@@ -56,6 +56,7 @@ describe('Response', () => {
 
     // can only use new operator
     expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(Response as any)()
     }).toThrow()
 

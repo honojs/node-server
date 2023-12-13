@@ -1,5 +1,5 @@
-import request from 'supertest'
 import { Hono } from 'hono'
+import request from 'supertest'
 import { handle } from '../src/vercel'
 
 describe('Basic', () => {
@@ -40,7 +40,7 @@ describe('Basic', () => {
   it('Should return 201 response - DELETE /api/posts/123', async () => {
     const res = await request(server).delete('/api/posts/123')
     expect(res.status).toBe(200)
-    expect(res.text).toBe(`DELETE 123`)
+    expect(res.text).toBe('DELETE 123')
   })
 })
 
@@ -63,15 +63,15 @@ describe('Routing', () => {
     it('Should return responses from `/v2/api/*`', async () => {
       let res = await request(server).get('/v2/api')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`get /api`)
+      expect(res.text).toBe('get /api')
 
       res = await request(server).get('/v2/api/123')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`get /api/123`)
+      expect(res.text).toBe('get /api/123')
 
       res = await request(server).post('/v2/api')
       expect(res.status).toBe(200)
-      expect(res.text).toBe(`post /api`)
+      expect(res.text).toBe('post /api')
     })
   })
 })

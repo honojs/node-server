@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Define lightweight pseudo Response class and replace global.Response with it.
 
 import type { OutgoingHttpHeaders } from 'node:http'
