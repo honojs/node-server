@@ -25,6 +25,10 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
     console.info('The user aborted a request.')
   } else {
     console.error(e)
+    outgoing.headersSent
+      ? outgoing.writeHead(500)
+      : outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
+    outgoing.end(`Error: ${err.message}`)
     outgoing.destroy(err)
   }
 }
@@ -53,6 +57,13 @@ const responseViaResponseObject = async (
 ) => {
   if (res instanceof Promise) {
     res = await res.catch(handleFetchError)
+  }
+  if (!(res instanceof Response)) {
+    return handleResponseError(
+      // @ts-expect-error the object must have `toString()`
+      new Error(`The response is not an instance of Response, but ${res.toString()}`),
+      outgoing
+    )
   }
   if (cacheKey in res) {
     try {
