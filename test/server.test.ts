@@ -24,6 +24,10 @@ describe('Basic', () => {
   app.delete('/posts/:id', (c) => {
     return c.text(`DELETE ${c.req.param('id')}`)
   })
+  // @ts-expect-error the response is string
+  app.get('/invalid', () => {
+    return '<h1>HTML</h1>'
+  })
 
   const server = createAdaptorServer(app)
 
@@ -57,6 +61,14 @@ describe('Basic', () => {
     const res = await request(server).delete('/posts/123')
     expect(res.status).toBe(200)
     expect(res.text).toBe('DELETE 123')
+  })
+
+  it('Should return 500 response - GET /invalid', async () => {
+    const res = await request(server).get('/invalid')
+    expect(res.status).toBe(500)
+    expect(res.headers['content-type']).toBe('text/plain')
+    // The error message might be changed.
+    expect(res.text).toBe('Error: The response is not an instance of Response, but <h1>HTML</h1>')
   })
 })
 
@@ -477,7 +489,6 @@ describe('Hono compression', () => {
     expect(res.headers['content-encoding']).toMatch(/gzip/)
   })
 })
-
 
 describe('set child response to c.res', () => {
   const app = new Hono()
