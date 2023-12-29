@@ -25,9 +25,7 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
     console.info('The user aborted a request.')
   } else {
     console.error(e)
-    outgoing.headersSent
-      ? outgoing.writeHead(500)
-      : outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
+    if (!outgoing.headersSent) outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
     outgoing.end(`Error: ${err.message}`)
     outgoing.destroy(err)
   }
