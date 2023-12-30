@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
+import { Response as PonyfillResponse } from '@whatwg-node/fetch'
 import { Hono } from 'hono'
 import { basicAuth } from 'hono/basic-auth'
 import { compress } from 'hono/compress'
@@ -27,6 +28,9 @@ describe('Basic', () => {
   // @ts-expect-error the response is string
   app.get('/invalid', () => {
     return '<h1>HTML</h1>'
+  })
+  app.get('/ponyfill', () => {
+    return new PonyfillResponse('Pony')
   })
 
   const server = createAdaptorServer(app)
@@ -67,8 +71,13 @@ describe('Basic', () => {
     const res = await request(server).get('/invalid')
     expect(res.status).toBe(500)
     expect(res.headers['content-type']).toBe('text/plain')
-    // The error message might be changed.
-    expect(res.text).toBe('Error: The response is not an instance of Response, but <h1>HTML</h1>')
+  })
+
+  it('Should return 200 response - GET /ponyfill', async () => {
+    const res = await request(server).get('/ponyfill')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.text).toBe('Pony')
   })
 })
 

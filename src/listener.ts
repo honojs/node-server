@@ -56,19 +56,13 @@ const responseViaResponseObject = async (
   if (res instanceof Promise) {
     res = await res.catch(handleFetchError)
   }
-  if (!(res instanceof Response)) {
-    return handleResponseError(
-      // @ts-expect-error the object must have `toString()`
-      new Error(`The response is not an instance of Response, but ${res.toString()}`),
-      outgoing
-    )
-  }
-  if (cacheKey in res) {
-    try {
+
+  try {
+    if (cacheKey in res) {
       return responseViaCache(res as Response, outgoing)
-    } catch (e: unknown) {
-      return handleResponseError(e, outgoing)
     }
+  } catch (e: unknown) {
+    return handleResponseError(e, outgoing)
   }
 
   const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
