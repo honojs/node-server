@@ -2,11 +2,12 @@ import type { ReadStream} from 'fs'
 import { createReadStream, existsSync, lstatSync } from 'fs'
 import type { MiddlewareHandler } from 'hono'
 import { getFilePath } from 'hono/utils/filepath'
+import { getFilePathforAbsRoot } from './getFilePathforAbsRoot'
 import { getMimeType } from 'hono/utils/mime'
 
 export type ServeStaticOptions = {
   /**
-   * Root path, relative to current working directory. (absolute paths are not supported)
+   * Root path, relative to current working directory or absolte path.
    */
   root?: string
   path?: string
@@ -39,27 +40,33 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
 
     const url = new URL(c.req.url)
 
-    const filename = options.path ?? decodeURIComponent(url.pathname)
-    let path = getFilePath({
-      filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
-      root: options.root,
-      defaultDocument: options.index ?? 'index.html',
-    })
+    const path = options.path ?? decodeURIComponent(url.pathname)
+    const filename = options.rewriteRequestPath?.(path) ?? path
+    const defaultDocument = options.index ?? 'index.html'
 
-    if (!path) return next()
+    const filePath = options.root?.startsWith('/')
+      ? getFilePathforAbsRoot({
+          filename,
+          root: options.root,
+          defaultDocument,
+        })
+      : './' +
+        getFilePath({
+          filename,
+          root: options.root,
+          defaultDocument,
+        })
 
-    path = `./${path}`
-
-    if (!existsSync(path)) {
+    if (!filePath || !existsSync(filePath)) {
       return next()
     }
 
-    const mimeType = getMimeType(path)
+    const mimeType = getMimeType(filePath)
     if (mimeType) {
       c.header('Content-Type', mimeType)
     }
 
-    const stat = lstatSync(path)
+    const stat = lstatSync(filePath)
     const size = stat.size
 
     if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
@@ -72,7 +79,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
 
     if (!range) {
       c.header('Content-Length', size.toString())
-      return c.body(createStreamBody(createReadStream(path)), 200)
+      return c.body(createStreamBody(createReadStream(filePath)), 200)
     }
 
     c.header('Accept-Ranges', 'bytes')
@@ -86,7 +93,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     }
 
     const chunksize = end - start + 1
-    const stream = createReadStream(path, { start, end })
+    const stream = createReadStream(filePath, { start, end })
 
     c.header('Content-Length', chunksize.toString())
     c.header('Content-Range', `bytes ${start}-${end}/${stat.size}`)
