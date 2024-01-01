@@ -122,7 +122,7 @@ describe('Serve Static Middleware', () => {
     expect(res.text).toBe('This is plain.txt')
   })
 
-  it('Should handle the `onNotFound()` option', async () => {
+  it('Should handle the `onNotFound` option', async () => {
     const res = await request(server).get('/on-not-found/foo.txt')
     expect(res.status).toBe(404)
     expect(notFoundMessage).toBe(
