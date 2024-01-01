@@ -162,6 +162,22 @@ app.use(
 )
 ```
 
+#### `onNotFound`
+
+The `onNotFound` is useful for debugging. You can write a handle for when a file is not found.
+
+```ts
+app.use(
+  '/static/*',
+  serveStatic({
+    root: './non-existent-dir',
+    onNotFound: (path, c) => {
+      console.log(`${path} is not found, request to ${c.req.path}`)
+    },
+  })
+)
+```
+
 ## Related projects
 
 - Hono - <https://hono.dev>

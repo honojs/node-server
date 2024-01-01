@@ -1,6 +1,6 @@
-import type { ReadStream} from 'fs'
+import type { ReadStream } from 'fs'
 import { createReadStream, existsSync, lstatSync } from 'fs'
-import type { MiddlewareHandler } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import { getFilePath } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
 
@@ -12,6 +12,7 @@ export type ServeStaticOptions = {
   path?: string
   index?: string // default is 'index.html'
   rewriteRequestPath?: (path: string) => string
+  onNotFound?: (path: string, c: Context) => void | Promise<void>
 }
 
 const createStreamBody = (stream: ReadStream) => {
@@ -51,6 +52,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     path = `./${path}`
 
     if (!existsSync(path)) {
+      await options.onNotFound?.(path, c)
       return next()
     }
 

@@ -16,6 +16,17 @@ describe('Serve Static Middleware', () => {
     })
   )
 
+  let notFoundMessage = ''
+  app.use(
+    '/on-not-found/*',
+    serveStatic({
+      root: './not-found',
+      onNotFound: (path, c) => {
+        notFoundMessage = `${path} is not found, request to ${c.req.path}`
+      },
+    })
+  )
+
   const server = createAdaptorServer(app)
 
   it('Should return index.html', async () => {
@@ -109,5 +120,13 @@ describe('Serve Static Middleware', () => {
     expect(res.headers['content-range']).toBe('bytes 0-16/17')
     expect(res.text.length).toBe(17)
     expect(res.text).toBe('This is plain.txt')
+  })
+
+  it('Should handle the `onNotFound` option', async () => {
+    const res = await request(server).get('/on-not-found/foo.txt')
+    expect(res.status).toBe(404)
+    expect(notFoundMessage).toBe(
+      './not-found/on-not-found/foo.txt is not found, request to /on-not-found/foo.txt'
+    )
   })
 })
