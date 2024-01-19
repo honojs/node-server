@@ -1,12 +1,16 @@
 import fs from 'node:fs'
+import type { IncomingMessage } from 'node:http'
 import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
+import type { Socket } from 'node:net'
 import { Response as PonyfillResponse } from '@whatwg-node/fetch'
 import { Hono } from 'hono'
 import { basicAuth } from 'hono/basic-auth'
 import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
 import request from 'supertest'
+import wsRequest from 'superwstest'
+import { WebSocketServer } from 'ws'
 import { createAdaptorServer } from '../src/server'
 
 describe('Basic', () => {
@@ -469,7 +473,6 @@ describe('HTTP2', () => {
   })
 
   it('Should return 200 response - GET /', async () => {
-    // @ts-expect-error: @types/supertest is not updated yet
     const res = await request(server, { http2: true }).get('/').trustLocalhost()
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/text\/plain/)
@@ -516,5 +519,40 @@ describe('set child response to c.res', () => {
     const res = await request(server).get('/json')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/application\/json/)
+  })
+})
+
+describe('upgrade websocket', () => {
+  const app = new Hono<{
+    Bindings: {
+      incoming: IncomingMessage;
+      socket: Socket;
+      head: Buffer;
+    }
+  }>()
+  const wsServer = new WebSocketServer({ noServer: true })
+  
+  class UpgradeResponse extends Response {
+    status = 101
+  }
+
+  app.use('/', async (c) => {
+    wsServer.handleUpgrade(c.env.incoming, c.env.socket, c.env.head, (ws) => {
+        ws.send('Hello World!')
+    })
+
+    return new UpgradeResponse()
+  })
+  
+  const server = createAdaptorServer(app)
+  
+  // 'superwstest' needs the server to be listening
+  beforeEach((done) => { server.listen(0, 'localhost', done) })
+  afterEach((done) => { server.close(done) })
+
+  it('Should send a WebSocket message - GET /', async () => {
+    await wsRequest(server)
+      .ws('/')
+      .expectText('Hello World!')
   })
 })
