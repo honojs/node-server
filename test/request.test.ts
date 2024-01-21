@@ -27,7 +27,16 @@ describe('Request', () => {
     } as IncomingMessage)
     expect(req).toBeInstanceOf(global.Request)
     expect(req.url).toBe('http://localhost/foo.txt')
-    // Check if cached value is returned correctly
+  })
+
+  it('Should resolve double dots in host header', async () => {
+    const req = newRequest({
+      headers: {
+        host: 'localhost/..',
+      },
+      url: '/foo.txt',
+    } as IncomingMessage)
+    expect(req).toBeInstanceOf(global.Request)
     expect(req.url).toBe('http://localhost/foo.txt')
   })
 })
