@@ -129,4 +129,9 @@ describe('Serve Static Middleware', () => {
       './not-found/on-not-found/foo.txt is not found, request to /on-not-found/foo.txt'
     )
   })
+
+  it('Should handle double dots in URL', async () => {
+    const res = await request(server).get('/static/../secret.txt')
+    expect(res.status).toBe(404)
+  })
 })
