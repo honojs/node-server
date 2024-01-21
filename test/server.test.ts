@@ -462,6 +462,12 @@ describe('SSL', () => {
 describe('HTTP2', () => {
   const app = new Hono()
   app.get('/', (c) => c.text('Hello! Node!'))
+  app.get('/headers', (c) => { 
+    // call newRequestFromIncoming
+    c.req.header('Accept')
+    return c.text('Hello! Node!') 
+  })
+  app.get('/url', (c) => c.text(c.req.url))
 
   const server = createAdaptorServer({
     fetch: app.fetch,
@@ -474,6 +480,23 @@ describe('HTTP2', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/text\/plain/)
     expect(res.text).toBe('Hello! Node!')
+  })
+
+  it('Should return 200 response - GET /headers', async () => {
+    // @ts-expect-error: @types/supertest is not updated yet
+    const res = await request(server, { http2: true }).get('/headers').trustLocalhost()
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.text).toBe('Hello! Node!')
+  })
+
+  // Use :authority as the host for the url.
+  it('Should return 200 response - GET /url', async () => {
+    // @ts-expect-error: @types/supertest is not updated yet
+    const res = await request(server, { http2: true }).get('/url').trustLocalhost()
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(new URL(res.text).hostname).toBe('127.0.0.1')
   })
 })
 

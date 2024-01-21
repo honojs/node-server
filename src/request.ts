@@ -2,7 +2,7 @@
 // Define prototype for lightweight pseudo Request object
 
 import type { IncomingMessage } from 'node:http'
-import type { Http2ServerRequest } from 'node:http2'
+import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
 
 const newRequestFromIncoming = (
@@ -11,9 +11,12 @@ const newRequestFromIncoming = (
   incoming: IncomingMessage | Http2ServerRequest
 ): Request => {
   const headerRecord: [string, string][] = []
-  const len = incoming.rawHeaders.length
-  for (let i = 0; i < len; i += 2) {
-    headerRecord.push([incoming.rawHeaders[i], incoming.rawHeaders[i + 1]])
+  const rawHeaders = incoming.rawHeaders
+  for (let i = 0; i < rawHeaders.length; i += 2) {
+    const {[i]: key, [i + 1]: value} = rawHeaders
+    if (key.charCodeAt(0) !== /*:*/ 0x3a) {
+      headerRecord.push([key, value])
+    }
   }
 
   const init = {
@@ -34,6 +37,7 @@ const newRequestFromIncoming = (
 const getRequestCache = Symbol('getRequestCache')
 const requestCache = Symbol('requestCache')
 const incomingKey = Symbol('incomingKey')
+const urlCacheKey = Symbol('urlCacheKey')
 
 const requestPrototype: Record<string | symbol, any> = {
   get method() {
@@ -41,8 +45,10 @@ const requestPrototype: Record<string | symbol, any> = {
   },
 
   get url() {
-    const url = `http://${this[incomingKey].headers.host}${this[incomingKey].url}`
-    return /\.\./.test(url) ? new URL(url).href : url
+    if (this[urlCacheKey]) return this[urlCacheKey]
+    const req = this[incomingKey]
+    const url = `http://${req instanceof Http2ServerRequest ? req.headers[':authority'] : req.headers.host}${req.url}`
+    return (this[urlCacheKey] = new URL(url).href)
   },
 
   [getRequestCache]() {
