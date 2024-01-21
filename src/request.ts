@@ -3,7 +3,6 @@
 
 import type { IncomingMessage } from 'node:http'
 import type { Http2ServerRequest } from 'node:http2'
-import { resolve } from 'node:path'
 import { Readable } from 'node:stream'
 
 const newRequestFromIncoming = (
@@ -42,13 +41,8 @@ const requestPrototype: Record<string | symbol, any> = {
   },
 
   get url() {
-    let path = this[incomingKey]['path']
-    if (!path) {
-      const originalPath = this[incomingKey].url
-      path = /\.\./.test(originalPath) ? resolve(originalPath) : originalPath
-      this[incomingKey]['path'] = path
-    }
-    return `http://${this[incomingKey].headers.host}${path}`
+    const url = `http://${this[incomingKey].headers.host}${this[incomingKey].url}`
+    return /\.\./.test(url) ? new URL(url).href : url
   },
 
   [getRequestCache]() {
