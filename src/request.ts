@@ -47,7 +47,7 @@ const requestPrototype: Record<string | symbol, any> = {
   get url() {
     if (this[urlCacheKey]) return this[urlCacheKey]
     const req = this[incomingKey]
-    const url = `http://${req instanceof Http2ServerRequest ? req.headers[':authority'] : req.headers.host}${req.url}`
+    const url = `http://${req instanceof Http2ServerRequest ? req.authority : req.headers.host}${req.url}`
     return (this[urlCacheKey] = new URL(url).href)
   },
 
