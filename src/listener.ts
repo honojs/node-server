@@ -1,5 +1,7 @@
-import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
+import { ServerResponse } from 'node:http'
+import type { IncomingMessage, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
+import type { Socket } from 'node:net'
 import { newRequest } from './request'
 import { cacheKey } from './response'
 import type { FetchCallback } from './types'
@@ -56,6 +58,10 @@ const responseViaResponseObject = async (
   if (res instanceof Promise) {
     res = await res.catch(handleFetchError)
   }
+  
+  if (res.status === 101) {
+    return
+  }
 
   try {
     if (cacheKey in res) {
@@ -103,10 +109,13 @@ const responseViaResponseObject = async (
   }
 }
 
+type RequestListener = ReturnType<typeof getRequestListener>;
+
 export const getRequestListener = (fetchCallback: FetchCallback) => {
   return (
     incoming: IncomingMessage | Http2ServerRequest,
-    outgoing: ServerResponse | Http2ServerResponse
+    outgoing: ServerResponse | Http2ServerResponse,
+    env?: Record<string, unknown>
   ) => {
     let res
 
@@ -115,7 +124,11 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     const req = newRequest(incoming)
 
     try {
-      res = fetchCallback(req) as Response | Promise<Response>
+      res = fetchCallback(req, env || {
+        incoming,
+        outgoing
+      }) as Response | Promise<Response>
+      
       if (cacheKey in res) {
         // synchronous, cacheable response
         return responseViaCache(res as Response, outgoing)
@@ -129,5 +142,15 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     }
 
     return responseViaResponseObject(res, outgoing)
+  }
+}
+
+export const getUpgradeListener = (requestListener: RequestListener) => {
+  return (incoming: IncomingMessage, socket: Socket, head: Buffer) => {
+    const outgoing = new ServerResponse(incoming)
+    outgoing.assignSocket(socket)
+    requestListener(incoming, outgoing, {
+        incoming, outgoing, socket, head
+    })
   }
 }

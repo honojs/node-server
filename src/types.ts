@@ -1,3 +1,4 @@
+
 import type { createServer, Server, ServerOptions as HttpServerOptions } from 'node:http'
 import type {
   createSecureServer as createSecureHttp2Server,
@@ -11,8 +12,9 @@ import type {
   createServer as createHttpsServer,
   ServerOptions as HttpsServerOptions,
 } from 'node:https'
+import type { Env } from 'hono'
 
-export type FetchCallback = (request: Request) => Promise<unknown> | unknown
+export type FetchCallback = (request: Request, env: Env) => Promise<unknown> | unknown
 
 export type NextHandlerOption = {
   fetch: FetchCallback
@@ -50,4 +52,5 @@ export type Options = {
   fetch: FetchCallback
   port?: number
   hostname?: string
+  upgrade?: boolean
 } & ServerOptions
