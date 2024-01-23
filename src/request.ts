@@ -37,7 +37,6 @@ const newRequestFromIncoming = (
 const getRequestCache = Symbol('getRequestCache')
 const requestCache = Symbol('requestCache')
 const incomingKey = Symbol('incomingKey')
-const urlCacheKey = Symbol('urlCacheKey')
 
 const requestPrototype: Record<string | symbol, any> = {
   get method() {
@@ -45,10 +44,10 @@ const requestPrototype: Record<string | symbol, any> = {
   },
 
   get url() {
-    if (this[urlCacheKey]) return this[urlCacheKey]
+    if (this[requestCache]) return this[requestCache].url
     const req = this[incomingKey]
     const url = `http://${req instanceof Http2ServerRequest ? req.authority : req.headers.host}${req.url}`
-    return (this[urlCacheKey] = new URL(url).href)
+    return new URL(url).href
   },
 
   [getRequestCache]() {
