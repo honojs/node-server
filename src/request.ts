@@ -7,12 +7,13 @@ import { Readable } from 'node:stream'
 
 const newRequestFromIncoming = (
   method: string,
+  url: string,
   incoming: IncomingMessage | Http2ServerRequest
 ): Request => {
   const headerRecord: [string, string][] = []
   const rawHeaders = incoming.rawHeaders
   for (let i = 0; i < rawHeaders.length; i += 2) {
-    const {[i]: key, [i + 1]: value} = rawHeaders
+    const { [i]: key, [i + 1]: value } = rawHeaders
     if (key.charCodeAt(0) !== /*:*/ 0x3a) {
       headerRecord.push([key, value])
     }
@@ -30,12 +31,13 @@ const newRequestFromIncoming = (
     ;(init as any).duplex = 'half'
   }
 
-  return new Request(`http://${incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host}${incoming.url}`, init)
+  return new Request(url, init)
 }
 
 const getRequestCache = Symbol('getRequestCache')
 const requestCache = Symbol('requestCache')
 const incomingKey = Symbol('incomingKey')
+const urlKey = Symbol('urlKey')
 
 const requestPrototype: Record<string | symbol, any> = {
   get method() {
@@ -43,13 +45,15 @@ const requestPrototype: Record<string | symbol, any> = {
   },
 
   get url() {
-    if (this[requestCache]) return this[requestCache].url
-    const req = this[incomingKey]
-    return new URL(`http://${req instanceof Http2ServerRequest ? req.authority : req.headers.host}${req.url}`).href
+    return this[urlKey]
   },
 
   [getRequestCache]() {
-    return (this[requestCache] ||= newRequestFromIncoming(this.method, this[incomingKey]))
+    return (this[requestCache] ||= newRequestFromIncoming(
+      this.method,
+      this[urlKey],
+      this[incomingKey]
+    ))
   },
 }
 ;[
@@ -84,5 +88,10 @@ Object.setPrototypeOf(requestPrototype, global.Request.prototype)
 export const newRequest = (incoming: IncomingMessage | Http2ServerRequest) => {
   const req = Object.create(requestPrototype)
   req[incomingKey] = incoming
+  req[urlKey] = new URL(
+    `http://${incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host}${
+      incoming.url
+    }`
+  ).href
   return req
 }
