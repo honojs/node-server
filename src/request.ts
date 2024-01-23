@@ -7,7 +7,6 @@ import { Readable } from 'node:stream'
 
 const newRequestFromIncoming = (
   method: string,
-  url: string,
   incoming: IncomingMessage | Http2ServerRequest
 ): Request => {
   const headerRecord: [string, string][] = []
@@ -31,7 +30,7 @@ const newRequestFromIncoming = (
     ;(init as any).duplex = 'half'
   }
 
-  return new Request(url, init)
+  return new Request(`http://${incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host}${incoming.url}`, init)
 }
 
 const getRequestCache = Symbol('getRequestCache')
@@ -46,12 +45,11 @@ const requestPrototype: Record<string | symbol, any> = {
   get url() {
     if (this[requestCache]) return this[requestCache].url
     const req = this[incomingKey]
-    const url = `http://${req instanceof Http2ServerRequest ? req.authority : req.headers.host}${req.url}`
-    return new URL(url).href
+    return new URL(`http://${req instanceof Http2ServerRequest ? req.authority : req.headers.host}${req.url}`).href
   },
 
   [getRequestCache]() {
-    return (this[requestCache] ||= newRequestFromIncoming(this.method, this.url, this[incomingKey]))
+    return (this[requestCache] ||= newRequestFromIncoming(this.method, this[incomingKey]))
   },
 }
 ;[
