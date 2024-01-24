@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
+import * as zlib from 'node:zlib'
 import { newRequest } from './request'
 import { cacheKey } from './response'
 import type { FetchCallback } from './types'
@@ -38,9 +39,15 @@ const responseViaCache = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [status, body, header] = (res as any)[cacheKey]
   if (typeof body === 'string') {
-    header['Content-Length'] = Buffer.byteLength(body)
-    outgoing.writeHead(status, header)
-    outgoing.end(body)
+    if (header['content-encoding']) {
+      const compressedBody = compressBody(body, header['content-encoding'])
+      outgoing.writeHead(status, header)
+      outgoing.end(new Uint8Array(compressedBody))
+    } else {
+      header['Content-Length'] = Buffer.byteLength(body)
+      outgoing.writeHead(status, header)
+      outgoing.end(body)
+    }
   } else {
     outgoing.writeHead(status, header)
     return writeFromReadableStream(body, outgoing)?.catch(
@@ -101,6 +108,13 @@ const responseViaResponseObject = async (
     outgoing.writeHead(res.status, resHeaderRecord)
     outgoing.end()
   }
+}
+
+const compressBody = (body: string, encoding: 'gzip' | 'deflate' = 'gzip'): Buffer => {
+  if (encoding === 'deflate'){
+    return zlib.deflateSync(Buffer.from(body))
+  }
+  return zlib.gzipSync(Buffer.from(body))
 }
 
 export const getRequestListener = (fetchCallback: FetchCallback) => {

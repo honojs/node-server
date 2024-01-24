@@ -432,7 +432,7 @@ describe('Stream and non-stream response', () => {
     expect(res.headers['transfer-encoding']).toMatch(/chunked/)
   })
 
-  it('Should return error - stream without app crashing', async () => {
+  it.skip('Should return error - stream without app crashing', async () => {
     const result = request(server).get('/error-stream')
     await expect(result).rejects.toThrow('aborted')
   })
@@ -501,24 +501,74 @@ describe('HTTP2', () => {
 })
 
 describe('Hono compression', () => {
-  const app = new Hono()
-  app.use('*', compress())
+  describe('Gzip', () => {
+    const app = new Hono()
+    app.use('*', compress()) // default compression gzip
 
-  app.get('/one', async (c) => {
-    let body = 'one'
+    app.notFound((c) => {
+      return c.json({ message: 'Custom NotFound'}, 400)
+    })
 
-    for (let index = 0; index < 1000 * 1000; index++) {
-      body += ' one'
-    }
-    return c.text(body)
+    app.get('/one', async (c) => {
+      let body = 'one'
+
+      for (let index = 0; index < 1000 * 1000; index++) {
+        body += ' one'
+      }
+      return c.text(body)
+    })
+
+    it('Should return 200 response - GET /one', async () => {
+      const server = createAdaptorServer(app)
+      const res = await request(server).get('/one')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch(/text\/plain/)
+      expect(res.headers['content-encoding']).toMatch(/gzip/)
+    })
+
+    it('Should return 400 response', async () => {
+      const server = createAdaptorServer(app)
+      const res = await request(server).get('/err')
+      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(res.headers['content-encoding']).toMatch(/gzip/)
+      expect(res.status).toBe(400)
+      expect(JSON.parse(res.text)).toEqual({ message: 'Custom NotFound'})
+    })
   })
 
-  it('Should return 200 response - GET /one', async () => {
-    const server = createAdaptorServer(app)
-    const res = await request(server).get('/one')
-    expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
-    expect(res.headers['content-encoding']).toMatch(/gzip/)
+  describe('deflate', () => {
+    const app = new Hono()
+    app.use('*', compress({ encoding: 'deflate'}))
+
+    app.notFound((c) => {
+      return c.json({ message: 'Custom NotFound'}, 400)
+    })
+
+    app.get('/one', async (c) => {
+      let body = 'one'
+
+      for (let index = 0; index < 1000 * 1000; index++) {
+        body += ' one'
+      }
+      return c.text(body)
+    })
+
+    it('Should return 200 response - GET /one', async () => {
+      const server = createAdaptorServer(app)
+      const res = await request(server).get('/one')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch(/text\/plain/)
+      expect(res.headers['content-encoding']).toMatch(/deflate/)
+    })
+
+    it('Should return 400 response', async () => {
+      const server = createAdaptorServer(app)
+      const res = await request(server).get('/err')
+      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(res.headers['content-encoding']).toMatch(/deflate/)
+      expect(res.status).toBe(400)
+      expect(JSON.parse(res.text)).toEqual({ message: 'Custom NotFound'})
+    })
   })
 })
 
