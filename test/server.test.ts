@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
 import { Response as PonyfillResponse } from '@whatwg-node/fetch'
@@ -462,10 +463,10 @@ describe('SSL', () => {
 describe('HTTP2', () => {
   const app = new Hono()
   app.get('/', (c) => c.text('Hello! Node!'))
-  app.get('/headers', (c) => { 
+  app.get('/headers', (c) => {
     // call newRequestFromIncoming
     c.req.header('Accept')
-    return c.text('Hello! Node!') 
+    return c.text('Hello! Node!')
   })
   app.get('/url', (c) => c.text(c.req.url))
 
@@ -539,5 +540,31 @@ describe('set child response to c.res', () => {
     const res = await request(server).get('/json')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/application\/json/)
+  })
+})
+
+type RawBindings = {
+  incoming: IncomingMessage
+  outgoing: ServerResponse
+}
+
+describe('forwarding IncomingMessage and ServerResponse in env', () => {
+  const app = new Hono<{ Bindings: RawBindings }>()
+  app.get('/', (c) => c.json({
+    incoming: c.env.incoming.constructor.name,
+    url: c.env.incoming.url,
+    outgoing: c.env.outgoing.constructor.name,
+    status: c.env.outgoing.statusCode
+  }))
+
+  it('Should add `incoming` and `outgoing` to env', async () => {
+    const server = createAdaptorServer(app)
+    const res = await request(server).get('/')
+
+    expect(res.status).toBe(200)
+    expect(res.body.incoming).toBe('IncomingMessage')
+    expect(res.body.url).toBe('/')
+    expect(res.body.outgoing).toBe('ServerResponse')
+    expect(res.body.status).toBe(200)
   })
 })
