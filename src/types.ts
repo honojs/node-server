@@ -11,8 +11,9 @@ import type {
   createServer as createHttpsServer,
   ServerOptions as HttpsServerOptions,
 } from 'node:https'
+import type { Hono } from 'hono'
 
-export type FetchCallback = (request: Request) => Promise<unknown> | unknown
+export type FetchCallback = typeof Hono['prototype']['fetch']
 
 export type NextHandlerOption = {
   fetch: FetchCallback
