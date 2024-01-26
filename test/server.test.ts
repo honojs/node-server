@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
 import { Response as PonyfillResponse } from '@whatwg-node/fetch'
@@ -9,6 +8,7 @@ import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
 import request from 'supertest'
 import { createAdaptorServer } from '../src/server'
+import type { RawBindings } from '../src/types'
 
 describe('Basic', () => {
   const app = new Hono()
@@ -542,11 +542,6 @@ describe('set child response to c.res', () => {
     expect(res.headers['content-type']).toMatch(/application\/json/)
   })
 })
-
-type RawBindings = {
-  incoming: IncomingMessage
-  outgoing: ServerResponse
-}
 
 describe('forwarding IncomingMessage and ServerResponse in env', () => {
   const app = new Hono<{ Bindings: RawBindings }>()
