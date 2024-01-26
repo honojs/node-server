@@ -8,7 +8,7 @@ import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
 import request from 'supertest'
 import { createAdaptorServer } from '../src/server'
-import type { RawBindings } from '../src/types'
+import type { HttpBindings } from '../src/types'
 
 describe('Basic', () => {
   const app = new Hono()
@@ -544,7 +544,7 @@ describe('set child response to c.res', () => {
 })
 
 describe('forwarding IncomingMessage and ServerResponse in env', () => {
-  const app = new Hono<{ Bindings: RawBindings }>()
+  const app = new Hono<{ Bindings: HttpBindings }>()
   app.get('/', (c) => c.json({
     incoming: c.env.incoming.constructor.name,
     url: c.env.incoming.url,
