@@ -51,10 +51,19 @@ const responseViaCache = (
 
 const responseViaResponseObject = async (
   res: Response | Promise<Response>,
-  outgoing: ServerResponse | Http2ServerResponse
+  outgoing: ServerResponse | Http2ServerResponse,
+  customErrorHandler?: (e: unknown) => void
 ) => {
   if (res instanceof Promise) {
-    res = await res.catch(handleFetchError)
+    if (customErrorHandler) {
+      try {
+        res = await res
+      } catch (err) {
+        return customErrorHandler(err)
+      }
+    } else {
+      res = await res.catch(handleFetchError)
+    }
   }
 
   try {
@@ -103,7 +112,10 @@ const responseViaResponseObject = async (
   }
 }
 
-export const getRequestListener = (fetchCallback: FetchCallback) => {
+export const getRequestListener = (
+  fetchCallback: FetchCallback,
+  customErrorHandler?: (e: unknown) => void
+) => {
   return (
     incoming: IncomingMessage | Http2ServerRequest,
     outgoing: ServerResponse | Http2ServerResponse
@@ -122,12 +134,16 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
       }
     } catch (e: unknown) {
       if (!res) {
+        if (customErrorHandler) {
+          return customErrorHandler(e)
+        }
+
         res = handleFetchError(e)
       } else {
         return handleResponseError(e, outgoing)
       }
     }
 
-    return responseViaResponseObject(res, outgoing)
+    return responseViaResponseObject(res, outgoing, customErrorHandler)
   }
 }
