@@ -1,8 +1,16 @@
-import type { createServer, Server, ServerOptions as HttpServerOptions } from 'node:http'
+import type {
+  createServer,
+  IncomingMessage,
+  Server,
+  ServerOptions as HttpServerOptions,
+  ServerResponse as HttpServerResponse,
+} from 'node:http'
 import type {
   createSecureServer as createSecureHttp2Server,
   createServer as createHttp2Server,
+  Http2ServerRequest,
   Http2Server,
+  Http2ServerResponse,
   Http2SecureServer,
   SecureServerOptions as SecureHttp2ServerOptions,
   ServerOptions as Http2ServerOptions,
@@ -12,7 +20,17 @@ import type {
   ServerOptions as HttpsServerOptions,
 } from 'node:https'
 
-export type FetchCallback = (request: Request) => Promise<unknown> | unknown
+export type HttpBindings = {
+  incoming: IncomingMessage
+  outgoing: HttpServerResponse
+}
+
+export type Http2Bindings = {
+  incoming: Http2ServerRequest
+  outgoing: Http2ServerResponse
+}
+
+export type FetchCallback = (request: Request, env: HttpBindings | Http2Bindings) => Promise<unknown> | unknown
 
 export type NextHandlerOption = {
   fetch: FetchCallback

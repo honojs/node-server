@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { newRequest } from './request'
 import { cacheKey } from './response'
-import type { FetchCallback } from './types'
+import type { FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import './globals'
 
@@ -115,7 +115,7 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     const req = newRequest(incoming)
 
     try {
-      res = fetchCallback(req) as Response | Promise<Response>
+      res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as Response | Promise<Response>
       if (cacheKey in res) {
         // synchronous, cacheable response
         return responseViaCache(res as Response, outgoing)
