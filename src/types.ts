@@ -72,3 +72,5 @@ export type Options = {
   port?: number
   hostname?: string
 } & ServerOptions
+
+export type CustomErrorHandler = (err: unknown) => void | Response | Promise<void | Response>
