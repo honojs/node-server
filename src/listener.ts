@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { newRequest } from './request'
 import { cacheKey } from './response'
-import type { FetchCallback, HttpBindings } from './types'
+import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import './globals'
 
@@ -54,14 +54,16 @@ const responseViaCache = (
 const responseViaResponseObject = async (
   res: Response | Promise<Response>,
   outgoing: ServerResponse | Http2ServerResponse,
-  options: { errorHandler?: (e: unknown) => void } = {}
+  options: { errorHandler?: CustomErrorHandler } = {}
 ) => {
   if (res instanceof Promise) {
     if (options.errorHandler) {
       try {
         res = await res
       } catch (err) {
-        return options.errorHandler(err)
+        const errRes = await options.errorHandler(err)
+        if (!errRes) return
+        res = errRes
       }
     } else {
       res = await res.catch(handleFetchError)
@@ -116,9 +118,9 @@ const responseViaResponseObject = async (
 
 export const getRequestListener = (
   fetchCallback: FetchCallback,
-  options: { errorHandler?: (e: unknown) => void } = {}
+  options: { errorHandler?: CustomErrorHandler } = {}
 ) => {
-  return (
+  return async (
     incoming: IncomingMessage | Http2ServerRequest,
     outgoing: ServerResponse | Http2ServerResponse
   ) => {
@@ -139,10 +141,12 @@ export const getRequestListener = (
     } catch (e: unknown) {
       if (!res) {
         if (options.errorHandler) {
-          return options.errorHandler(e)
+          res = await options.errorHandler(e)
+          if (!res) return
+        } else {
+          res = handleFetchError(e)
         }
 
-        res = handleFetchError(e)
       } else {
         return handleResponseError(e, outgoing)
       }
