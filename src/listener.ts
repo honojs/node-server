@@ -62,7 +62,9 @@ const responseViaResponseObject = async (
         res = await res
       } catch (err) {
         const errRes = await options.errorHandler(err)
-        if (!errRes) return
+        if (!errRes) {
+          return
+        }
         res = errRes
       }
     } else {
@@ -153,7 +155,9 @@ export const getRequestListener = (
       if (!res) {
         if (options.errorHandler) {
           res = await options.errorHandler(e)
-          if (!res) return
+          if (!res) {
+            return
+          }
         } else {
           res = handleFetchError(e)
         }
