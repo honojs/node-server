@@ -30,7 +30,10 @@ export type Http2Bindings = {
   outgoing: Http2ServerResponse
 }
 
-export type FetchCallback = (request: Request, env: HttpBindings | Http2Bindings) => Promise<unknown> | unknown
+export type FetchCallback = (
+  request: Request,
+  env: HttpBindings | Http2Bindings
+) => Promise<unknown> | unknown
 
 export type NextHandlerOption = {
   fetch: FetchCallback

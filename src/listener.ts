@@ -25,7 +25,9 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
     console.info('The user aborted a request.')
   } else {
     console.error(e)
-    if (!outgoing.headersSent) outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
+    if (!outgoing.headersSent) {
+      outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
+    }
     outgoing.end(`Error: ${err.message}`)
     outgoing.destroy(err)
   }
@@ -115,7 +117,9 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     const req = newRequest(incoming)
 
     try {
-      res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as Response | Promise<Response>
+      res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as
+        | Response
+        | Promise<Response>
       if (cacheKey in res) {
         // synchronous, cacheable response
         return responseViaCache(res as Response, outgoing)

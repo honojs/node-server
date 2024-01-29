@@ -444,10 +444,10 @@
   resolved "https://registry.yarnpkg.com/@eslint/js/-/js-8.55.0.tgz#b721d52060f369aa259cf97392403cb9ce892ec6"
   integrity sha512-qQfo2mxH5yVom1kacMtZZJFVdW+E70mqHMJvVg6WTLo+VBuQJ4TojZlfWBjK0ve5BdEeNAVxOsl/nvNMpJOaJA==
 
-"@hono/eslint-config@^0.0.2":
-  version "0.0.2"
-  resolved "https://registry.yarnpkg.com/@hono/eslint-config/-/eslint-config-0.0.2.tgz#80ea395e630b0e7abb9f9f633aa89155e110ebe4"
-  integrity sha512-YAI0ryGdbzKARQYLesYGjwv/p86m3u2q98W+uurdFoFhlWYEk8/MIrtUpCuREFD2jucZ4TDaS7hh6J6l69aKZA==
+"@hono/eslint-config@^0.0.4":
+  version "0.0.4"
+  resolved "https://registry.yarnpkg.com/@hono/eslint-config/-/eslint-config-0.0.4.tgz#11bf12fd606b63302b4c4f5880f6965cc33ddcd2"
+  integrity sha512-CaL3LBdI2tw7Luo4vGDhhrdntA02Nsts6P0FjAz3U5piy3UhWzgEvEN+L9M0fsG7Mm1cgd+kM3hF8CRJOH0aGA==
   dependencies:
     "@typescript-eslint/eslint-plugin" "^6.14.0"
     "@typescript-eslint/parser" "^6.14.0"
@@ -4807,6 +4807,11 @@ prepend-http@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/prepend-http/-/prepend-http-2.0.0.tgz#e92434bfa5ea8c19f41cdfd401d741a3c819d897"
   integrity sha512-ravE6m9Atw9Z/jjttRUZ+clIXogdghyZAuWJ3qEzjT+jI/dL1ifAqhZeC5VHzQp1MSt1+jxKkFNemj/iO7tVUA==
+
+prettier@^3.2.4:
+  version "3.2.4"
+  resolved "https://registry.yarnpkg.com/prettier/-/prettier-3.2.4.tgz#4723cadeac2ce7c9227de758e5ff9b14e075f283"
+  integrity sha512-FWu1oLHKCrtpO1ypU6J0SbK2d9Ckwysq6bHj/uaCP26DxrPpppCLQRGVuqAxSTvhF00AcvDRyYrLNW7ocBhFFQ==
 
 pretty-format@^29.0.0, pretty-format@^29.0.3:
   version "29.0.3"
