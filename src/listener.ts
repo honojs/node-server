@@ -157,7 +157,6 @@ export const getRequestListener = (
         } else {
           res = handleFetchError(e)
         }
-
       } else {
         return handleResponseError(e, outgoing)
       }
