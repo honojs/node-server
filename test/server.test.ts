@@ -545,12 +545,14 @@ describe('set child response to c.res', () => {
 
 describe('forwarding IncomingMessage and ServerResponse in env', () => {
   const app = new Hono<{ Bindings: HttpBindings }>()
-  app.get('/', (c) => c.json({
-    incoming: c.env.incoming.constructor.name,
-    url: c.env.incoming.url,
-    outgoing: c.env.outgoing.constructor.name,
-    status: c.env.outgoing.statusCode
-  }))
+  app.get('/', (c) =>
+    c.json({
+      incoming: c.env.incoming.constructor.name,
+      url: c.env.incoming.url,
+      outgoing: c.env.outgoing.constructor.name,
+      status: c.env.outgoing.statusCode,
+    })
+  )
 
   it('Should add `incoming` and `outgoing` to env', async () => {
     const server = createAdaptorServer(app)

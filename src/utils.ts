@@ -19,7 +19,9 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function cancel(error?: any) {
     reader.cancel(error).catch(() => {})
-    if (error) writable.destroy(error)
+    if (error) {
+      writable.destroy(error)
+    }
   }
   function onDrain() {
     reader.read().then(flow, cancel)
