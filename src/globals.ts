@@ -1,9 +1,4 @@
 import crypto from 'node:crypto'
-import { Response } from './response'
-
-Object.defineProperty(global, 'Response', {
-  value: Response,
-})
 
 const webFetch = global.fetch
 

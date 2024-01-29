@@ -178,6 +178,40 @@ app.use(
 )
 ```
 
+## Accessing Node.js API
+
+You can access the Node.js API from `c.env` in Node.js. For example, if you want to specify a type, you can write the following.
+
+```ts
+import { serve } from '@hono/node-server'
+import type { HttpBindings } from '@hono/node-server'
+import { Hono } from 'hono'
+
+const app = new Hono<{ Bindings: HttpBindings }>()
+
+app.get('/', (c) => {
+  return c.json({
+    remoteAddress: c.env.incoming.socket.remoteAddress,
+  })
+})
+
+serve(app)
+```
+
+The APIs that you can get from `c.env` are as follows.
+
+```ts
+type HttpBindings = {
+  incoming: IncomingMessage
+  outgoing: ServerResponse
+}
+
+type Http2Bindings = {
+  incoming: Http2ServerRequest
+  outgoing: Http2ServerResponse
+}
+```
+
 ## Related projects
 
 - Hono - <https://hono.dev>

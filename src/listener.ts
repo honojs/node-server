@@ -71,7 +71,8 @@ const responseViaResponseObject = async (
   }
 
   try {
-    if (cacheKey in res) {
+    const isCached = cacheKey in res
+    if (isCached) {
       return responseViaCache(res as Response, outgoing)
     }
   } catch (e: unknown) {
@@ -90,20 +91,30 @@ const responseViaResponseObject = async (
        * Else if content-type is not application/json nor text/* but can be text/event-stream,
        * we assume that the response should be streamed.
        */
+
+      const {
+        'transfer-encoding': transferEncoding,
+        'content-encoding': contentEncoding,
+        'content-length': contentLength,
+        'x-accel-buffering': accelBuffering,
+        'content-type': contentType,
+      } = resHeaderRecord
+
       if (
-        resHeaderRecord['transfer-encoding'] ||
-        resHeaderRecord['content-encoding'] ||
-        resHeaderRecord['content-length'] ||
+        transferEncoding ||
+        contentEncoding ||
+        contentLength ||
         // nginx buffering variant
-        (resHeaderRecord['x-accel-buffering'] &&
-          regBuffer.test(resHeaderRecord['x-accel-buffering'] as string)) ||
-        !regContentType.test(resHeaderRecord['content-type'] as string)
+        (accelBuffering && regBuffer.test(accelBuffering as string)) ||
+        !regContentType.test(contentType as string)
       ) {
         outgoing.writeHead(res.status, resHeaderRecord)
+
         await writeFromReadableStream(res.body, outgoing)
       } else {
         const buffer = await res.arrayBuffer()
         resHeaderRecord['content-length'] = buffer.byteLength
+
         outgoing.writeHead(res.status, resHeaderRecord)
         outgoing.end(new Uint8Array(buffer))
       }

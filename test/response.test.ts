@@ -40,6 +40,10 @@ describe('Response', () => {
     server.close()
   })
 
+  it('Should be overrode by Response', () => {
+    expect(Response).not.toBe(GlobalResponse)
+  })
+
   it('Compatibility with standard Response object', async () => {
     // response name not changed
     expect(Response.name).toEqual('Response')
