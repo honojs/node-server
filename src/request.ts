@@ -5,6 +5,23 @@ import type { IncomingMessage } from 'node:http'
 import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
 
+export const GlobalRequest = global.Request
+export class Request extends GlobalRequest {
+  constructor(input: string | Request, options?: RequestInit) {
+    if (typeof input === 'object' && getRequestCache in input) {
+      input = (input as any)[getRequestCache]()
+    }
+    if (options?.body instanceof ReadableStream) {
+      // node 18 fetch needs half duplex mode when request body is stream
+      ;(options as any).duplex = 'half'
+    }
+    super(input, options)
+  }
+}
+Object.defineProperty(global, 'Request', {
+  value: Request,
+})
+
 const newRequestFromIncoming = (
   method: string,
   url: string,
@@ -27,8 +44,6 @@ const newRequestFromIncoming = (
   if (!(method === 'GET' || method === 'HEAD')) {
     // lazy-consume request body
     init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
-    // node 18 fetch needs half duplex mode when request body is stream
-    ;(init as any).duplex = 'half'
   }
 
   return new Request(url, init)
@@ -83,7 +98,7 @@ const requestPrototype: Record<string | symbol, any> = {
     },
   })
 })
-Object.setPrototypeOf(requestPrototype, global.Request.prototype)
+Object.setPrototypeOf(requestPrototype, Request.prototype)
 
 export const newRequest = (incoming: IncomingMessage | Http2ServerRequest) => {
   const req = Object.create(requestPrototype)
