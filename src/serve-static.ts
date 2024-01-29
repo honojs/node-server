@@ -36,7 +36,9 @@ const createStreamBody = (stream: ReadStream) => {
 export const serveStatic = (options: ServeStaticOptions = { root: '' }): MiddlewareHandler => {
   return async (c, next) => {
     // Do nothing if Response is already set
-    if (c.finalized) return next()
+    if (c.finalized) {
+      return next()
+    }
 
     const url = new URL(c.req.url)
 
@@ -47,7 +49,9 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
       defaultDocument: options.index ?? 'index.html',
     })
 
-    if (!path) return next()
+    if (!path) {
+      return next()
+    }
 
     path = `./${path}`
 

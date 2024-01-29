@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { newRequest } from './request'
 import { cacheKey } from './response'
-import type { FetchCallback } from './types'
+import type { FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import './globals'
 
@@ -25,7 +25,9 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
     console.info('The user aborted a request.')
   } else {
     console.error(e)
-    if (!outgoing.headersSent) outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
+    if (!outgoing.headersSent) {
+      outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
+    }
     outgoing.end(`Error: ${err.message}`)
     outgoing.destroy(err)
   }
@@ -127,7 +129,9 @@ export const getRequestListener = (
     const req = newRequest(incoming)
 
     try {
-      res = fetchCallback(req) as Response | Promise<Response>
+      res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as
+        | Response
+        | Promise<Response>
       if (cacheKey in res) {
         // synchronous, cacheable response
         return responseViaCache(res as Response, outgoing)
