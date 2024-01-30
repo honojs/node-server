@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { newRequest } from './request'
 import { cacheKey } from './response'
-import type { FetchCallback } from './types'
+import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import './globals'
 
@@ -25,7 +25,9 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
     console.info('The user aborted a request.')
   } else {
     console.error(e)
-    if (!outgoing.headersSent) outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
+    if (!outgoing.headersSent) {
+      outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
+    }
     outgoing.end(`Error: ${err.message}`)
     outgoing.destroy(err)
   }
@@ -51,14 +53,28 @@ const responseViaCache = (
 
 const responseViaResponseObject = async (
   res: Response | Promise<Response>,
-  outgoing: ServerResponse | Http2ServerResponse
+  outgoing: ServerResponse | Http2ServerResponse,
+  options: { errorHandler?: CustomErrorHandler } = {}
 ) => {
   if (res instanceof Promise) {
-    res = await res.catch(handleFetchError)
+    if (options.errorHandler) {
+      try {
+        res = await res
+      } catch (err) {
+        const errRes = await options.errorHandler(err)
+        if (!errRes) {
+          return
+        }
+        res = errRes
+      }
+    } else {
+      res = await res.catch(handleFetchError)
+    }
   }
 
   try {
-    if (cacheKey in res) {
+    const isCached = cacheKey in res
+    if (isCached) {
       return responseViaCache(res as Response, outgoing)
     }
   } catch (e: unknown) {
@@ -77,20 +93,30 @@ const responseViaResponseObject = async (
        * Else if content-type is not application/json nor text/* but can be text/event-stream,
        * we assume that the response should be streamed.
        */
+
+      const {
+        'transfer-encoding': transferEncoding,
+        'content-encoding': contentEncoding,
+        'content-length': contentLength,
+        'x-accel-buffering': accelBuffering,
+        'content-type': contentType,
+      } = resHeaderRecord
+
       if (
-        resHeaderRecord['transfer-encoding'] ||
-        resHeaderRecord['content-encoding'] ||
-        resHeaderRecord['content-length'] ||
+        transferEncoding ||
+        contentEncoding ||
+        contentLength ||
         // nginx buffering variant
-        (resHeaderRecord['x-accel-buffering'] &&
-          regBuffer.test(resHeaderRecord['x-accel-buffering'] as string)) ||
-        !regContentType.test(resHeaderRecord['content-type'] as string)
+        (accelBuffering && regBuffer.test(accelBuffering as string)) ||
+        !regContentType.test(contentType as string)
       ) {
         outgoing.writeHead(res.status, resHeaderRecord)
+
         await writeFromReadableStream(res.body, outgoing)
       } else {
         const buffer = await res.arrayBuffer()
         resHeaderRecord['content-length'] = buffer.byteLength
+
         outgoing.writeHead(res.status, resHeaderRecord)
         outgoing.end(new Uint8Array(buffer))
       }
@@ -103,8 +129,11 @@ const responseViaResponseObject = async (
   }
 }
 
-export const getRequestListener = (fetchCallback: FetchCallback) => {
-  return (
+export const getRequestListener = (
+  fetchCallback: FetchCallback,
+  options: { errorHandler?: CustomErrorHandler } = {}
+) => {
+  return async (
     incoming: IncomingMessage | Http2ServerRequest,
     outgoing: ServerResponse | Http2ServerResponse
   ) => {
@@ -115,19 +144,28 @@ export const getRequestListener = (fetchCallback: FetchCallback) => {
     const req = newRequest(incoming)
 
     try {
-      res = fetchCallback(req) as Response | Promise<Response>
+      res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as
+        | Response
+        | Promise<Response>
       if (cacheKey in res) {
         // synchronous, cacheable response
         return responseViaCache(res as Response, outgoing)
       }
     } catch (e: unknown) {
       if (!res) {
-        res = handleFetchError(e)
+        if (options.errorHandler) {
+          res = await options.errorHandler(e)
+          if (!res) {
+            return
+          }
+        } else {
+          res = handleFetchError(e)
+        }
       } else {
         return handleResponseError(e, outgoing)
       }
     }
 
-    return responseViaResponseObject(res, outgoing)
+    return responseViaResponseObject(res, outgoing, options)
   }
 }

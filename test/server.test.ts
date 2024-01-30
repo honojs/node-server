@@ -8,6 +8,7 @@ import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
 import request from 'supertest'
 import { createAdaptorServer } from '../src/server'
+import type { HttpBindings } from '../src/types'
 
 describe('Basic', () => {
   const app = new Hono()
@@ -621,5 +622,28 @@ describe('set child response to c.res', () => {
     const res = await request(server).get('/json')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('application/json')
+  })
+})
+
+describe('forwarding IncomingMessage and ServerResponse in env', () => {
+  const app = new Hono<{ Bindings: HttpBindings }>()
+  app.get('/', (c) =>
+    c.json({
+      incoming: c.env.incoming.constructor.name,
+      url: c.env.incoming.url,
+      outgoing: c.env.outgoing.constructor.name,
+      status: c.env.outgoing.statusCode,
+    })
+  )
+
+  it('Should add `incoming` and `outgoing` to env', async () => {
+    const server = createAdaptorServer(app)
+    const res = await request(server).get('/')
+
+    expect(res.status).toBe(200)
+    expect(res.body.incoming).toBe('IncomingMessage')
+    expect(res.body.url).toBe('/')
+    expect(res.body.outgoing).toBe('ServerResponse')
+    expect(res.body.status).toBe(200)
   })
 })
