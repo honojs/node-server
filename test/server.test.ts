@@ -554,7 +554,7 @@ describe('Hono compression default gzip', () => {
 
 describe('Hono compression deflate', () => {
   const app = new Hono()
-  app.use('*', compress( { encoding: 'deflate'}))
+  app.use('*', compress({ encoding: 'deflate' }))
 
   app.notFound((c) => {
     return c.text('Custom NotFound', 404)
