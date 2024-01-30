@@ -38,7 +38,7 @@ describe('Basic', () => {
   it('Should return 200 response - GET /', async () => {
     const res = await request(server).get('/')
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Hello! Node!')
   })
 
@@ -51,7 +51,7 @@ describe('Basic', () => {
   it('Should return 200 response - GET /user-agent', async () => {
     const res = await request(server).get('/user-agent').set('user-agent', 'Hono')
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Hono')
   })
 
@@ -70,14 +70,13 @@ describe('Basic', () => {
   it('Should return 500 response - GET /invalid', async () => {
     const res = await request(server).get('/invalid')
     expect(res.status).toBe(500)
-    expect(res.headers['content-type']).toEqual('text/plain;charset=UTF-8')
+    expect(res.headers['content-type']).toEqual('text/plain')
   })
 
-  // it fails with hono 3.12.7
-  it.skip('Should return 200 response - GET /ponyfill', async () => {
+  it('Should return 200 response - GET /ponyfill', async () => {
     const res = await request(server).get('/ponyfill')
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Pony')
   })
 })
@@ -189,28 +188,28 @@ describe('Response body', () => {
     it('Should return JSON body', async () => {
       const res = await request(server).get('/json')
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(res.headers['content-type']).toMatch('application/json')
       expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
     })
 
     it('Should return JSON body from /json-async', async () => {
       const res = await request(server).get('/json-async')
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(res.headers['content-type']).toMatch('application/json')
       expect(JSON.parse(res.text)).toEqual({ foo: 'async' })
     })
 
     it('Should return HTML', async () => {
       const res = await request(server).get('/html')
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch(/text\/html/)
+      expect(res.headers['content-type']).toMatch('text/html')
       expect(res.text).toBe('<h1>Hello!</h1>')
     })
 
     it('Should return HTML from /html-async', async () => {
       const res = await request(server).get('/html-async')
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch(/text\/html/)
+      expect(res.headers['content-type']).toMatch('text/html')
       expect(res.text).toBe('<h1>Hello!</h1>')
     })
   })
@@ -235,14 +234,14 @@ describe('Response body', () => {
     it('Should return JSON body from /json-blob', async () => {
       const res = await request(server).get('/json-blob')
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(res.headers['content-type']).toMatch('application/json')
       expect(JSON.parse(res.text)).toEqual({ foo: 'blob' })
     })
 
     it('Should return JSON body from /json-buffer', async () => {
       const res = await request(server).get('/json-buffer')
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch(/application\/json/)
+      expect(res.headers['content-type']).toMatch('application/json')
       expect(JSON.parse(res.text)).toEqual({ foo: 'buffer' })
     })
   })
@@ -394,7 +393,7 @@ describe('Stream and non-stream response', () => {
     const res = await request(server).get('/json')
     expect(res.status).toBe(200)
     expect(res.headers['content-length']).toMatch('13')
-    expect(res.headers['content-type']).toMatch(/application\/json/)
+    expect(res.headers['content-type']).toMatch('application/json')
     expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
   })
 
@@ -402,7 +401,7 @@ describe('Stream and non-stream response', () => {
     const res = await request(server).get('/text')
     expect(res.status).toBe(200)
     expect(res.headers['content-length']).toMatch('6')
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Hello!')
   })
 
@@ -410,8 +409,8 @@ describe('Stream and non-stream response', () => {
     const res = await request(server).get('/json-stream')
     expect(res.status).toBe(200)
     expect(res.headers['content-length']).toBeUndefined()
-    expect(res.headers['content-type']).toMatch(/application\/json/)
-    expect(res.headers['transfer-encoding']).toMatch(/chunked/)
+    expect(res.headers['content-type']).toMatch('application/json')
+    expect(res.headers['transfer-encoding']).toMatch('chunked')
     expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
   })
 
@@ -429,8 +428,8 @@ describe('Stream and non-stream response', () => {
       })
     expect(res.status).toBe(200)
     expect(res.headers['content-length']).toBeUndefined()
-    expect(res.headers['content-type']).toMatch(/text\/event-stream/)
-    expect(res.headers['transfer-encoding']).toMatch(/chunked/)
+    expect(res.headers['content-type']).toMatch('text/event-stream')
+    expect(res.headers['transfer-encoding']).toMatch('chunked')
   })
 
   it('Should return error - stream without app crashing', async () => {
@@ -455,7 +454,7 @@ describe('SSL', () => {
   it('Should return 200 response - GET /', async () => {
     const res = await request(server).get('/').trustLocalhost()
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Hello! Node!')
   })
 })
@@ -463,10 +462,10 @@ describe('SSL', () => {
 describe('HTTP2', () => {
   const app = new Hono()
   app.get('/', (c) => c.text('Hello! Node!'))
-  app.get('/headers', (c) => { 
+  app.get('/headers', (c) => {
     // call newRequestFromIncoming
     c.req.header('Accept')
-    return c.text('Hello! Node!') 
+    return c.text('Hello! Node!')
   })
   app.get('/url', (c) => c.text(c.req.url))
 
@@ -479,7 +478,7 @@ describe('HTTP2', () => {
     // @ts-expect-error: @types/supertest is not updated yet
     const res = await request(server, { http2: true }).get('/').trustLocalhost()
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Hello! Node!')
   })
 
@@ -487,7 +486,7 @@ describe('HTTP2', () => {
     // @ts-expect-error: @types/supertest is not updated yet
     const res = await request(server, { http2: true }).get('/headers').trustLocalhost()
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Hello! Node!')
   })
 
@@ -496,7 +495,7 @@ describe('HTTP2', () => {
     // @ts-expect-error: @types/supertest is not updated yet
     const res = await request(server, { http2: true }).get('/url').trustLocalhost()
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
+    expect(res.headers['content-type']).toMatch('text/plain')
     expect(new URL(res.text).hostname).toBe('127.0.0.1')
   })
 })
@@ -530,8 +529,8 @@ describe('Hono compression default gzip', () => {
     const server = createAdaptorServer(app)
     const res = await request(server).get('/one')
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
-    expect(res.headers['content-encoding']).toMatch(/gzip/)
+    expect(res.headers['content-type']).toMatch('text/plain')
+    expect(res.headers['content-encoding']).toMatch('gzip')
   })
 
   it('should return 404 Custom NotFound', async () => {
@@ -540,7 +539,7 @@ describe('Hono compression default gzip', () => {
     expect(res.status).toBe(404)
     expect(res.text).toEqual('Custom NotFound')
     expect(res.headers['content-type']).toEqual('text/plain; charset=UTF-8')
-    expect(res.headers['content-encoding']).toMatch(/gzip/)
+    expect(res.headers['content-encoding']).toMatch('gzip')
   })
 
   it('should return 500 Custom Error!', async () => {
@@ -549,7 +548,7 @@ describe('Hono compression default gzip', () => {
     expect(res.status).toBe(500)
     expect(res.text).toEqual('Custom Error!')
     expect(res.headers['content-type']).toEqual('text/plain; charset=UTF-8')
-    expect(res.headers['content-encoding']).toMatch(/gzip/)
+    expect(res.headers['content-encoding']).toMatch('gzip')
   })
 })
 
@@ -582,8 +581,8 @@ describe('Hono compression deflate', () => {
     const server = createAdaptorServer(app)
     const res = await request(server).get('/one')
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/text\/plain/)
-    expect(res.headers['content-encoding']).toMatch(/deflate/)
+    expect(res.headers['content-type']).toMatch('text/plain')
+    expect(res.headers['content-encoding']).toMatch('deflate')
   })
 
   it('should return 404 Custom NotFound', async () => {
@@ -592,7 +591,7 @@ describe('Hono compression deflate', () => {
     expect(res.status).toBe(404)
     expect(res.text).toEqual('Custom NotFound')
     expect(res.headers['content-type']).toEqual('text/plain; charset=UTF-8')
-    expect(res.headers['content-encoding']).toMatch(/deflate/)
+    expect(res.headers['content-encoding']).toMatch('deflate')
   })
 
   it('should return 500 Custom Error!', async () => {
@@ -601,7 +600,7 @@ describe('Hono compression deflate', () => {
     expect(res.status).toBe(500)
     expect(res.text).toEqual('Custom Error!')
     expect(res.headers['content-type']).toEqual('text/plain; charset=UTF-8')
-    expect(res.headers['content-encoding']).toMatch(/deflate/)
+    expect(res.headers['content-encoding']).toMatch('deflate')
   })
 })
 
@@ -621,6 +620,6 @@ describe('set child response to c.res', () => {
     const server = createAdaptorServer(app)
     const res = await request(server).get('/json')
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch(/application\/json/)
+    expect(res.headers['content-type']).toMatch('application/json')
   })
 })
