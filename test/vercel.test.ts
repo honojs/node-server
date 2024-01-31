@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { showRoutes } from 'hono/dev'
 import request from 'supertest'
 import { handle } from '../src/vercel'
 
@@ -56,7 +57,7 @@ describe('Routing', () => {
     const app = new Hono()
     app.route('/v2', book)
 
-    app.showRoutes()
+    showRoutes(app)
 
     const server = handle(app)
 
