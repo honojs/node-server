@@ -152,7 +152,7 @@ describe('With `mimes` options', () => {
     expect(res.headers.get('Content-Type')).toBe('application/vnd.apple.mpegurl')
   })
   it('Should return content-type of ts', async () => {
-    const res = await request(server).get('/static/video/morning-routine1.ts')
+    const res = await request(server).get('/static/video/morning-routine1.ts1')
     expect(res.status).toBe(200)
     expect(res.headers.get('Content-Type')).toBe('video/mp2t')
   })
