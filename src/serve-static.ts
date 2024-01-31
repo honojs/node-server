@@ -10,6 +10,7 @@ export type ServeStaticOptions = {
    */
   root?: string
   path?: string
+  mimes?: Record<string, string>
   index?: string // default is 'index.html'
   rewriteRequestPath?: (path: string) => string
   onNotFound?: (path: string, c: Context) => void | Promise<void>
@@ -60,7 +61,12 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
       return next()
     }
 
-    const mimeType = getMimeType(path)
+    let mimeType: string | undefined = undefined
+    if (options.mimes) {
+      mimeType = getMimeType(path, options.mimes) ?? getMimeType(path)
+    } else {
+      mimeType = getMimeType(path)
+    }
     if (mimeType) {
       c.header('Content-Type', mimeType)
     }
