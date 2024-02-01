@@ -39,6 +39,7 @@
   },
   "scripts": {
     "test": "jest",
+    "test:cov": "jest --coverage",
     "build": "tsup",
     "watch": "tsup --watch",
     "postbuild": "publint",
