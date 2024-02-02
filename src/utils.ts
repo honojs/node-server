@@ -55,7 +55,7 @@ export const buildOutgoingHttpHeaders = (headers: Headers): OutgoingHttpHeaders 
   if (cookies.length > 0) {
     res['set-cookie'] = cookies
   }
-  res['content-type'] ??= 'text/plain;charset=UTF-8'
+  res['content-type'] ??= 'text/plain; charset=UTF-8'
 
   return res
 }
