@@ -34,7 +34,7 @@ export class Response {
     }
 
     if (typeof body === 'string' || body instanceof ReadableStream) {
-      let headers = (init?.headers || { 'content-type': 'text/plain;charset=UTF-8' }) as
+      let headers = (init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }) as
         | Record<string, string>
         | Headers
         | OutgoingHttpHeaders
