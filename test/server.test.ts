@@ -6,6 +6,7 @@ import { Hono } from 'hono'
 import { basicAuth } from 'hono/basic-auth'
 import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
+import { stream } from 'hono/streaming'
 import request from 'supertest'
 import { createAdaptorServer } from '../src/server'
 import type { HttpBindings } from '../src/types'
@@ -356,7 +357,7 @@ describe('Stream and non-stream response', () => {
   app.get('/json-stream', (c) => {
     c.header('x-accel-buffering', 'no')
     c.header('content-type', 'application/json')
-    return c.stream(async (stream) => {
+    return stream(c, async (stream) => {
       stream.write(JSON.stringify({ foo: 'bar' }))
     })
   })
