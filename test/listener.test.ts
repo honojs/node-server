@@ -89,3 +89,119 @@ describe('Error handling - async fetchCallback', () => {
     expect(res.text).toBe('error handler did not return a response')
   })
 })
+
+describe('Abort request', () => {
+  let onAbort: (req: Request) => void
+  let reqReadyResolve: () => void
+  let reqReadyPromise: Promise<void>
+  const fetchCallback = async (req: Request) => {
+    req.signal.addEventListener('abort', () => onAbort(req))
+    reqReadyResolve?.()
+    await new Promise(() => {}) // never resolve
+  }
+
+  const requestListener = getRequestListener(fetchCallback)
+
+  const server = createServer(async (req, res) => {
+    await requestListener(req, res)
+  })
+
+  beforeEach(() => {
+    reqReadyPromise = new Promise<void>((r) => {
+      reqReadyResolve = r
+    })
+  })
+
+  afterAll(() => {
+    server.close()
+  })
+
+  it('should emit an abort event when the nodejs request is aborted', async () => {
+    const requests: Request[] = []
+    const abortedPromise = new Promise<void>((resolve) => {
+      onAbort = (req) => {
+        requests.push(req)
+        resolve()
+      }
+    })
+
+    const req = request(server)
+      .get('/abort')
+      .end(() => {})
+
+    await reqReadyPromise
+
+    req.abort()
+
+    await abortedPromise
+
+    expect(requests).toHaveLength(1)
+    const abortedReq = requests[0]
+    expect(abortedReq).toBeInstanceOf(Request)
+    expect(abortedReq.signal.aborted).toBe(true)
+  })
+
+  it('should emit an abort event when the nodejs request is aborted on multiple requests', async () => {
+    const requests: Request[] = []
+
+    {
+      const abortedPromise = new Promise<void>((resolve) => {
+        onAbort = (req) => {
+          requests.push(req)
+          resolve()
+        }
+      })
+
+      reqReadyPromise = new Promise<void>((r) => {
+        reqReadyResolve = r
+      })
+
+      const req = request(server)
+        .get('/abort')
+        .end(() => {})
+
+      await reqReadyPromise
+
+      req.abort()
+
+      await abortedPromise
+    }
+
+    expect(requests).toHaveLength(1)
+
+    for (const abortedReq of requests) {
+      expect(abortedReq).toBeInstanceOf(Request)
+      expect(abortedReq.signal.aborted).toBe(true)
+    }
+
+    {
+      const abortedPromise = new Promise<void>((resolve) => {
+        onAbort = (req) => {
+          requests.push(req)
+          resolve()
+        }
+      })
+
+      reqReadyPromise = new Promise<void>((r) => {
+        reqReadyResolve = r
+      })
+
+      const req = request(server)
+        .get('/abort')
+        .end(() => {})
+
+      await reqReadyPromise
+
+      req.abort()
+
+      await abortedPromise
+    }
+
+    expect(requests).toHaveLength(2)
+
+    for (const abortedReq of requests) {
+      expect(abortedReq).toBeInstanceOf(Request)
+      expect(abortedReq.signal.aborted).toBe(true)
+    }
+  })
+})

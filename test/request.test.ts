@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http'
-import { newRequest, Request, GlobalRequest } from '../src/request'
+import { newRequest, Request, GlobalRequest, getAbortController } from '../src/request'
 
 describe('Request', () => {
   describe('newRequest', () => {
@@ -39,6 +39,34 @@ describe('Request', () => {
       } as IncomingMessage)
       expect(req).toBeInstanceOf(global.Request)
       expect(req.url).toBe('http://localhost/foo.txt')
+    })
+
+    it('should generate only one `AbortController` per `Request` object created', async () => {
+      const req = newRequest({
+        headers: {
+          host: 'localhost/..',
+        },
+        rawHeaders: ['host', 'localhost/..'],
+        url: '/foo.txt',
+      } as IncomingMessage)
+      const req2 = newRequest({
+        headers: {
+          host: 'localhost/..',
+        },
+        rawHeaders: ['host', 'localhost/..'],
+        url: '/foo.txt',
+      } as IncomingMessage)
+
+      const x = req[getAbortController]()
+      const y = req[getAbortController]()
+      const z = req2[getAbortController]()
+
+      expect(x).toBeInstanceOf(AbortController)
+      expect(y).toBeInstanceOf(AbortController)
+      expect(z).toBeInstanceOf(AbortController)
+      expect(x).toBe(y)
+      expect(z).not.toBe(x)
+      expect(z).not.toBe(y)
     })
   })
 
