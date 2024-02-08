@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
-import { newRequest } from './request'
+import { newRequest, getAbortController } from './request'
 import { cacheKey } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
@@ -142,6 +142,12 @@ export const getRequestListener = (
     // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
     // so generate a pseudo Request object with only the minimum required information.
     const req = newRequest(incoming)
+
+    outgoing.on('close', () => {
+      if (incoming.destroyed) {
+        req[getAbortController]().abort()
+      }
+    })
 
     try {
       res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as
