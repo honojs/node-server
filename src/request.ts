@@ -25,7 +25,8 @@ Object.defineProperty(global, 'Request', {
 const newRequestFromIncoming = (
   method: string,
   url: string,
-  incoming: IncomingMessage | Http2ServerRequest
+  incoming: IncomingMessage | Http2ServerRequest,
+  abortController: AbortController
 ): Request => {
   const headerRecord: [string, string][] = []
   const rawHeaders = incoming.rawHeaders
@@ -39,6 +40,7 @@ const newRequestFromIncoming = (
   const init = {
     method: method,
     headers: headerRecord,
+    signal: abortController.signal,
   } as RequestInit
 
   if (!(method === 'GET' || method === 'HEAD')) {
@@ -53,6 +55,8 @@ const getRequestCache = Symbol('getRequestCache')
 const requestCache = Symbol('requestCache')
 const incomingKey = Symbol('incomingKey')
 const urlKey = Symbol('urlKey')
+const abortControllerKey = Symbol('abortControllerKey')
+export const getAbortController = Symbol('getAbortController')
 
 const requestPrototype: Record<string | symbol, any> = {
   get method() {
@@ -63,11 +67,18 @@ const requestPrototype: Record<string | symbol, any> = {
     return this[urlKey]
   },
 
+  [getAbortController]() {
+    this[getRequestCache]()
+    return this[abortControllerKey]
+  },
+
   [getRequestCache]() {
+    this[abortControllerKey] ||= new AbortController()
     return (this[requestCache] ||= newRequestFromIncoming(
       this.method,
       this[urlKey],
-      this[incomingKey]
+      this[incomingKey],
+      this[abortControllerKey]
     ))
   },
 }
