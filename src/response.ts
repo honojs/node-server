@@ -12,38 +12,48 @@ export class Response {
   #body?: BodyInit | null
   #init?: ResponseInit
 
+  constructor(body?: BodyInit | null, init?: ResponseInit) {
+    this.#body = body
+
+    if (init instanceof Response) {
+      this.handleResponseInitFromAnotherResponse(init)
+    } else {
+      this.#init = init
+    }
+
+    this.handleBodyStringOrStream(body, init)
+  }
+
   private get cache(): typeof GlobalResponse {
     delete (this as any)[cacheKey]
     return ((this as any)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
   }
 
-  constructor(body?: BodyInit | null, init?: ResponseInit) {
-    this.#body = body
-    if (init instanceof Response) {
-      const cachedGlobalResponse = (init as any)[responseCache]
-      if (cachedGlobalResponse) {
-        this.#init = cachedGlobalResponse
-        // instantiate GlobalResponse cache and this object always returns value from global.Response
-        this.cache
-        return
-      } else {
-        this.#init = init.#init
-      }
+  private handleResponseInitFromAnotherResponse(init: Response): void {
+    const cachedGlobalResponse = (init as any)[responseCache]
+
+    if (cachedGlobalResponse) {
+      this.#init = cachedGlobalResponse
+      this.cache
     } else {
-      this.#init = init
+      this.#init = init.#init
     }
+  }
+
+  private handleBodyStringOrStream(body?: BodyInit | null, init?: ResponseInit): void {
+    const headers = this.buildHeaders(init?.headers)
 
     if (typeof body === 'string' || body instanceof ReadableStream) {
-      let headers = (init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }) as
-        | Record<string, string>
-        | Headers
-        | OutgoingHttpHeaders
-      if (headers instanceof Headers) {
-        headers = buildOutgoingHttpHeaders(headers)
-      }
-
       ;(this as any)[cacheKey] = [init?.status || 200, body, headers]
     }
+  }
+
+  private buildHeaders(headers?: HeadersInit): HeadersInit | OutgoingHttpHeaders {
+    if (headers instanceof Headers) {
+      return buildOutgoingHttpHeaders(headers)
+    }
+
+    return headers || { 'content-type': 'text/plain;charset=UTF-8' }
   }
 }
 ;[
