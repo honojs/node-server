@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { getAbortController, newRequest } from './request'
-import { cacheKey } from './response'
+import { cacheKey, getInternalBody } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import './globals'
@@ -83,7 +83,25 @@ const responseViaResponseObject = async (
 
   const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
 
-  if (res.body) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const internalBody = getInternalBody(res as any)
+  if (internalBody) {
+    try {
+      if (internalBody.length) {
+        resHeaderRecord['content-length'] = internalBody.length
+      }
+      outgoing.writeHead(res.status, resHeaderRecord)
+      if (typeof internalBody.source === 'string' || internalBody.source instanceof Uint8Array) {
+        outgoing.end(internalBody.source)
+      } else if (internalBody.source instanceof Blob) {
+        outgoing.end(new Uint8Array(await internalBody.source.arrayBuffer()))
+      } else {
+        await writeFromReadableStream(internalBody.stream, outgoing)
+      }
+    } catch (e: unknown) {
+      handleResponseError(e, outgoing)
+    }
+  } else if (res.body) {
     try {
       /**
        * If content-encoding is set, we assume that the response should be not decoded.
