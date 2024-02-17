@@ -72,8 +72,7 @@ const responseViaResponseObject = async (
     }
   }
 
-  const isCached = cacheKey in res
-  if (isCached) {
+  if (cacheKey in res) {
     return responseViaCache(res as Response, outgoing)
   }
 
