@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import { getAbortController, newRequest } from './request'
-import { cacheKey } from './response'
+import { cacheKey, getInternalBody } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import './globals'
@@ -72,56 +72,61 @@ const responseViaResponseObject = async (
     }
   }
 
-  try {
-    const isCached = cacheKey in res
-    if (isCached) {
-      return responseViaCache(res as Response, outgoing)
-    }
-  } catch (e: unknown) {
-    return handleResponseError(e, outgoing)
+  if (cacheKey in res) {
+    return responseViaCache(res as Response, outgoing)
   }
 
   const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
 
-  if (res.body) {
-    try {
-      /**
-       * If content-encoding is set, we assume that the response should be not decoded.
-       * Else if transfer-encoding is set, we assume that the response should be streamed.
-       * Else if content-length is set, we assume that the response content has been taken care of.
-       * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
-       * Else if content-type is not application/json nor text/* but can be text/event-stream,
-       * we assume that the response should be streamed.
-       */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const internalBody = getInternalBody(res as any)
+  if (internalBody) {
+    if (internalBody.length) {
+      resHeaderRecord['content-length'] = internalBody.length
+    }
+    outgoing.writeHead(res.status, resHeaderRecord)
+    if (typeof internalBody.source === 'string' || internalBody.source instanceof Uint8Array) {
+      outgoing.end(internalBody.source)
+    } else if (internalBody.source instanceof Blob) {
+      outgoing.end(new Uint8Array(await internalBody.source.arrayBuffer()))
+    } else {
+      await writeFromReadableStream(internalBody.stream, outgoing)
+    }
+  } else if (res.body) {
+    /**
+     * If content-encoding is set, we assume that the response should be not decoded.
+     * Else if transfer-encoding is set, we assume that the response should be streamed.
+     * Else if content-length is set, we assume that the response content has been taken care of.
+     * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
+     * Else if content-type is not application/json nor text/* but can be text/event-stream,
+     * we assume that the response should be streamed.
+     */
 
-      const {
-        'transfer-encoding': transferEncoding,
-        'content-encoding': contentEncoding,
-        'content-length': contentLength,
-        'x-accel-buffering': accelBuffering,
-        'content-type': contentType,
-      } = resHeaderRecord
+    const {
+      'transfer-encoding': transferEncoding,
+      'content-encoding': contentEncoding,
+      'content-length': contentLength,
+      'x-accel-buffering': accelBuffering,
+      'content-type': contentType,
+    } = resHeaderRecord
 
-      if (
-        transferEncoding ||
-        contentEncoding ||
-        contentLength ||
-        // nginx buffering variant
-        (accelBuffering && regBuffer.test(accelBuffering as string)) ||
-        !regContentType.test(contentType as string)
-      ) {
-        outgoing.writeHead(res.status, resHeaderRecord)
+    if (
+      transferEncoding ||
+      contentEncoding ||
+      contentLength ||
+      // nginx buffering variant
+      (accelBuffering && regBuffer.test(accelBuffering as string)) ||
+      !regContentType.test(contentType as string)
+    ) {
+      outgoing.writeHead(res.status, resHeaderRecord)
 
-        await writeFromReadableStream(res.body, outgoing)
-      } else {
-        const buffer = await res.arrayBuffer()
-        resHeaderRecord['content-length'] = buffer.byteLength
+      await writeFromReadableStream(res.body, outgoing)
+    } else {
+      const buffer = await res.arrayBuffer()
+      resHeaderRecord['content-length'] = buffer.byteLength
 
-        outgoing.writeHead(res.status, resHeaderRecord)
-        outgoing.end(new Uint8Array(buffer))
-      }
-    } catch (e: unknown) {
-      handleResponseError(e, outgoing)
+      outgoing.writeHead(res.status, resHeaderRecord)
+      outgoing.end(new Uint8Array(buffer))
     }
   } else {
     outgoing.writeHead(res.status, resHeaderRecord)
@@ -173,6 +178,10 @@ export const getRequestListener = (
       }
     }
 
-    return responseViaResponseObject(res, outgoing, options)
+    try {
+      return responseViaResponseObject(res, outgoing, options)
+    } catch (e) {
+      return handleResponseError(e, outgoing)
+    }
   }
 }

@@ -83,6 +83,88 @@ describe('Basic', () => {
   })
 })
 
+describe('via internal body', () => {
+  const app = new Hono()
+  app.use('*', async (c, next) => {
+    await next()
+
+    // generate internal response object
+    const status = c.res.status
+    if (status > 999) {
+      c.res = new Response('Internal Server Error', { status: 500 })
+    }
+  })
+  app.get('/', () => {
+    const response = new Response('Hello! Node!')
+    return response
+  })
+  app.get('/uint8array', () => {
+    const response = new Response(new Uint8Array([1, 2, 3]), {
+      headers: { 'content-type': 'application/octet-stream' },
+    })
+    return response
+  })
+  app.get('/blob', () => {
+    const response = new Response(new Blob([new Uint8Array([1, 2, 3])]), {
+      headers: { 'content-type': 'application/octet-stream' },
+    })
+    return response
+  })
+  app.get('/readable-stream', () => {
+    const stream = new ReadableStream({
+      async start(controller) {
+        controller.enqueue('Hello!')
+        controller.enqueue(' Node!')
+        controller.close()
+      },
+    })
+    return new Response(stream)
+  })
+
+  const server = createAdaptorServer(app)
+
+  it('Should return 200 response - GET /', async () => {
+    const res = await request(server).get('/')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch('text/plain')
+    expect(res.headers['content-length']).toMatch('12')
+    expect(res.text).toBe('Hello! Node!')
+  })
+
+  it('Should return 200 response - GET /uint8array', async () => {
+    const res = await request(server).get('/uint8array')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch('application/octet-stream')
+    expect(res.headers['content-length']).toMatch('3')
+    expect(res.body).toEqual(Buffer.from([1, 2, 3]))
+  })
+
+  it('Should return 200 response - GET /blob', async () => {
+    const res = await request(server).get('/blob')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch('application/octet-stream')
+    expect(res.headers['content-length']).toMatch('3')
+    expect(res.body).toEqual(Buffer.from([1, 2, 3]))
+  })
+
+  it('Should return 200 response - GET /readable-stream', async () => {
+    const expectedChunks = ['Hello!', ' Node!']
+    const res = await request(server)
+      .get('/readable-stream')
+      .parse((res, fn) => {
+        res.on('data', (chunk) => {
+          const str = chunk.toString()
+          expect(str).toBe(expectedChunks.shift())
+        })
+        res.on('end', () => fn(null, ''))
+      })
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch('text/plain; charset=UTF-8')
+    expect(res.headers['content-length']).toBeUndefined()
+    expect(expectedChunks.length).toBe(0) // all chunks are received
+  })
+})
+
 describe('Routing', () => {
   describe('Nested Route', () => {
     const book = new Hono()

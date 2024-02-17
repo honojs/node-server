@@ -4,15 +4,22 @@
 import type { OutgoingHttpHeaders } from 'node:http'
 import { buildOutgoingHttpHeaders } from './utils'
 
+interface InternalBody {
+  source: string | Uint8Array | FormData | Blob | null
+  stream: ReadableStream
+  length: number | null
+}
+
 const responseCache = Symbol('responseCache')
+const getResponseCache = Symbol('getResponseCache')
 export const cacheKey = Symbol('cache')
 
 export const GlobalResponse = global.Response
 export class Response {
   #body?: BodyInit | null
-  #init?: ResponseInit
+  #init?: ResponseInit;
 
-  private get cache(): typeof GlobalResponse {
+  [getResponseCache](): typeof GlobalResponse {
     delete (this as any)[cacheKey]
     return ((this as any)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
   }
@@ -24,7 +31,7 @@ export class Response {
       if (cachedGlobalResponse) {
         this.#init = cachedGlobalResponse
         // instantiate GlobalResponse cache and this object always returns value from global.Response
-        this.cache
+        this[getResponseCache]()
         return
       } else {
         this.#init = init.#init
@@ -60,14 +67,14 @@ export class Response {
 ].forEach((k) => {
   Object.defineProperty(Response.prototype, k, {
     get() {
-      return this.cache[k]
+      return this[getResponseCache]()[k]
     },
   })
 })
 ;['arrayBuffer', 'blob', 'clone', 'formData', 'json', 'text'].forEach((k) => {
   Object.defineProperty(Response.prototype, k, {
     value: function () {
-      return this.cache[k]()
+      return this[getResponseCache]()[k]()
     },
   })
 })
@@ -76,3 +83,27 @@ Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
 Object.defineProperty(global, 'Response', {
   value: Response,
 })
+
+const stateKey = Reflect.ownKeys(new GlobalResponse()).find(
+  (k) => typeof k === 'symbol' && k.toString() === 'Symbol(state)'
+) as symbol | undefined
+if (!stateKey) {
+  console.warn('Failed to find Response internal state key')
+}
+
+export function getInternalBody(
+  response: Response | typeof GlobalResponse
+): InternalBody | undefined {
+  if (!stateKey) {
+    return
+  }
+
+  if (response instanceof Response) {
+    response = (response as any)[getResponseCache]()
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const state = (response as any)[stateKey] as { body?: InternalBody } | undefined
+
+  return (state && state.body) || undefined
+}
