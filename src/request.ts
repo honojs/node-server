@@ -95,6 +95,7 @@ const requestPrototype: Record<string | symbol, any> = {
   'referrer',
   'referrerPolicy',
   'signal',
+  'keepalive',
 ].forEach((k) => {
   Object.defineProperty(requestPrototype, k, {
     get() {
