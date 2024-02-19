@@ -17,6 +17,7 @@ describe('Request', () => {
       expect(req.method).toBe('GET')
       expect(req.url).toBe('http://localhost/')
       expect(req.headers.get('host')).toBe('localhost')
+      expect(req.keepalive).toBe(false)
     })
 
     it('Should resolve double dots in URL', async () => {
