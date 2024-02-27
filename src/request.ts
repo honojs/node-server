@@ -13,7 +13,8 @@ export class Request extends GlobalRequest {
     }
     if (options?.body instanceof ReadableStream) {
       // node 18 fetch needs half duplex mode when request body is stream
-      ;(options as any).duplex = 'half'
+      // if already set, do nothing since a Request object was passed to the options or explicitly set by the user.
+      ;(options as any).duplex ??= 'half'
     }
     super(input, options)
   }

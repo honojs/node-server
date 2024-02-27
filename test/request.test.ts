@@ -112,5 +112,21 @@ describe('Request', () => {
       expect(req2).toBeInstanceOf(GlobalRequest)
       expect(req2.text()).resolves.toBe('bar')
     })
+
+    it('should skip to set `duplex: "half"` if init option is a Request object', async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('bar'))
+          controller.close()
+        },
+      })
+      const req = new Request('http://localhost', {
+        method: 'POST',
+        body: stream,
+      })
+      const req2 = new Request('http://localhost/subapp', req)
+      expect(req2).toBeInstanceOf(GlobalRequest)
+      expect(req2.text()).resolves.toBe('bar')
+    })
   })
 })
