@@ -22,6 +22,11 @@
       "types": "./dist/vercel.d.ts",
       "require": "./dist/vercel.js",
       "import": "./dist/vercel.mjs"
+    },
+    "./utils/*": {
+      "types": "./dist/utils/*.d.ts",
+      "require": "./dist/utils/*.js",
+      "import": "./dist/utils/*.mjs"
     }
   },
   "typesVersions": {
@@ -34,6 +39,9 @@
       ],
       "vercel": [
         "./dist/vercel.d.ts"
+      ],
+      "utils/*": [
+        "./dist/utils/*.d.ts"
       ]
     }
   },

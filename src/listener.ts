@@ -4,6 +4,7 @@ import { getAbortController, newRequest } from './request'
 import { cacheKey, getInternalBody } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
+import { X_ALREADY_SENT } from './utils/response/constants'
 import './globals'
 
 const regBuffer = /^no$/i
@@ -128,6 +129,8 @@ const responseViaResponseObject = async (
       outgoing.writeHead(res.status, resHeaderRecord)
       outgoing.end(new Uint8Array(buffer))
     }
+  } else if (resHeaderRecord[X_ALREADY_SENT]) {
+    // do nothing, the response has already been sent
   } else {
     outgoing.writeHead(res.status, resHeaderRecord)
     outgoing.end()
