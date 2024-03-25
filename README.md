@@ -215,7 +215,7 @@ type Http2Bindings = {
 ## Direct response from Node.js API
 
 You can directly respond to the client from the Node.js API.
-In that case, the response from Hono should be ignored, so return RESPONSE_ALREADY_SENT.
+In that case, the response from Hono should be ignored, so return `RESPONSE_ALREADY_SENT`.
 
 > [!NOTE]
 > This feature can be used when migrating existing Node.js applications to Hono, but we recommend using Hono's API for new applications.
