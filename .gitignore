@@ -4,6 +4,7 @@ node_modules
 .yarn/*
 yarn-error.log
 *.tgz
+coverage
 
 # for debug or playing
 sandbox
