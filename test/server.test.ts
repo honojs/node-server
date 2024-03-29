@@ -14,6 +14,7 @@ import type { HttpBindings } from '../src/types'
 describe('Basic', () => {
   const app = new Hono()
   app.get('/', (c) => c.text('Hello! Node!'))
+  app.get('/url', (c) => c.text(c.req.url))
 
   app.get('/posts', (c) => {
     return c.text(`Page ${c.req.query('page')}`)
@@ -42,6 +43,16 @@ describe('Basic', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Hello! Node!')
+  })
+
+  it('Should return 200 response - GET /url', async () => {
+    const res = await request(server).get('/url').trustLocalhost()
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch('text/plain')
+    const url = new URL(res.text)
+    expect(url.pathname).toBe('/url')
+    expect(url.hostname).toBe('127.0.0.1')
+    expect(url.protocol).toBe('http:')
   })
 
   it('Should return 200 response - GET /posts?page=2', async () => {
@@ -525,6 +536,7 @@ describe('Stream and non-stream response', () => {
 describe('SSL', () => {
   const app = new Hono()
   app.get('/', (c) => c.text('Hello! Node!'))
+  app.get('/url', (c) => c.text(c.req.url))
 
   const server = createAdaptorServer({
     fetch: app.fetch,
@@ -540,6 +552,16 @@ describe('SSL', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Hello! Node!')
+  })
+
+  it('Should return 200 response - GET /url', async () => {
+    const res = await request(server).get('/url').trustLocalhost()
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch('text/plain')
+    const url = new URL(res.text)
+    expect(url.pathname).toBe('/url')
+    expect(url.hostname).toBe('127.0.0.1')
+    expect(url.protocol).toBe('https:')
   })
 })
 
@@ -580,7 +602,10 @@ describe('HTTP2', () => {
     const res = await request(server, { http2: true }).get('/url').trustLocalhost()
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain')
-    expect(new URL(res.text).hostname).toBe('127.0.0.1')
+    const url = new URL(res.text)
+    expect(url.pathname).toBe('/url')
+    expect(url.hostname).toBe('127.0.0.1')
+    expect(url.protocol).toBe('https:')
   })
 })
 

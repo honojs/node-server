@@ -4,6 +4,7 @@
 import type { IncomingMessage } from 'node:http'
 import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
+import type { TLSSocket } from 'node:tls'
 
 export const GlobalRequest = global.Request
 export class Request extends GlobalRequest {
@@ -117,7 +118,12 @@ export const newRequest = (incoming: IncomingMessage | Http2ServerRequest) => {
   const req = Object.create(requestPrototype)
   req[incomingKey] = incoming
   req[urlKey] = new URL(
-    `http://${incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host}${
+    `${
+      incoming instanceof Http2ServerRequest ||
+      (incoming.socket && (incoming.socket as TLSSocket).encrypted)
+        ? 'https'
+        : 'http'
+    }://${incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host}${
       incoming.url
     }`
   ).href
