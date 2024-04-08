@@ -1,8 +1,12 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { GlobalResponse } from '../src/response'
+import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 
-class NextResponse extends Response {}
+Object.defineProperty(global, 'Response', {
+  value: LightweightResponse,
+})
+
+class NextResponse extends LightweightResponse {}
 
 class UpperCaseStream extends TransformStream {
   constructor() {

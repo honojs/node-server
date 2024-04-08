@@ -80,9 +80,6 @@ export class Response {
 })
 Object.setPrototypeOf(Response, GlobalResponse)
 Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
-Object.defineProperty(global, 'Response', {
-  value: Response,
-})
 
 const stateKey = Reflect.ownKeys(new GlobalResponse()).find(
   (k) => typeof k === 'symbol' && k.toString() === 'Symbol(state)'

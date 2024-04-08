@@ -69,6 +69,7 @@ type ServerOptions =
 
 export type Options = {
   fetch: FetchCallback
+  overrideGlobalObjects?: boolean
   port?: number
   hostname?: string
 } & ServerOptions

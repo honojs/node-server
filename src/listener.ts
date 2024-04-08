@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
-import { getAbortController, newRequest } from './request'
-import { cacheKey, getInternalBody } from './response'
+import { getAbortController, newRequest, Request as LightweightRequest } from './request'
+import { cacheKey, getInternalBody, Response as LightweightResponse } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import { X_ALREADY_SENT } from './utils/response/constants'
@@ -139,8 +139,20 @@ const responseViaResponseObject = async (
 
 export const getRequestListener = (
   fetchCallback: FetchCallback,
-  options: { errorHandler?: CustomErrorHandler } = {}
+  options: {
+    errorHandler?: CustomErrorHandler
+    overrideGlobalObjects?: boolean
+  } = {}
 ) => {
+  if (options.overrideGlobalObjects !== false && global.Request !== LightweightRequest) {
+    Object.defineProperty(global, 'Request', {
+      value: LightweightRequest,
+    })
+    Object.defineProperty(global, 'Response', {
+      value: LightweightResponse,
+    })
+  }
+
   return async (
     incoming: IncomingMessage | Http2ServerRequest,
     outgoing: ServerResponse | Http2ServerResponse

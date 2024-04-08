@@ -1,5 +1,14 @@
 import type { IncomingMessage } from 'node:http'
-import { newRequest, Request, GlobalRequest, getAbortController } from '../src/request'
+import {
+  newRequest,
+  Request as LightweightRequest,
+  GlobalRequest,
+  getAbortController,
+} from '../src/request'
+
+Object.defineProperty(global, 'Request', {
+  value: LightweightRequest,
+})
 
 describe('Request', () => {
   describe('newRequest', () => {
