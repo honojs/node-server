@@ -1,3 +1,7 @@
+Object.defineProperty(global, 'fetch', {
+  value: global.fetch,
+  writable: true,
+})
 Object.defineProperty(global, 'Response', {
   value: global.Response,
   writable: true,
