@@ -48,15 +48,15 @@ Essentially, you can simply use the latest version of each major release.
 
 ## Installation
 
-You can install from npm registry with `npm` command:
+You can install it from the npm registry with `npm` command:
 
-```
+```sh
 npm install @hono/node-server
 ```
 
 Or use `yarn`:
 
-```
+```sh
 yarn add @hono/node-server
 ```
 
@@ -79,7 +79,7 @@ serve(app, (info) => {
 
 For example, run it using `ts-node`. Then an HTTP server will be launched. The default port is `3000`.
 
-```
+```sh
 ts-node ./index.ts
 ```
 
@@ -111,6 +111,17 @@ serve({
     key: fs.readFileSync('test/fixtures/keys/agent1-key.pem'),
     cert: fs.readFileSync('test/fixtures/keys/agent1-cert.pem'),
   },
+})
+```
+
+### `overrideGlobalObjects`
+
+The default value is `true`. The Node.js Adapter rewrites the global Request/Response and uses a lightweight Request/Response to improve performance. If you don't want to do that, set `false`.
+
+```ts
+serve({
+  fetch: app.fetch,
+  overrideGlobalObjects: false,
 })
 ```
 
