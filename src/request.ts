@@ -20,9 +20,6 @@ export class Request extends GlobalRequest {
     super(input, options)
   }
 }
-Object.defineProperty(global, 'Request', {
-  value: Request,
-})
 
 const newRequestFromIncoming = (
   method: string,

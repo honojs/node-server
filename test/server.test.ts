@@ -8,6 +8,8 @@ import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
 import { stream } from 'hono/streaming'
 import request from 'supertest'
+import { GlobalRequest, Request as LightweightRequest } from '../src/request'
+import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 import { createAdaptorServer } from '../src/server'
 import type { HttpBindings } from '../src/types'
 
@@ -753,5 +755,44 @@ describe('forwarding IncomingMessage and ServerResponse in env', () => {
     expect(res.body.url).toBe('/')
     expect(res.body.outgoing).toBe('ServerResponse')
     expect(res.body.status).toBe(200)
+  })
+})
+
+describe('overrideGlobalObjects', () => {
+  const app = new Hono()
+
+  beforeEach(() => {
+    Object.defineProperty(global, 'Request', {
+      value: GlobalRequest,
+      writable: true,
+    })
+    Object.defineProperty(global, 'Response', {
+      value: GlobalResponse,
+      writable: true,
+    })
+  })
+
+  describe('default', () => {
+    it('Should be overridden', () => {
+      createAdaptorServer(app)
+      expect(global.Request).toBe(LightweightRequest)
+      expect(global.Response).toBe(LightweightResponse)
+    })
+  })
+
+  describe('overrideGlobalObjects: true', () => {
+    it('Should be overridden', () => {
+      createAdaptorServer({ overrideGlobalObjects: true, fetch: app.fetch })
+      expect(global.Request).toBe(LightweightRequest)
+      expect(global.Response).toBe(LightweightResponse)
+    })
+  })
+
+  describe('overrideGlobalObjects: false', () => {
+    it('Should not be overridden', () => {
+      createAdaptorServer({ overrideGlobalObjects: false, fetch: app.fetch })
+      expect(global.Request).toBe(GlobalRequest)
+      expect(global.Response).toBe(GlobalResponse)
+    })
   })
 })

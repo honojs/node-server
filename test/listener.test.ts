@@ -1,6 +1,8 @@
 import { createServer } from 'node:http'
 import request from 'supertest'
 import { getRequestListener } from '../src/listener'
+import { GlobalRequest, Request as LightweightRequest } from '../src/request'
+import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 
 describe('Error handling - sync fetchCallback', () => {
   const fetchCallback = jest.fn(() => {
@@ -203,5 +205,48 @@ describe('Abort request', () => {
       expect(abortedReq).toBeInstanceOf(Request)
       expect(abortedReq.signal.aborted).toBe(true)
     }
+  })
+})
+
+describe('overrideGlobalObjects', () => {
+  const fetchCallback = jest.fn()
+
+  beforeEach(() => {
+    Object.defineProperty(global, 'Request', {
+      value: GlobalRequest,
+      writable: true,
+    })
+    Object.defineProperty(global, 'Response', {
+      value: GlobalResponse,
+      writable: true,
+    })
+  })
+
+  describe('default', () => {
+    it('Should be overridden', () => {
+      getRequestListener(fetchCallback)
+      expect(global.Request).toBe(LightweightRequest)
+      expect(global.Response).toBe(LightweightResponse)
+    })
+  })
+
+  describe('overrideGlobalObjects: true', () => {
+    it('Should be overridden', () => {
+      getRequestListener(fetchCallback, {
+        overrideGlobalObjects: true,
+      })
+      expect(global.Request).toBe(LightweightRequest)
+      expect(global.Response).toBe(LightweightResponse)
+    })
+  })
+
+  describe('overrideGlobalObjects: false', () => {
+    it('Should not be overridden', () => {
+      getRequestListener(fetchCallback, {
+        overrideGlobalObjects: false,
+      })
+      expect(global.Request).toBe(GlobalRequest)
+      expect(global.Response).toBe(GlobalResponse)
+    })
   })
 })
