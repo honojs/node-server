@@ -6,6 +6,25 @@ import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
 import type { TLSSocket } from 'node:tls'
 
+export class RequestError extends Error {
+  static name = 'RequestError'
+  constructor(
+    message: string,
+    options?: {
+      cause?: unknown
+    }
+  ) {
+    super(message, options)
+  }
+}
+
+export const toRequestError = (e: unknown): RequestError => {
+  if (e instanceof RequestError) {
+    return e
+  }
+  return new RequestError((e as Error).message, { cause: e })
+}
+
 export const GlobalRequest = global.Request
 export class Request extends GlobalRequest {
   constructor(input: string | Request, options?: RequestInit) {
