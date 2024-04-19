@@ -159,18 +159,18 @@ export const getRequestListener = (
   ) => {
     let res
 
-    // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
-    // so generate a pseudo Request object with only the minimum required information.
-    const req = newRequest(incoming)
-
-    // Detect if request was aborted.
-    outgoing.on('close', () => {
-      if (incoming.destroyed) {
-        req[getAbortController]().abort()
-      }
-    })
-
     try {
+      // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
+      // so generate a pseudo Request object with only the minimum required information.
+      const req = newRequest(incoming)
+
+      // Detect if request was aborted.
+      outgoing.on('close', () => {
+        if (incoming.destroyed) {
+          req[getAbortController]().abort()
+        }
+      })
+
       res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as
         | Response
         | Promise<Response>

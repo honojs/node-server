@@ -4,6 +4,28 @@ import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 
+describe('Invalid request', () => {
+  const requestListener = getRequestListener(jest.fn())
+  const server = createServer(async (req, res) => {
+    await requestListener(req, res)
+
+    if (!res.writableEnded) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' })
+      res.end('error handler did not return a response')
+    }
+  })
+
+  it('Should return server error for a request w/o host header', async () => {
+    const res = await request(server).get('/').set('Host', '').send()
+    expect(res.status).toBe(500)
+  })
+
+  it('Should return server error for a request invalid host header', async () => {
+    const res = await request(server).get('/').set('Host', 'a b').send()
+    expect(res.status).toBe(500)
+  })
+})
+
 describe('Error handling - sync fetchCallback', () => {
   const fetchCallback = jest.fn(() => {
     throw new Error('thrown error')
