@@ -1,28 +1,68 @@
 import { createServer } from 'node:http'
 import request from 'supertest'
 import { getRequestListener } from '../src/listener'
-import { GlobalRequest, Request as LightweightRequest } from '../src/request'
+import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 
 describe('Invalid request', () => {
-  const requestListener = getRequestListener(jest.fn())
-  const server = createServer(async (req, res) => {
-    await requestListener(req, res)
+  describe('default error handler', () => {
+    const requestListener = getRequestListener(jest.fn())
+    const server = createServer(requestListener)
 
-    if (!res.writableEnded) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' })
-      res.end('error handler did not return a response')
-    }
+    it('Should return server error for a request w/o host header', async () => {
+      const res = await request(server).get('/').set('Host', '').send()
+      expect(res.status).toBe(400)
+    })
+
+    it('Should return server error for a request invalid host header', async () => {
+      const res = await request(server).get('/').set('Host', 'a b').send()
+      expect(res.status).toBe(400)
+    })
   })
 
-  it('Should return server error for a request w/o host header', async () => {
-    const res = await request(server).get('/').set('Host', '').send()
-    expect(res.status).toBe(400)
+  describe('custom error handler', () => {
+    const requestListener = getRequestListener(jest.fn(), {
+      errorHandler: (e) => {
+        if (e instanceof RequestError) {
+          return new Response(e.message, { status: 400 })
+        } else {
+          return new Response('unknown error', { status: 500 })
+        }
+      },
+    })
+    const server = createServer(requestListener)
+
+    it('Should return server error for a request w/o host header', async () => {
+      const res = await request(server).get('/').set('Host', '').send()
+      expect(res.status).toBe(400)
+    })
+
+    it('Should return server error for a request invalid host header', async () => {
+      const res = await request(server).get('/').set('Host', 'a b').send()
+      expect(res.status).toBe(400)
+    })
+
+    it('Should return server error for host header with path', async () => {
+      const res = await request(server).get('/').set('Host', 'a/b').send()
+      expect(res.status).toBe(400)
+    })
   })
 
-  it('Should return server error for a request invalid host header', async () => {
-    const res = await request(server).get('/').set('Host', 'a b').send()
-    expect(res.status).toBe(400)
+  describe('default hostname', () => {
+    const requestListener = getRequestListener(() => new Response('ok'), {
+      hostname: 'example.com',
+    })
+    const server = createServer(requestListener)
+
+    it('Should return 200 for a request w/o host header', async () => {
+      const res = await request(server).get('/').set('Host', '').send()
+      expect(res.status).toBe(200)
+    })
+
+    it('Should return server error for a request invalid host header', async () => {
+      const res = await request(server).get('/').set('Host', 'a b').send()
+      expect(res.status).toBe(400)
+    })
   })
 })
 

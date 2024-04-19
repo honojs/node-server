@@ -150,6 +150,7 @@ const responseViaResponseObject = async (
 export const getRequestListener = (
   fetchCallback: FetchCallback,
   options: {
+    hostname?: string
     errorHandler?: CustomErrorHandler
     overrideGlobalObjects?: boolean
   } = {}
@@ -173,7 +174,7 @@ export const getRequestListener = (
     try {
       // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
       // so generate a pseudo Request object with only the minimum required information.
-      req = newRequest(incoming)
+      req = newRequest(incoming, options.hostname)
 
       // Detect if request was aborted.
       outgoing.on('close', () => {

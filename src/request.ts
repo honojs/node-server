@@ -130,11 +130,16 @@ const requestPrototype: Record<string | symbol, any> = {
 })
 Object.setPrototypeOf(requestPrototype, Request.prototype)
 
-export const newRequest = (incoming: IncomingMessage | Http2ServerRequest) => {
+export const newRequest = (
+  incoming: IncomingMessage | Http2ServerRequest,
+  defaultHostname?: string
+) => {
   const req = Object.create(requestPrototype)
   req[incomingKey] = incoming
 
-  const host = incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host
+  const host =
+    (incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host) ||
+    defaultHostname
   if (!host) {
     throw new RequestError('Missing host header')
   }
