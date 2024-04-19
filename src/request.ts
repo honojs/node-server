@@ -133,15 +133,27 @@ Object.setPrototypeOf(requestPrototype, Request.prototype)
 export const newRequest = (incoming: IncomingMessage | Http2ServerRequest) => {
   const req = Object.create(requestPrototype)
   req[incomingKey] = incoming
-  req[urlKey] = new URL(
+
+  const host = incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host
+  if (!host) {
+    throw new RequestError('Missing host header')
+  }
+  const url = new URL(
     `${
       incoming instanceof Http2ServerRequest ||
       (incoming.socket && (incoming.socket as TLSSocket).encrypted)
         ? 'https'
         : 'http'
-    }://${incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host}${
-      incoming.url
-    }`
-  ).href
+    }://${host}${incoming.url}`
+  )
+
+  // check by length for performance.
+  // if suspicious, check by host. host header sometimes contains port.
+  if (url.hostname.length !== host.length && url.hostname !== host.replace(/:\d+$/, '')) {
+    throw new RequestError('Invalid host header')
+  }
+
+  req[urlKey] = url.href
+
   return req
 }

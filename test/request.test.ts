@@ -41,29 +41,29 @@ describe('Request', () => {
     })
 
     it('Should resolve double dots in host header', async () => {
-      const req = newRequest({
-        headers: {
-          host: 'localhost/..',
-        },
-        url: '/foo.txt',
-      } as IncomingMessage)
-      expect(req).toBeInstanceOf(global.Request)
-      expect(req.url).toBe('http://localhost/foo.txt')
+      expect(() => {
+        newRequest({
+          headers: {
+            host: 'localhost/..',
+          },
+          url: '/foo.txt',
+        } as IncomingMessage)
+      }).toThrow('Invalid host header')
     })
 
     it('should generate only one `AbortController` per `Request` object created', async () => {
       const req = newRequest({
         headers: {
-          host: 'localhost/..',
+          host: 'localhost',
         },
-        rawHeaders: ['host', 'localhost/..'],
+        rawHeaders: ['host', 'localhost'],
         url: '/foo.txt',
       } as IncomingMessage)
       const req2 = newRequest({
         headers: {
-          host: 'localhost/..',
+          host: 'localhost',
         },
-        rawHeaders: ['host', 'localhost/..'],
+        rawHeaders: ['host', 'localhost'],
         url: '/foo.txt',
       } as IncomingMessage)
 
