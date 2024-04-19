@@ -17,12 +17,12 @@ describe('Invalid request', () => {
 
   it('Should return server error for a request w/o host header', async () => {
     const res = await request(server).get('/').set('Host', '').send()
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(400)
   })
 
   it('Should return server error for a request invalid host header', async () => {
     const res = await request(server).get('/').set('Host', 'a b').send()
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(400)
   })
 })
 
