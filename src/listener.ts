@@ -1,6 +1,11 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
-import { getAbortController, newRequest, Request as LightweightRequest } from './request'
+import {
+  getAbortController,
+  newRequest,
+  Request as LightweightRequest,
+  toRequestError,
+} from './request'
 import { cacheKey, getInternalBody, Response as LightweightResponse } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
@@ -9,6 +14,11 @@ import './globals'
 
 const regBuffer = /^no$/i
 const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
+
+const handleRequestError = (): Response =>
+  new Response(null, {
+    status: 400,
+  })
 
 const handleFetchError = (e: unknown): Response =>
   new Response(null, {
@@ -140,6 +150,7 @@ const responseViaResponseObject = async (
 export const getRequestListener = (
   fetchCallback: FetchCallback,
   options: {
+    hostname?: string
     errorHandler?: CustomErrorHandler
     overrideGlobalObjects?: boolean
   } = {}
@@ -157,12 +168,13 @@ export const getRequestListener = (
     incoming: IncomingMessage | Http2ServerRequest,
     outgoing: ServerResponse | Http2ServerResponse
   ) => {
-    let res
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let res, req: any
 
     try {
       // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
       // so generate a pseudo Request object with only the minimum required information.
-      const req = newRequest(incoming)
+      req = newRequest(incoming, options.hostname)
 
       // Detect if request was aborted.
       outgoing.on('close', () => {
@@ -181,10 +193,12 @@ export const getRequestListener = (
     } catch (e: unknown) {
       if (!res) {
         if (options.errorHandler) {
-          res = await options.errorHandler(e)
+          res = await options.errorHandler(req ? e : toRequestError(e))
           if (!res) {
             return
           }
+        } else if (!req) {
+          res = handleRequestError()
         } else {
           res = handleFetchError(e)
         }

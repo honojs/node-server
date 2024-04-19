@@ -6,6 +6,7 @@ import type { Options, ServerType } from './types'
 export const createAdaptorServer = (options: Options): ServerType => {
   const fetchCallback = options.fetch
   const requestListener = getRequestListener(fetchCallback, {
+    hostname: options.hostname,
     overrideGlobalObjects: options.overrideGlobalObjects,
   })
   // ts will complain about createServerHTTP and createServerHTTP2 not being callable, which works just fine

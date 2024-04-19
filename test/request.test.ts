@@ -4,6 +4,7 @@ import {
   Request as LightweightRequest,
   GlobalRequest,
   getAbortController,
+  RequestError,
 } from '../src/request'
 
 Object.defineProperty(global, 'Request', {
@@ -40,30 +41,30 @@ describe('Request', () => {
       expect(req.url).toBe('http://localhost/foo.txt')
     })
 
-    it('Should resolve double dots in host header', async () => {
+    it('Should accept hostname and port in host header', async () => {
       const req = newRequest({
         headers: {
-          host: 'localhost/..',
+          host: 'localhost:8080',
         },
-        url: '/foo.txt',
+        url: '/static/../foo.txt',
       } as IncomingMessage)
       expect(req).toBeInstanceOf(global.Request)
-      expect(req.url).toBe('http://localhost/foo.txt')
+      expect(req.url).toBe('http://localhost:8080/foo.txt')
     })
 
     it('should generate only one `AbortController` per `Request` object created', async () => {
       const req = newRequest({
         headers: {
-          host: 'localhost/..',
+          host: 'localhost',
         },
-        rawHeaders: ['host', 'localhost/..'],
+        rawHeaders: ['host', 'localhost'],
         url: '/foo.txt',
       } as IncomingMessage)
       const req2 = newRequest({
         headers: {
-          host: 'localhost/..',
+          host: 'localhost',
         },
-        rawHeaders: ['host', 'localhost/..'],
+        rawHeaders: ['host', 'localhost'],
         url: '/foo.txt',
       } as IncomingMessage)
 
@@ -77,6 +78,39 @@ describe('Request', () => {
       expect(x).toBe(y)
       expect(z).not.toBe(x)
       expect(z).not.toBe(y)
+    })
+
+    it('Should throw error if host header contains path', async () => {
+      expect(() => {
+        newRequest({
+          headers: {
+            host: 'localhost/..',
+          },
+          url: '/foo.txt',
+        } as IncomingMessage)
+      }).toThrow(RequestError)
+    })
+
+    it('Should throw error if host header is empty', async () => {
+      expect(() => {
+        newRequest({
+          headers: {
+            host: '',
+          },
+          url: '/foo.txt',
+        } as IncomingMessage)
+      }).toThrow(RequestError)
+    })
+
+    it('Should throw error if host header contains query parameter', async () => {
+      expect(() => {
+        newRequest({
+          headers: {
+            host: 'localhost?foo=bar',
+          },
+          url: '/foo.txt',
+        } as IncomingMessage)
+      }).toThrow(RequestError)
     })
   })
 

@@ -6,6 +6,25 @@ import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
 import type { TLSSocket } from 'node:tls'
 
+export class RequestError extends Error {
+  static name = 'RequestError'
+  constructor(
+    message: string,
+    options?: {
+      cause?: unknown
+    }
+  ) {
+    super(message, options)
+  }
+}
+
+export const toRequestError = (e: unknown): RequestError => {
+  if (e instanceof RequestError) {
+    return e
+  }
+  return new RequestError((e as Error).message, { cause: e })
+}
+
 export const GlobalRequest = global.Request
 export class Request extends GlobalRequest {
   constructor(input: string | Request, options?: RequestInit) {
@@ -111,18 +130,35 @@ const requestPrototype: Record<string | symbol, any> = {
 })
 Object.setPrototypeOf(requestPrototype, Request.prototype)
 
-export const newRequest = (incoming: IncomingMessage | Http2ServerRequest) => {
+export const newRequest = (
+  incoming: IncomingMessage | Http2ServerRequest,
+  defaultHostname?: string
+) => {
   const req = Object.create(requestPrototype)
   req[incomingKey] = incoming
-  req[urlKey] = new URL(
+
+  const host =
+    (incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host) ||
+    defaultHostname
+  if (!host) {
+    throw new RequestError('Missing host header')
+  }
+  const url = new URL(
     `${
       incoming instanceof Http2ServerRequest ||
       (incoming.socket && (incoming.socket as TLSSocket).encrypted)
         ? 'https'
         : 'http'
-    }://${incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host}${
-      incoming.url
-    }`
-  ).href
+    }://${host}${incoming.url}`
+  )
+
+  // check by length for performance.
+  // if suspicious, check by host. host header sometimes contains port.
+  if (url.hostname.length !== host.length && url.hostname !== host.replace(/:\d+$/, '')) {
+    throw new RequestError('Invalid host header')
+  }
+
+  req[urlKey] = url.href
+
   return req
 }
