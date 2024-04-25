@@ -40,7 +40,7 @@ export class Response {
       this.#init = init
     }
 
-    if (typeof body === 'string' || typeof body?.getReader !== 'undefined') {
+    if (typeof body === 'string' || typeof (body as ReadableStream)?.getReader !== 'undefined') {
       let headers = (init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }) as
         | Record<string, string>
         | Headers
