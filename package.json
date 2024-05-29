@@ -46,7 +46,7 @@
     }
   },
   "scripts": {
-    "test": "jest",
+    "test": "node --expose-gc ./node_modules/.bin/jest",
     "build": "tsup",
     "watch": "tsup --watch",
     "postbuild": "publint",
