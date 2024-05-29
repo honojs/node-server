@@ -13,10 +13,11 @@
       "jest",
       "node",
     ],
-    "rootDir": "./src",
+    "rootDir": ".",
     "outDir": "./dist",
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "test/**/*.ts"
   ],
 }
