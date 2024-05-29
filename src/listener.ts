@@ -179,7 +179,7 @@ export const getRequestListener = (
       // Detect if request was aborted.
       outgoing.on('close', () => {
         if (incoming.errored) {
-          req[getAbortController]().abort()
+          req[getAbortController]().abort(incoming.errored.toString())
         }
       })
 
