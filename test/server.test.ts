@@ -8,7 +8,7 @@ import { compress } from 'hono/compress'
 import { poweredBy } from 'hono/powered-by'
 import { stream } from 'hono/streaming'
 import request from 'supertest'
-import { GlobalRequest, Request as LightweightRequest } from '../src/request'
+import { GlobalRequest, Request as LightweightRequest, getAbortController } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 import { createAdaptorServer } from '../src/server'
 import type { HttpBindings } from '../src/types'
@@ -794,5 +794,75 @@ describe('overrideGlobalObjects', () => {
       expect(global.Request).toBe(GlobalRequest)
       expect(global.Response).toBe(GlobalResponse)
     })
+  })
+})
+
+describe('Memory leak test', () => {
+  let counter = 0
+  const registry = new FinalizationRegistry(() => {
+    counter--
+  })
+  const app = new Hono()
+  const server = createAdaptorServer(app)
+
+  let onAbort: () => void
+  let reqReadyResolve: () => void
+  let reqReadyPromise: Promise<void>
+
+  app.use(async (c, next) => {
+    counter++
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    registry.register((c.req.raw as any)[getAbortController](), 'abortController')
+    await next()
+  })
+  app.get('/', (c) => c.text('Hello! Node!'))
+  app.post('/', async (c) => c.json(await c.req.json()))
+  app.get('/abort', async (c) => {
+    c.req.raw.signal.addEventListener('abort', () => onAbort())
+    reqReadyResolve?.()
+    await new Promise(() => {}) // never resolve
+  })
+
+  beforeEach(() => {
+    counter = 0
+    reqReadyPromise = new Promise<void>((r) => {
+      reqReadyResolve = r
+    })
+  })
+
+  afterAll(() => {
+    server.close()
+  })
+
+  it('Should not have memory leak - GET /', async () => {
+    await request(server).get('/')
+    global.gc?.()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(counter).toBe(0)
+  })
+
+  it('Should not have memory leak - POST /', async () => {
+    await request(server).post('/').set('Content-Type', 'application/json').send({ foo: 'bar' })
+    global.gc?.()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(counter).toBe(0)
+  })
+
+  it('Should not have memory leak - GET /abort', async () => {
+    const abortedPromise = new Promise<void>((resolve) => {
+      onAbort = resolve
+    })
+
+    const req = request(server)
+      .get('/abort')
+      .end(() => {})
+    await reqReadyPromise
+    req.abort()
+    await abortedPromise
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    global.gc?.()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(counter).toBe(0)
   })
 })
