@@ -155,7 +155,28 @@ import { serveStatic } from '@hono/node-server/serve-static'
 app.use('/static/*', serveStatic({ root: './' }))
 ```
 
-Note that `root` must be _relative_ to the current working directory - absolute paths are not supported.
+Note that `root` must be _relative_ to the current working directory from which the app was started. Absolute paths are not supported.
+
+This can cause confusion when running your application locally.
+
+Imagine your project structure is:
+
+```
+my-hono-project/
+  src/
+    index.ts
+  static/
+    index.html
+```
+
+Typically, you would run your app from the project's root directory (`my-hono-project`), 
+so you would need the following code to serve the `static` folder:
+
+```ts
+app.use('/static/*', serveStatic({ root: './static' }))
+```
+
+Notice that `root` here is not relative to `src/index.ts`, rather to `my-hono-project`.
 
 ### Options
 
