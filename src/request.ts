@@ -62,6 +62,17 @@ const newRequestFromIncoming = (
     signal: abortController.signal,
   } as RequestInit
 
+  if (method === 'TRACE') {
+    init.method = 'GET'
+    const req = new Request(url, init)
+    Object.defineProperty(req, 'method', {
+      get() {
+        return 'TRACE'
+      },
+    })
+    return req
+  }
+
   if (!(method === 'GET' || method === 'HEAD')) {
     // lazy-consume request body
     init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
