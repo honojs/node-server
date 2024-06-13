@@ -38,6 +38,11 @@ describe('Basic', () => {
     return new PonyfillResponse('Pony')
   })
 
+  app.on('trace', '/', (c) => {
+    const headers = c.req.raw.headers // build new request object
+    return c.text(`headers: ${JSON.stringify(headers)}`)
+  })
+
   const server = createAdaptorServer(app)
 
   it('Should return 200 response - GET /', async () => {
@@ -93,6 +98,11 @@ describe('Basic', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain')
     expect(res.text).toBe('Pony')
+  })
+
+  it('Should not raise error for TRACE method', async () => {
+    const res = await request(server).trace('/')
+    expect(res.text).toBe('headers: {}')
   })
 })
 
