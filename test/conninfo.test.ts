@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'net'
 import { Hono } from 'hono'
+import type { AddressType, ConnInfo } from 'hono/conninfo'
 import { getConnInfo } from '../src/conninfo'
-import { AddressType, ConnInfo } from 'hono/conninfo'
 
 describe('ConnInfo', () => {
   it('Should works', async () => {
