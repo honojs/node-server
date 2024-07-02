@@ -47,7 +47,7 @@
   },
   "scripts": {
     "test": "node --expose-gc ./node_modules/.bin/jest",
-    "build": "tsup",
+    "build": "tsup --external hono",
     "watch": "tsup --watch",
     "postbuild": "publint",
     "prerelease": "yarn build && yarn test",

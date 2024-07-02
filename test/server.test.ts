@@ -398,9 +398,9 @@ describe('Error handling', () => {
     expect(res.text).toBe('Custom Error!')
   })
 
-  it('Should return 500 response - PURGE method', async () => {
+  it('Should return 404 response - PURGE method', async () => {
     const res = await request(server).purge('/')
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(404)
   })
 })
 
