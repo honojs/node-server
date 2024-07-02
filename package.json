@@ -47,7 +47,7 @@
   },
   "scripts": {
     "test": "node --expose-gc ./node_modules/.bin/jest",
-    "build": "tsup",
+    "build": "tsup --external hono",
     "watch": "tsup --watch",
     "postbuild": "publint",
     "prerelease": "yarn build && yarn test",
@@ -78,7 +78,7 @@
     "@types/supertest": "^2.0.12",
     "@whatwg-node/fetch": "^0.9.14",
     "eslint": "^8.55.0",
-    "hono": "^4.0.3",
+    "hono": "^4.4.10",
     "jest": "^29.6.1",
     "np": "^7.7.0",
     "prettier": "^3.2.4",

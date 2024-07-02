@@ -2924,10 +2924,10 @@ hexoid@^1.0.0:
   resolved "https://registry.yarnpkg.com/hexoid/-/hexoid-1.0.0.tgz#ad10c6573fb907de23d9ec63a711267d9dc9bc18"
   integrity sha512-QFLV0taWQOZtvIRIAdBChesmogZrtuXvVWsFHZTk2SU+anspqZ2vMnoLg7IE1+Uk16N19APic1BuF8bC8c2m5g==
 
-hono@^4.0.3:
-  version "4.0.3"
-  resolved "https://registry.yarnpkg.com/hono/-/hono-4.0.3.tgz#042ec90a6b784f85ee31c9dd8db6173d3588afdc"
-  integrity sha512-LLZFvqiksAO6Hf080XCUbsEjRxIrqEoiIN1HUzL0xtYP+BZUxGfeWg8yB5Dvp/sI7T0Lt4XdtGTGLwpIzAsl8w==
+hono@^4.4.10:
+  version "4.4.10"
+  resolved "https://registry.yarnpkg.com/hono/-/hono-4.4.10.tgz#f980feea3b74dd4edc9249a0726165df13c50e16"
+  integrity sha512-z6918u9rXRU5CCisMHd2uUVoQXcNyUrUMmYY7VH10v4HJG7+hqgMK/G8YNTd13C6s4rBfzF09iz8VpOip9qG3A==
 
 hosted-git-info@^2.1.4:
   version "2.8.9"
