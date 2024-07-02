@@ -27,6 +27,11 @@
       "types": "./dist/utils/*.d.ts",
       "require": "./dist/utils/*.js",
       "import": "./dist/utils/*.mjs"
+    },
+    "./conninfo": {
+      "types": "./dist/conninfo.d.ts",
+      "require": "./dist/conninfo.js",
+      "import": "./dist/conninfo.mjs"
     }
   },
   "typesVersions": {
@@ -42,6 +47,9 @@
       ],
       "utils/*": [
         "./dist/utils/*.d.ts"
+      ],
+      "conninfo": [
+        "./dist/conninfo.d.ts"
       ]
     }
   },
