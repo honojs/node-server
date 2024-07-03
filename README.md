@@ -169,7 +169,7 @@ my-hono-project/
     index.html
 ```
 
-Typically, you would run your app from the project's root directory (`my-hono-project`), 
+Typically, you would run your app from the project's root directory (`my-hono-project`),
 so you would need the following code to serve the `static` folder:
 
 ```ts
@@ -208,6 +208,19 @@ app.use(
     },
   })
 )
+```
+
+## ConnInfo Helper
+
+You can use the [ConnInfo Helper](https://hono.dev/docs/helpers/conninfo) by importing `getConnInfo` from `@hono/node-server/conninfo`.
+
+```ts
+import { getConnInfo } from '@hono/node-server/conninfo'
+
+app.get('/', (c) => {
+  const info = getConnInfo(c) // info is `ConnInfo`
+  return c.text(`Your remote address is ${info.remote.address}`)
+})
 ```
 
 ## Accessing Node.js API
