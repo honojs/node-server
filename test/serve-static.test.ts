@@ -134,4 +134,10 @@ describe('Serve Static Middleware', () => {
     const res = await request(server).get('/static/../secret.txt')
     expect(res.status).toBe(404)
   })
+
+  it('Should handle an extension less files', async () => {
+    const res = await request(server).get('/static/extensionless')
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('Extensionless')
+  })
 })
