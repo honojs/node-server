@@ -5,6 +5,7 @@ import { Response as PonyfillResponse } from '@whatwg-node/fetch'
 import { Hono } from 'hono'
 import { basicAuth } from 'hono/basic-auth'
 import { compress } from 'hono/compress'
+import { etag } from 'hono/etag'
 import { poweredBy } from 'hono/powered-by'
 import { stream } from 'hono/streaming'
 import request from 'supertest'
@@ -143,6 +144,20 @@ describe('via internal body', () => {
     })
     return new Response(stream)
   })
+  app.get('/buffer', () => {
+    const response = new Response(Buffer.from('Hello Hono!'), {
+      headers: { 'content-type': 'text/plain' },
+    })
+    return response
+  })
+
+  app.use('/etag/*', etag())
+  app.get('/etag/buffer', () => {
+    const response = new Response(Buffer.from('Hello Hono!'), {
+      headers: { 'content-type': 'text/plain' },
+    })
+    return response
+  })
 
   const server = createAdaptorServer(app)
 
@@ -185,6 +200,23 @@ describe('via internal body', () => {
     expect(res.headers['content-type']).toMatch('text/plain; charset=UTF-8')
     expect(res.headers['content-length']).toBeUndefined()
     expect(expectedChunks.length).toBe(0) // all chunks are received
+  })
+
+  it('Should return 200 response - GET /buffer', async () => {
+    const res = await request(server).get('/buffer')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch('text/plain')
+    expect(res.headers['content-length']).toMatch('11')
+    expect(res.text).toBe('Hello Hono!')
+  })
+
+  it('Should return 200 response - GET /etag/buffer', async () => {
+    const res = await request(server).get('/etag/buffer')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch('text/plain')
+    expect(res.headers['etag']).toMatch('"7e03b9b8ed6156932691d111c81c34c3c02912f9"')
+    expect(res.headers['content-length']).toMatch('11')
+    expect(res.text).toBe('Hello Hono!')
   })
 })
 
