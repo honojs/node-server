@@ -92,18 +92,27 @@ const responseViaResponseObject = async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const internalBody = getInternalBody(res as any)
   if (internalBody) {
-    if (internalBody.length) {
-      resHeaderRecord['content-length'] = internalBody.length
-    }
-    outgoing.writeHead(res.status, resHeaderRecord)
-    if (typeof internalBody.source === 'string' || internalBody.source instanceof Uint8Array) {
-      outgoing.end(internalBody.source)
-    } else if (internalBody.source instanceof Blob) {
-      outgoing.end(new Uint8Array(await internalBody.source.arrayBuffer()))
+    const { length, source, stream } = internalBody
+    if (source instanceof Uint8Array && source.byteLength !== length) {
+      // maybe `source` is detached, so we should send via res.body
     } else {
-      await writeFromReadableStream(internalBody.stream, outgoing)
+      // send via internal raw data
+      if (length) {
+        resHeaderRecord['content-length'] = length
+      }
+      outgoing.writeHead(res.status, resHeaderRecord)
+      if (typeof source === 'string' || source instanceof Uint8Array) {
+        outgoing.end(source)
+      } else if (source instanceof Blob) {
+        outgoing.end(new Uint8Array(await source.arrayBuffer()))
+      } else {
+        await writeFromReadableStream(stream, outgoing)
+      }
+      return
     }
-  } else if (res.body) {
+  }
+
+  if (res.body) {
     /**
      * If content-encoding is set, we assume that the response should be not decoded.
      * Else if transfer-encoding is set, we assume that the response should be streamed.
