@@ -15,6 +15,13 @@ describe('Serve Static Middleware', () => {
       rewriteRequestPath: (path) => path.replace(/^\/dot-static/, '/.static'),
     })
   )
+  app.use(
+    '/immutable-icon.ico',
+    serveStatic({
+      path: './test/assets/favicon.ico',
+      headers: () => ({ 'Cache-Control': 'public, max-age=31536000, immutable' }),
+    })
+  )
 
   let notFoundMessage = ''
   app.use(
@@ -65,6 +72,12 @@ describe('Serve Static Middleware', () => {
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
     expect(res.text).toBe('This is plain.txt')
+  })
+
+  it('Should return custom headers', async () => {
+    const res = await request(server).get('/immutable-icon.ico')
+    expect(res.status).toBe(200)
+    expect(res.headers['cache-control']).toBe('public, max-age=31536000, immutable')
   })
 
   it('Should return 404 for non-existent files', async () => {

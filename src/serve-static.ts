@@ -11,6 +11,7 @@ export type ServeStaticOptions = {
   root?: string
   path?: string
   index?: string // default is 'index.html'
+  headers?: (c: Context) => Record<string, string | undefined>
   rewriteRequestPath?: (path: string) => string
   onNotFound?: (path: string, c: Context) => void | Promise<void>
 }
@@ -86,6 +87,15 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     if (!stats) {
       await options.onNotFound?.(path, c)
       return next()
+    }
+
+    const headers = options.headers?.(c)
+    if (headers) {
+      for (const [key, value] of Object.entries(headers)) {
+        if (value) {
+          c.header(key, value)
+        }
+      }
     }
 
     const mimeType = getMimeType(path)

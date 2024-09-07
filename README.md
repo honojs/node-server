@@ -210,6 +210,23 @@ app.use(
 )
 ```
 
+#### `headers`
+
+If you need to set headers for the served files, you can use the `headers` option.
+
+```ts
+app.use(
+  '/static/*',
+  serveStatic({
+    root: './static',
+    headers: (c) => ({
+      'Cache-Control': 'public, max-age=31536000',
+      'X-Filepath': c.req.path,
+    }),
+  })
+)
+```
+
 ## ConnInfo Helper
 
 You can use the [ConnInfo Helper](https://hono.dev/docs/helpers/conninfo) by importing `getConnInfo` from `@hono/node-server/conninfo`.
