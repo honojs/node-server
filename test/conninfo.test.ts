@@ -1,6 +1,6 @@
-import type { AddressInfo } from 'net'
 import { Hono } from 'hono'
 import type { AddressType, ConnInfo } from 'hono/conninfo'
+import type { AddressInfo } from 'net'
 import { getConnInfo } from '../src/conninfo'
 
 describe('ConnInfo', () => {

@@ -1,5 +1,5 @@
-import type { AddressInfo } from 'net'
 import type { GetConnInfo } from 'hono/conninfo'
+import type { AddressInfo } from 'net'
 import type { HttpBindings } from './types'
 
 /**
