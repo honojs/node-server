@@ -99,7 +99,6 @@ export function getInternalBody(
     response = (response as any)[getResponseCache]()
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const state = (response as any)[stateKey] as { body?: InternalBody } | undefined
 
   return (state && state.body) || undefined

@@ -1,5 +1,5 @@
-import { createServer } from 'node:http'
 import request from 'supertest'
+import { createServer } from 'node:http'
 import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
