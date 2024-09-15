@@ -11,10 +11,17 @@ export type ServeStaticOptions<E extends Env = Env> = {
   root?: string
   path?: string
   index?: string // default is 'index.html'
+  precompressed?: boolean
   rewriteRequestPath?: (path: string) => string
   onFound?: (path: string, c: Context<E>) => void | Promise<void>
   onNotFound?: (path: string, c: Context<E>) => void | Promise<void>
 }
+
+const ENCODINGS = {
+  br: '.br',
+  zstd: '.zst',
+  gzip: '.gz',
+} as const
 
 const createStreamBody = (stream: ReadStream) => {
   const body = new ReadableStream({
@@ -93,6 +100,30 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     const mimeType = getMimeType(path)
     if (mimeType) {
       c.header('Content-Type', mimeType)
+    }
+
+    if (options.precompressed) {
+      const acceptEncodings =
+        c.req
+          .header('Accept-Encoding')
+          ?.split(',')
+          .map((encoding) => encoding.trim())
+          .filter((encoding): encoding is keyof typeof ENCODINGS =>
+            Object.hasOwn(ENCODINGS, encoding)
+          )
+          .sort((a, b) => Object.keys(ENCODINGS).indexOf(a) - Object.keys(ENCODINGS).indexOf(b)) ??
+        []
+
+      for (const encoding of acceptEncodings) {
+        const precompressedStats = getStats(path + ENCODINGS[encoding])
+        if (precompressedStats) {
+          c.header('Content-Encoding', encoding)
+          c.header('Vary', 'Accept-Encoding', { append: true })
+          stats = precompressedStats
+          path = path + ENCODINGS[encoding]
+          break
+        }
+      }
     }
 
     const size = stats.size
