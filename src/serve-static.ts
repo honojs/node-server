@@ -1,10 +1,10 @@
-import type { Context, MiddlewareHandler } from 'hono'
+import type { Context, Env, MiddlewareHandler } from 'hono'
 import { getFilePath, getFilePathWithoutDefaultDocument } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
 import { createReadStream, lstatSync } from 'fs'
 import type { ReadStream, Stats } from 'fs'
 
-export type ServeStaticOptions = {
+export type ServeStaticOptions<E extends Env = Env> = {
   /**
    * Root path, relative to current working directory from which the app was started. Absolute paths are not supported.
    */
@@ -12,7 +12,8 @@ export type ServeStaticOptions = {
   path?: string
   index?: string // default is 'index.html'
   rewriteRequestPath?: (path: string) => string
-  onNotFound?: (path: string, c: Context) => void | Promise<void>
+  onFound?: (path: string, c: Context<E>) => void | Promise<void>
+  onNotFound?: (path: string, c: Context<E>) => void | Promise<void>
 }
 
 const createStreamBody = (stream: ReadStream) => {
@@ -87,6 +88,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
       await options.onNotFound?.(path, c)
       return next()
     }
+    await options.onFound?.(path, c)
 
     const mimeType = getMimeType(path)
     if (mimeType) {

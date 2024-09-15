@@ -6,7 +6,15 @@ import { createAdaptorServer } from './../src/server'
 describe('Serve Static Middleware', () => {
   const app = new Hono()
 
-  app.use('/static/*', serveStatic({ root: './test/assets' }))
+  app.use(
+    '/static/*',
+    serveStatic({
+      root: './test/assets',
+      onFound: (path, c) => {
+        c.header('X-Custom', `Found the file at ${path}`)
+      },
+    })
+  )
   app.use('/favicon.ico', serveStatic({ path: './test/assets/favicon.ico' }))
   app.use(
     '/dot-static/*',
@@ -34,6 +42,7 @@ describe('Serve Static Middleware', () => {
     expect(res.status).toBe(200)
     expect(res.text).toBe('<h1>Hello Hono</h1>')
     expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
+    expect(res.headers['x-custom']).toBe('Found the file at ./test/assets/static/index.html')
   })
 
   it('Should return hono.html', async () => {
