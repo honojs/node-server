@@ -22,6 +22,7 @@ const ENCODINGS = {
   zstd: '.zst',
   gzip: '.gz',
 } as const
+const ENCODINGS_ORDERED_KEYS = Object.keys(ENCODINGS) as (keyof typeof ENCODINGS)[]
 
 const createStreamBody = (stream: ReadStream) => {
   const body = new ReadableStream({
@@ -103,18 +104,17 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     }
 
     if (options.precompressed) {
-      const acceptEncodings =
+      const acceptEncodingSet = new Set(
         c.req
           .header('Accept-Encoding')
           ?.split(',')
           .map((encoding) => encoding.trim())
-          .filter((encoding): encoding is keyof typeof ENCODINGS =>
-            Object.hasOwn(ENCODINGS, encoding)
-          )
-          .sort((a, b) => Object.keys(ENCODINGS).indexOf(a) - Object.keys(ENCODINGS).indexOf(b)) ??
-        []
+      )
 
-      for (const encoding of acceptEncodings) {
+      for (const encoding of ENCODINGS_ORDERED_KEYS) {
+        if (!acceptEncodingSet.has(encoding)) {
+          continue
+        }
         const precompressedStats = getStats(path + ENCODINGS[encoding])
         if (precompressedStats) {
           c.header('Content-Encoding', encoding)
