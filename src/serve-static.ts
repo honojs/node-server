@@ -17,11 +17,14 @@ export type ServeStaticOptions<E extends Env = Env> = {
   onNotFound?: (path: string, c: Context<E>) => void | Promise<void>
 }
 
+const COMPRESSIBLE_CONTENT_TYPE_REGEX =
+  /^\s*(?:text\/[^;\s]+|application\/(?:javascript|json|xml|xml-dtd|ecmascript|dart|postscript|rtf|tar|toml|vnd\.dart|vnd\.ms-fontobject|vnd\.ms-opentype|wasm|x-httpd-php|x-javascript|x-ns-proxy-autoconfig|x-sh|x-tar|x-virtualbox-hdd|x-virtualbox-ova|x-virtualbox-ovf|x-virtualbox-vbox|x-virtualbox-vdi|x-virtualbox-vhd|x-virtualbox-vmdk|x-www-form-urlencoded)|font\/(?:otf|ttf)|image\/(?:bmp|vnd\.adobe\.photoshop|vnd\.microsoft\.icon|vnd\.ms-dds|x-icon|x-ms-bmp)|message\/rfc822|model\/gltf-binary|x-shader\/x-fragment|x-shader\/x-vertex|[^;\s]+?\+(?:json|text|xml|yaml))(?:[;\s]|$)/i
 const ENCODINGS = {
   br: '.br',
   zstd: '.zst',
   gzip: '.gz',
 } as const
+const ENCODINGS_ORDERED_KEYS = Object.keys(ENCODINGS) as (keyof typeof ENCODINGS)[]
 
 const createStreamBody = (stream: ReadStream) => {
   const body = new ReadableStream({
@@ -102,19 +105,18 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
       c.header('Content-Type', mimeType)
     }
 
-    if (options.precompressed) {
-      const acceptEncodings =
+    if (options.precompressed && (!mimeType || COMPRESSIBLE_CONTENT_TYPE_REGEX.test(mimeType))) {
+      const acceptEncodingSet = new Set(
         c.req
           .header('Accept-Encoding')
           ?.split(',')
           .map((encoding) => encoding.trim())
-          .filter((encoding): encoding is keyof typeof ENCODINGS =>
-            Object.hasOwn(ENCODINGS, encoding)
-          )
-          .sort((a, b) => Object.keys(ENCODINGS).indexOf(a) - Object.keys(ENCODINGS).indexOf(b)) ??
-        []
+      )
 
-      for (const encoding of acceptEncodings) {
+      for (const encoding of ENCODINGS_ORDERED_KEYS) {
+        if (!acceptEncodingSet.has(encoding)) {
+          continue
+        }
         const precompressedStats = getStats(path + ENCODINGS[encoding])
         if (precompressedStats) {
           c.header('Content-Encoding', encoding)
