@@ -35,6 +35,14 @@ describe('Serve Static Middleware', () => {
     })
   )
 
+  app.use(
+    '/static-with-precompressed/*',
+    serveStatic({
+      root: './test/assets',
+      precompressed: true,
+    })
+  )
+
   const server = createAdaptorServer(app)
 
   it('Should return index.html', async () => {
@@ -148,5 +156,43 @@ describe('Serve Static Middleware', () => {
     const res = await request(server).get('/static/extensionless')
     expect(res.status).toBe(200)
     expect(res.text).toBe('Extensionless')
+  })
+
+  it('Should return a pre-compressed zstd response - /static-with-precompressed/hello.txt', async () => {
+    // Check if it returns a normal response
+    let res = await request(server).get('/static-with-precompressed/hello.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-length']).toBe('20')
+    expect(res.text).toBe('Hello Not Compressed')
+
+    res = await request(server)
+      .get('/static-with-precompressed/hello.txt')
+      .set('Accept-Encoding', 'zstd')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-length']).toBe('21')
+    expect(res.headers['content-encoding']).toBe('zstd')
+    expect(res.headers['vary']).toBe('Accept-Encoding')
+    expect(res.text).toBe('Hello zstd Compressed')
+  })
+
+  it('Should return a pre-compressed brotli response - /static-with-precompressed/hello.txt', async () => {
+    const res = await request(server)
+      .get('/static-with-precompressed/hello.txt')
+      .set('Accept-Encoding', 'wompwomp, gzip, br, deflate, zstd')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-length']).toBe('19')
+    expect(res.headers['content-encoding']).toBe('br')
+    expect(res.headers['vary']).toBe('Accept-Encoding')
+    expect(res.text).toBe('Hello br Compressed')
+  })
+
+  it('Should not return a pre-compressed response - /static-with-precompressed/hello.txt', async () => {
+    const res = await request(server)
+      .get('/static-with-precompressed/hello.txt')
+      .set('Accept-Encoding', 'wompwomp, unknown')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-encoding']).toBeUndefined()
+    expect(res.headers['vary']).toBeUndefined()
+    expect(res.text).toBe('Hello Not Compressed')
   })
 })
