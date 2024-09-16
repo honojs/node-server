@@ -196,3 +196,30 @@ describe('Serve Static Middleware', () => {
     expect(res.text).toBe('Hello Not Compressed')
   })
 })
+
+describe('With `mimes` options', () => {
+  const mimes = {
+    m3u8: 'application/vnd.apple.mpegurl',
+    ts: 'video/mp2t',
+  }
+  const app = new Hono()
+  app.use('/static/*', serveStatic({ root: './assets', mimes }))
+
+  const server = createAdaptorServer(app)
+
+  it('Should return content-type of m3u8', async () => {
+    const res = await request(server).get('/static/video/morning-routine.m3u8')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('application/vnd.apple.mpegurl')
+  })
+  it('Should return content-type of ts', async () => {
+    const res = await request(server).get('/static/video/morning-routine1.ts1')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('video/mp2t')
+  })
+  it('Should return content-type of default on Hono', async () => {
+    const res = await request(server).get('/static/video/introduction.mp4')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')).toBe('video/mp4')
+  })
+})
