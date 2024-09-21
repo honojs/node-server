@@ -101,9 +101,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     await options.onFound?.(path, c)
 
     const mimeType = getMimeType(path)
-    if (mimeType) {
-      c.header('Content-Type', mimeType)
-    }
+    c.header('Content-Type', mimeType || 'application/octet-stream')
 
     if (options.precompressed && (!mimeType || COMPRESSIBLE_CONTENT_TYPE_REGEX.test(mimeType))) {
       const acceptEncodingSet = new Set(
