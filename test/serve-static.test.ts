@@ -49,6 +49,11 @@ describe('Serve Static Middleware', () => {
     serveStatic({ root: path.join(path.dirname(__filename), 'assets') })
   )
 
+  app.all(
+    '/static-absolute-root-with-dots/*',
+    serveStatic({ root: path.join(path.dirname(__filename), 'assets') + '/../assets' })
+  )
+
   const server = createAdaptorServer(app)
 
   it('Should return index.html', async () => {
@@ -209,5 +214,13 @@ describe('Serve Static Middleware', () => {
     expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
     expect(res.headers['content-length']).toBe('24')
     expect(res.text).toBe('Hello with absolute root')
+  })
+
+  it('Should return 200 with an absolute root with dots - /static-absolute-root-with-dots/hello.txt', async () => {
+    const res = await request(server).get('/static-absolute-root-with-dots/hello.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.headers['content-length']).toBe('34')
+    expect(res.text).toBe('Hello with absolute root with dots')
   })
 })
