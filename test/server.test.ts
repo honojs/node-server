@@ -11,7 +11,7 @@ import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
 import { GlobalRequest, Request as LightweightRequest, getAbortController } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
-import { createAdaptorServer } from '../src/server'
+import { createAdaptorServer, serve } from '../src/server'
 import type { HttpBindings } from '../src/types'
 
 describe('Basic', () => {
@@ -906,5 +906,21 @@ describe('Memory leak test', () => {
     global.gc?.()
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(counter).toBe(0)
+  })
+})
+
+describe('serve',  () => { 
+  const app = new Hono()
+  app.get('/', (c) => c.newResponse(null, 200))
+  serve(app)
+  
+  it('should serve on ipv4', async () => {
+    const response = await fetch('http://localhost:3000')
+    expect(response.status).toBe(200)
+  })
+
+  it('should serve on ipv6', async () => {
+    const response = await fetch('http://[::1]:3000')
+    expect(response.status).toBe(200)
   })
 })

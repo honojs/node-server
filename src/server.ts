@@ -21,7 +21,7 @@ export const serve = (
   listeningListener?: (info: AddressInfo) => void
 ): ServerType => {
   const server = createAdaptorServer(options)
-  server.listen(options?.port ?? 3000, options.hostname ?? '0.0.0.0', () => {
+  server.listen(options?.port ?? 3000, options.hostname, () => {
     const serverInfo = server.address() as AddressInfo
     listeningListener && listeningListener(serverInfo)
   })
