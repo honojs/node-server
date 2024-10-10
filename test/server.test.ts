@@ -909,11 +909,11 @@ describe('Memory leak test', () => {
   })
 })
 
-describe('serve',  () => { 
+describe('serve', () => {
   const app = new Hono()
   app.get('/', (c) => c.newResponse(null, 200))
   serve(app)
-  
+
   it('should serve on ipv4', async () => {
     const response = await fetch('http://localhost:3000')
     expect(response.status).toBe(200)
