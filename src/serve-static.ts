@@ -44,8 +44,8 @@ const createStreamBody = (stream: ReadStream) => {
   return body
 }
 
-const addCurrentDirPrefix = (path: string) => {
-  return `./${path}`
+const addDirPrefix = (path: string, absolute: boolean) => {
+  return absolute ? '/' + path : `./${path}`
 }
 
 const getStats = (path: string) => {
@@ -57,6 +57,18 @@ const getStats = (path: string) => {
 }
 
 export const serveStatic = (options: ServeStaticOptions = { root: '' }): MiddlewareHandler => {
+  let isAbsoluteRoot = false
+  let root: string
+
+  if (options.root) {
+    if (options.root.startsWith('/')) {
+      isAbsoluteRoot = true
+      root = new URL(`file://${options.root}`).pathname
+    } else {
+      root = options.root
+    }
+  }
+
   return async (c, next) => {
     // Do nothing if Response is already set
     if (c.finalized) {
@@ -67,11 +79,11 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
 
     let path = getFilePathWithoutDefaultDocument({
       filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
-      root: options.root,
+      root,
     })
 
     if (path) {
-      path = addCurrentDirPrefix(path)
+      path = addDirPrefix(path, isAbsoluteRoot)
     } else {
       return next()
     }
@@ -81,12 +93,12 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     if (stats && stats.isDirectory()) {
       path = getFilePath({
         filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
-        root: options.root,
+        root,
         defaultDocument: options.index ?? 'index.html',
       })
 
       if (path) {
-        path = addCurrentDirPrefix(path)
+        path = addDirPrefix(path, isAbsoluteRoot)
       } else {
         return next()
       }

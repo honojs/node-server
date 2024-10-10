@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import request from 'supertest'
+import path from 'path'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
 
@@ -41,6 +42,16 @@ describe('Serve Static Middleware', () => {
       root: './test/assets',
       precompressed: true,
     })
+  )
+
+  app.all(
+    '/static-absolute-root/*',
+    serveStatic({ root: path.join(path.dirname(__filename), 'assets') })
+  )
+
+  app.all(
+    '/static-absolute-root-with-dots/*',
+    serveStatic({ root: path.join(path.dirname(__filename), 'assets') + '/../assets' })
   )
 
   const server = createAdaptorServer(app)
@@ -195,5 +206,21 @@ describe('Serve Static Middleware', () => {
     expect(res.headers['content-encoding']).toBeUndefined()
     expect(res.headers['vary']).toBeUndefined()
     expect(res.text).toBe('Hello Not Compressed')
+  })
+
+  it('Should return 200 with an absolute root - /static-absolute-root/hello.txt', async () => {
+    const res = await request(server).get('/static-absolute-root/hello.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.headers['content-length']).toBe('24')
+    expect(res.text).toBe('Hello with absolute root')
+  })
+
+  it('Should return 200 with an absolute root with dots - /static-absolute-root-with-dots/hello.txt', async () => {
+    const res = await request(server).get('/static-absolute-root-with-dots/hello.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.headers['content-length']).toBe('34')
+    expect(res.text).toBe('Hello with absolute root with dots')
   })
 })
