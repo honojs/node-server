@@ -152,6 +152,11 @@ describe('Serve Static Middleware', () => {
     expect(res.status).toBe(404)
   })
 
+  it('Should handle URIError thrown while decoding URI component', async () => {
+    const res = await request(server).get('/static/%c0%afsecret.txt')
+    expect(res.status).toBe(404)
+  })
+
   it('Should handle an extension less files', async () => {
     const res = await request(server).get('/static/extensionless')
     expect(res.status).toBe(200)

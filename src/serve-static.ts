@@ -63,7 +63,14 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
       return next()
     }
 
-    const filename = options.path ?? decodeURIComponent(c.req.path)
+    let filename: string
+
+    try {
+      filename = options.path ?? decodeURIComponent(c.req.path)
+    } catch {
+      await options.onNotFound?.(c.req.path, c)
+      return next()
+    }
 
     let path = getFilePathWithoutDefaultDocument({
       filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
