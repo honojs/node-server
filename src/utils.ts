@@ -47,7 +47,10 @@ export const buildOutgoingHttpHeaders = (
   const res: OutgoingHttpHeaders = {}
 
   const cookies = []
-  const entries = headers instanceof Headers ? headers.entries() : Object.entries(headers)
+  const entries =
+    headers instanceof Headers
+      ? headers.entries()
+      : Object.entries(headers).filter(([, value]) => value)
 
   for (const [k, v] of entries) {
     if (k === 'set-cookie') {
@@ -56,6 +59,7 @@ export const buildOutgoingHttpHeaders = (
       res[k] = v
     }
   }
+
   if (cookies.length > 0) {
     res['set-cookie'] = cookies
   }
