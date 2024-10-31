@@ -45,7 +45,7 @@ export const buildOutgoingHttpHeaders = (headers: Headers | Record<string, strin
   const res: OutgoingHttpHeaders = {}
 
   const cookies = []
-  const entries = headers instanceof Headers ? headers.entries : Object.entries(headers);
+  const entries = headers instanceof Headers ? headers.entries() : Object.entries(headers);
   
   for (const [k, v] of entries) {
     if (k === 'set-cookie') {
