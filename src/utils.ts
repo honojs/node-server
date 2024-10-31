@@ -42,24 +42,21 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
 }
 
 export const buildOutgoingHttpHeaders = (
-  headers: Headers | Record<string, string>
+  headers: Headers | HeadersInit | null | undefined
 ): OutgoingHttpHeaders => {
   const res: OutgoingHttpHeaders = {}
+  if (!(headers instanceof Headers)) {
+    headers = new Headers(headers ?? undefined)
+  }
 
   const cookies = []
-  const entries =
-    headers instanceof Headers
-      ? headers.entries()
-      : Object.entries(headers).filter(([, value]) => value)
-
-  for (const [k, v] of entries) {
+  for (const [k, v] of headers) {
     if (k === 'set-cookie') {
       cookies.push(v)
     } else {
       res[k] = v
     }
   }
-
   if (cookies.length > 0) {
     res['set-cookie'] = cookies
   }
