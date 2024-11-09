@@ -18,7 +18,7 @@ describe('ConnInfo', () => {
           {},
           {
             incoming: {
-              socket
+              socket,
             },
           }
         )
