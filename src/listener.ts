@@ -189,6 +189,8 @@ export const getRequestListener = (
       outgoing.on('close', () => {
         if (incoming.errored) {
           req[getAbortController]().abort(incoming.errored.toString())
+        } else if (incoming.destroyed) {
+          req[getAbortController]().abort('Client connection prematurely closed.')
         }
       })
 
