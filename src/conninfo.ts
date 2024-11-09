@@ -1,5 +1,4 @@
 import type { GetConnInfo } from 'hono/conninfo'
-import type { AddressInfo } from 'net'
 import type { HttpBindings } from './types'
 
 /**
@@ -10,20 +9,15 @@ import type { HttpBindings } from './types'
 export const getConnInfo: GetConnInfo = (c) => {
   const bindings = (c.env.server ? c.env.server : c.env) as HttpBindings
 
-  const address = bindings.incoming.socket.address() as AddressInfo
-
-  if (!('address' in address)) {
-    return {
-      remote: {},
-    }
-  }
+  const address = bindings.incoming.socket.remoteAddress
+  const port = bindings.incoming.socket.remotePort
+  const family = bindings.incoming.socket.remoteFamily
 
   return {
     remote: {
-      address: address.address,
-      addressType:
-        address.family === 'IPv4' ? 'IPv4' : address.family === 'IPv6' ? 'IPv6' : 'unknown',
-      port: address.port,
+      address,
+      port,
+      addressType: family === 'IPv4' ? 'IPv4' : family === 'IPv6' ? 'IPv6' : void 0,
     },
   }
 }
