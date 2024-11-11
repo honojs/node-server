@@ -180,7 +180,7 @@ describe('Abort request', () => {
     server.close()
   })
 
-  it('should emit an abort event when the nodejs request is aborted', async () => {
+  it.each(['get', 'put', 'patch', 'del'] as const)('should emit an abort event when the nodejs %s request is aborted', async (method) => {
     const requests: Request[] = []
     const abortedPromise = new Promise<void>((resolve) => {
       onAbort = (req) => {
@@ -189,8 +189,7 @@ describe('Abort request', () => {
       }
     })
 
-    const req = request(server)
-      .get('/abort')
+    const req = request(server)[method]('/abort')
       .end(() => {})
 
     await reqReadyPromise
@@ -205,7 +204,7 @@ describe('Abort request', () => {
     expect(abortedReq.signal.aborted).toBe(true)
   })
 
-  it('should emit an abort event when the nodejs request is aborted on multiple requests', async () => {
+  it.each(['get', 'post', 'head', 'patch', 'del', 'put'] as const)('should emit an abort event when the nodejs request is aborted on multiple %s requests', async (method) => {
     const requests: Request[] = []
 
     {
@@ -220,8 +219,7 @@ describe('Abort request', () => {
         reqReadyResolve = r
       })
 
-      const req = request(server)
-        .get('/abort')
+      const req = request(server)[method]('/abort')
         .end(() => {})
 
       await reqReadyPromise
@@ -250,8 +248,7 @@ describe('Abort request', () => {
         reqReadyResolve = r
       })
 
-      const req = request(server)
-        .get('/abort')
+      const req = request(server)[method]('/abort')
         .end(() => {})
 
       await reqReadyPromise
