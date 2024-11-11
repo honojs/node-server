@@ -180,7 +180,7 @@ describe('Abort request', () => {
     server.close()
   })
 
-  it.each(['get', 'put', 'patch', 'del'] as const)('should emit an abort event when the nodejs %s request is aborted', async (method) => {
+  it.each(['get', 'put', 'patch', 'delete'] as const)('should emit an abort event when the nodejs %s request is aborted', async (method) => {
     const requests: Request[] = []
     const abortedPromise = new Promise<void>((resolve) => {
       onAbort = (req) => {
@@ -204,7 +204,7 @@ describe('Abort request', () => {
     expect(abortedReq.signal.aborted).toBe(true)
   })
 
-  it.each(['get', 'post', 'head', 'patch', 'del', 'put'] as const)('should emit an abort event when the nodejs request is aborted on multiple %s requests', async (method) => {
+  it.each(['get', 'post', 'head', 'patch', 'delete', 'put'] as const)('should emit an abort event when the nodejs request is aborted on multiple %s requests', async (method) => {
     const requests: Request[] = []
 
     {
