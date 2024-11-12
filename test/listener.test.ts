@@ -180,94 +180,100 @@ describe('Abort request', () => {
     server.close()
   })
 
-  it('should emit an abort event when the nodejs request is aborted', async () => {
-    const requests: Request[] = []
-    const abortedPromise = new Promise<void>((resolve) => {
-      onAbort = (req) => {
-        requests.push(req)
-        resolve()
+  it.each(['get', 'put', 'patch', 'delete'] as const)(
+    'should emit an abort event when the nodejs %s request is aborted',
+    async (method) => {
+      const requests: Request[] = []
+      const abortedPromise = new Promise<void>((resolve) => {
+        onAbort = (req) => {
+          requests.push(req)
+          resolve()
+        }
+      })
+
+      const req = request(server)
+        [method]('/abort')
+        .end(() => {})
+
+      await reqReadyPromise
+
+      req.abort()
+
+      await abortedPromise
+
+      expect(requests).toHaveLength(1)
+      const abortedReq = requests[0]
+      expect(abortedReq).toBeInstanceOf(Request)
+      expect(abortedReq.signal.aborted).toBe(true)
+    }
+  )
+
+  it.each(['get', 'post', 'head', 'patch', 'delete', 'put'] as const)(
+    'should emit an abort event when the nodejs request is aborted on multiple %s requests',
+    async (method) => {
+      const requests: Request[] = []
+
+      {
+        const abortedPromise = new Promise<void>((resolve) => {
+          onAbort = (req) => {
+            requests.push(req)
+            resolve()
+          }
+        })
+
+        reqReadyPromise = new Promise<void>((r) => {
+          reqReadyResolve = r
+        })
+
+        const req = request(server)
+          [method]('/abort')
+          .end(() => {})
+
+        await reqReadyPromise
+
+        req.abort()
+
+        await abortedPromise
       }
-    })
 
-    const req = request(server)
-      .get('/abort')
-      .end(() => {})
+      expect(requests).toHaveLength(1)
 
-    await reqReadyPromise
+      for (const abortedReq of requests) {
+        expect(abortedReq).toBeInstanceOf(Request)
+        expect(abortedReq.signal.aborted).toBe(true)
+      }
 
-    req.abort()
+      {
+        const abortedPromise = new Promise<void>((resolve) => {
+          onAbort = (req) => {
+            requests.push(req)
+            resolve()
+          }
+        })
 
-    await abortedPromise
+        reqReadyPromise = new Promise<void>((r) => {
+          reqReadyResolve = r
+        })
 
-    expect(requests).toHaveLength(1)
-    const abortedReq = requests[0]
-    expect(abortedReq).toBeInstanceOf(Request)
-    expect(abortedReq.signal.aborted).toBe(true)
-  })
+        const req = request(server)
+          [method]('/abort')
+          .end(() => {})
 
-  it('should emit an abort event when the nodejs request is aborted on multiple requests', async () => {
-    const requests: Request[] = []
+        await reqReadyPromise
 
-    {
-      const abortedPromise = new Promise<void>((resolve) => {
-        onAbort = (req) => {
-          requests.push(req)
-          resolve()
-        }
-      })
+        req.abort()
 
-      reqReadyPromise = new Promise<void>((r) => {
-        reqReadyResolve = r
-      })
+        await abortedPromise
+      }
 
-      const req = request(server)
-        .get('/abort')
-        .end(() => {})
+      expect(requests).toHaveLength(2)
 
-      await reqReadyPromise
-
-      req.abort()
-
-      await abortedPromise
+      for (const abortedReq of requests) {
+        expect(abortedReq).toBeInstanceOf(Request)
+        expect(abortedReq.signal.aborted).toBe(true)
+      }
     }
-
-    expect(requests).toHaveLength(1)
-
-    for (const abortedReq of requests) {
-      expect(abortedReq).toBeInstanceOf(Request)
-      expect(abortedReq.signal.aborted).toBe(true)
-    }
-
-    {
-      const abortedPromise = new Promise<void>((resolve) => {
-        onAbort = (req) => {
-          requests.push(req)
-          resolve()
-        }
-      })
-
-      reqReadyPromise = new Promise<void>((r) => {
-        reqReadyResolve = r
-      })
-
-      const req = request(server)
-        .get('/abort')
-        .end(() => {})
-
-      await reqReadyPromise
-
-      req.abort()
-
-      await abortedPromise
-    }
-
-    expect(requests).toHaveLength(2)
-
-    for (const abortedReq of requests) {
-      expect(abortedReq).toBeInstanceOf(Request)
-      expect(abortedReq.signal.aborted).toBe(true)
-    }
-  })
+  )
 })
 
 describe('overrideGlobalObjects', () => {
