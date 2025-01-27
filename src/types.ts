@@ -61,7 +61,7 @@ type createSecureHttp2Options = {
   createServer?: typeof createSecureHttp2Server
 }
 
-type ServerOptions =
+export type ServerOptions =
   | createHttpOptions
   | createHttpsOptions
   | createHttp2Options
