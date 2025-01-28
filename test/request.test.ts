@@ -1,4 +1,5 @@
-import type { IncomingMessage } from 'node:http'
+import { IncomingMessage } from 'node:http'
+import { Socket } from 'node:net'
 import {
   newRequest,
   Request as LightweightRequest,
@@ -111,6 +112,29 @@ describe('Request', () => {
           url: '/foo.txt',
         } as IncomingMessage)
       }).toThrow(RequestError)
+    })
+
+    it('Should be create request body from `req.rawBody` if it exists', async () => {
+      const rawBody = Buffer.from('foo')
+      const socket = new Socket()
+      const incomingMessage = new IncomingMessage(socket)
+      incomingMessage.method = 'POST'
+      incomingMessage.headers = {
+        host: 'localhost',
+      }
+      incomingMessage.url = '/foo.txt'
+      ;(incomingMessage as IncomingMessage & { rawBody: Buffer }).rawBody = rawBody
+      incomingMessage.push(rawBody)
+      incomingMessage.push(null)
+
+      for await (const chunk of incomingMessage) {
+        // consume body
+        expect(chunk).toBeDefined()
+      }
+
+      const req = newRequest(incomingMessage)
+      const text = await req.text()
+      expect(text).toBe('foo')
     })
   })
 
