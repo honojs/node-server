@@ -74,8 +74,19 @@ const newRequestFromIncoming = (
   }
 
   if (!(method === 'GET' || method === 'HEAD')) {
-    // lazy-consume request body
-    init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+    if ('rawBody' in incoming && incoming.rawBody instanceof Buffer) {
+      // In some environments (e.g. firebase functions), the body is already consumed.
+      // So we need to re-read the request body from `incoming.rawBody` if available.
+      init.body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(incoming.rawBody)
+          controller.close()
+        },
+      })
+    } else {
+      // lazy-consume request body
+      init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+    }
   }
 
   return new Request(url, init)
