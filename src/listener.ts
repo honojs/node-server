@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
 import {
-  getAbortController,
+  abortControllerKey,
   newRequest,
   Request as LightweightRequest,
   toRequestError,
@@ -187,10 +187,15 @@ export const getRequestListener = (
 
       // Detect if request was aborted.
       outgoing.on('close', () => {
+        const abortController = req[abortControllerKey] as AbortController | undefined
+        if (!abortController) {
+          return
+        }
+
         if (incoming.errored) {
-          req[getAbortController]().abort(incoming.errored.toString())
+          req[abortControllerKey].abort(incoming.errored.toString())
         } else if (!outgoing.writableFinished) {
-          req[getAbortController]().abort('Client connection prematurely closed.')
+          req[abortControllerKey].abort('Client connection prematurely closed.')
         }
       })
 

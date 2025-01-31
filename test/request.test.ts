@@ -5,6 +5,7 @@ import {
   Request as LightweightRequest,
   GlobalRequest,
   getAbortController,
+  abortControllerKey,
   RequestError,
 } from '../src/request'
 
@@ -79,6 +80,21 @@ describe('Request', () => {
       expect(x).toBe(y)
       expect(z).not.toBe(x)
       expect(z).not.toBe(y)
+    })
+
+    it('should be able to safely check if an AbortController has been initialized by referencing the abortControllerKey', async () => {
+      const req = newRequest({
+        headers: {
+          host: 'localhost',
+        },
+        rawHeaders: ['host', 'localhost'],
+        url: '/foo.txt',
+      } as IncomingMessage)
+
+      expect(req[abortControllerKey]).toBeUndefined() // not initialized, do not initialize internal request object automatically
+
+      expect(req[getAbortController]()).toBeDefined()
+      expect(req[abortControllerKey]).toBeDefined() // initialized
     })
 
     it('Should throw error if host header contains path', async () => {

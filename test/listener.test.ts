@@ -274,6 +274,17 @@ describe('Abort request', () => {
       }
     }
   )
+
+  it('should handle request abort without requestCache', async () => {
+    const fetchCallback = async () => {
+      // NOTE: we don't req.signal
+      await new Promise(() => {}) // never resolve
+    }
+    const requestListener = getRequestListener(fetchCallback)
+    const server = createServer(requestListener)
+    const req = request(server).post('/abort').timeout({ deadline: 1 })
+    await expect(req).rejects.toHaveProperty('timeout')
+  })
 })
 
 describe('overrideGlobalObjects', () => {

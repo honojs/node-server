@@ -96,7 +96,7 @@ const getRequestCache = Symbol('getRequestCache')
 const requestCache = Symbol('requestCache')
 const incomingKey = Symbol('incomingKey')
 const urlKey = Symbol('urlKey')
-const abortControllerKey = Symbol('abortControllerKey')
+export const abortControllerKey = Symbol('abortControllerKey')
 export const getAbortController = Symbol('getAbortController')
 
 const requestPrototype: Record<string | symbol, any> = {
