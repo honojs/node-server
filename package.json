@@ -58,7 +58,7 @@
     "build": "tsup --external hono",
     "watch": "tsup --watch",
     "postbuild": "publint",
-    "prerelease": "yarn build && yarn test",
+    "prerelease": "bun run build && bun run test",
     "release": "np",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",

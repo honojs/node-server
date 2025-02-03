@@ -625,7 +625,6 @@ describe('HTTP2', () => {
   })
 
   it('Should return 200 response - GET /', async () => {
-    // @ts-expect-error: @types/supertest is not updated yet
     const res = await request(server, { http2: true }).get('/').trustLocalhost()
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain')
@@ -633,7 +632,6 @@ describe('HTTP2', () => {
   })
 
   it('Should return 200 response - GET /headers', async () => {
-    // @ts-expect-error: @types/supertest is not updated yet
     const res = await request(server, { http2: true }).get('/headers').trustLocalhost()
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain')
@@ -642,7 +640,6 @@ describe('HTTP2', () => {
 
   // Use :authority as the host for the url.
   it('Should return 200 response - GET /url', async () => {
-    // @ts-expect-error: @types/supertest is not updated yet
     const res = await request(server, { http2: true }).get('/url').trustLocalhost()
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain')
