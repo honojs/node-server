@@ -74,7 +74,7 @@ describe('Serve Static Middleware', () => {
       name: 'Foo Bar',
       flag: true,
     })
-    expect(res.headers['content-type']).toBe('application/json; charset=utf-8')
+    expect(res.headers['content-type']).toBe('application/json')
   })
 
   it('Should return correct headers and data for text', async () => {
