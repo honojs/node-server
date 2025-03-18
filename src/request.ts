@@ -188,14 +188,18 @@ export const newRequest = (
   if (!host) {
     throw new RequestError('Missing host header')
   }
-  const url = new URL(
-    `${
-      incoming instanceof Http2ServerRequest ||
-      (incoming.socket && (incoming.socket as TLSSocket).encrypted)
-        ? 'https'
-        : 'http'
-    }://${host}${incomingUrl}`
-  )
+
+  let scheme: string
+  if (incoming instanceof Http2ServerRequest) {
+    scheme = incoming.scheme
+    if (!(scheme === 'http' || scheme === 'https')) {
+      throw new RequestError('Unsupported scheme')
+    }
+  } else {
+    scheme = incoming.socket && (incoming.socket as TLSSocket).encrypted ? 'https' : 'http'
+  }
+
+  const url = new URL(`${scheme}://${host}${incomingUrl}`)
 
   // check by length for performance.
   // if suspicious, check by host. host header sometimes contains port.
