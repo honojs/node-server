@@ -160,6 +160,28 @@ export const newRequest = (
   const req = Object.create(requestPrototype)
   req[incomingKey] = incoming
 
+  const incomingUrl = incoming.url || ''
+
+  // handle absolute URL in request.url
+  if (
+    incomingUrl[0] !== '/' && // short-circuit for performance. most requests are relative URL.
+    (incomingUrl.startsWith('http://') || incomingUrl.startsWith('https://'))
+  ) {
+    if (incoming instanceof Http2ServerRequest) {
+      throw new RequestError('Absolute URL for :path is not allowed in HTTP/2') // RFC 9113 8.3.1.
+    }
+
+    try {
+      const url = new URL(incomingUrl)
+      req[urlKey] = url.href
+    } catch (e) {
+      throw new RequestError('Invalid absolute URL', { cause: e })
+    }
+
+    return req
+  }
+
+  // Otherwise, relative URL
   const host =
     (incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host) ||
     defaultHostname
@@ -172,7 +194,7 @@ export const newRequest = (
       (incoming.socket && (incoming.socket as TLSSocket).encrypted)
         ? 'https'
         : 'http'
-    }://${host}${incoming.url}`
+    }://${host}${incomingUrl}`
   )
 
   // check by length for performance.
