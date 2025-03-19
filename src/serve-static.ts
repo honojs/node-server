@@ -1,8 +1,8 @@
 import type { Context, Env, MiddlewareHandler } from 'hono'
 import { getFilePath, getFilePathWithoutDefaultDocument } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
-import { createReadStream, lstatSync } from 'fs'
-import type { ReadStream, Stats } from 'fs'
+import { createReadStream, lstatSync } from 'node:fs'
+import type { ReadStream, Stats } from 'node:fs'
 
 export type ServeStaticOptions<E extends Env = Env> = {
   /**
