@@ -47,7 +47,7 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
 const responseViaCache = (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
-): undefined | Promise<undefined> => {
+): undefined | Promise<undefined | void> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [status, body, header] = (res as any)[cacheKey]
   if (typeof body === 'string') {
