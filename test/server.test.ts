@@ -640,7 +640,11 @@ describe('HTTP2', () => {
 
   // Use :authority as the host for the url.
   it('Should return 200 response - GET /url', async () => {
-    const res = await request(server, { http2: true }).get('/url').trustLocalhost()
+    const res = await request(server, { http2: true })
+      .get('/url')
+      .set(':scheme', 'https')
+      .set(':authority', '127.0.0.1')
+      .trustLocalhost()
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain')
     const url = new URL(res.text)

@@ -1,5 +1,8 @@
 import { IncomingMessage } from 'node:http'
+import type { ServerHttp2Stream } from 'node:http2'
+import { Http2ServerRequest } from 'node:http2'
 import { Socket } from 'node:net'
+import { Duplex } from 'node:stream'
 import {
   newRequest,
   Request as LightweightRequest,
@@ -130,7 +133,7 @@ describe('Request', () => {
       }).toThrow(RequestError)
     })
 
-    it('Should be create request body from `req.rawBody` if it exists', async () => {
+    it('Should be created request body from `req.rawBody` if it exists', async () => {
       const rawBody = Buffer.from('foo')
       const socket = new Socket()
       const incomingMessage = new IncomingMessage(socket)
@@ -151,6 +154,110 @@ describe('Request', () => {
       const req = newRequest(incomingMessage)
       const text = await req.text()
       expect(text).toBe('foo')
+    })
+
+    describe('absolute-form for request-target', () => {
+      it('should be created from valid absolute URL', async () => {
+        const req = newRequest({
+          url: 'http://localhost/path/to/file.html',
+        } as IncomingMessage)
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('http://localhost/path/to/file.html')
+      })
+
+      it('should throw error if host header is invalid', async () => {
+        expect(() => {
+          newRequest({
+            url: 'http://',
+          } as IncomingMessage)
+        }).toThrow(RequestError)
+      })
+
+      it('should throw error if absolute-form is specified via HTTP/2', async () => {
+        expect(() => {
+          newRequest(
+            new Http2ServerRequest(
+              new Duplex() as ServerHttp2Stream,
+              {
+                ':scheme': 'http',
+                ':authority': 'localhost',
+                ':path': 'http://localhost/foo.txt',
+              },
+              {},
+              []
+            )
+          )
+        }).toThrow(RequestError)
+      })
+    })
+
+    describe('HTTP/2', () => {
+      it('should be created from "http" scheme', async () => {
+        const req = newRequest(
+          new Http2ServerRequest(
+            new Duplex() as ServerHttp2Stream,
+            {
+              ':scheme': 'http',
+              ':authority': 'localhost',
+              ':path': '/foo.txt',
+            },
+            {},
+            []
+          )
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('http://localhost/foo.txt')
+      })
+
+      it('should be created from "https" scheme', async () => {
+        const req = newRequest(
+          new Http2ServerRequest(
+            new Duplex() as ServerHttp2Stream,
+            {
+              ':scheme': 'https',
+              ':authority': 'localhost',
+              ':path': '/foo.txt',
+            },
+            {},
+            []
+          )
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('https://localhost/foo.txt')
+      })
+
+      it('should throw error if scheme is missing', async () => {
+        expect(() => {
+          newRequest(
+            new Http2ServerRequest(
+              new Duplex() as ServerHttp2Stream,
+              {
+                ':authority': 'localhost',
+                ':path': '/foo.txt',
+              },
+              {},
+              []
+            )
+          )
+        }).toThrow(RequestError)
+      })
+
+      it('should throw error if unsupported scheme is specified', async () => {
+        expect(() => {
+          newRequest(
+            new Http2ServerRequest(
+              new Duplex() as ServerHttp2Stream,
+              {
+                ':scheme': 'ftp',
+                ':authority': 'localhost',
+                ':path': '/foo.txt',
+              },
+              {},
+              []
+            )
+          )
+        }).toThrow(RequestError)
+      })
     })
   })
 
