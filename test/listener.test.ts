@@ -67,18 +67,18 @@ describe('Invalid request', () => {
 
   describe('malformed body response', () => {
     const malformedResponse = {
-      body: 'content'
-    };
+      body: 'content',
+    }
     const requestListener = getRequestListener(() => malformedResponse, {
-      hostname: 'example.com'
-    });
+      hostname: 'example.com',
+    })
     const server = createServer(requestListener)
 
     it('Should return a 500 for a malformed response', async () => {
       const res = await request(server).get('/').send()
       expect(res.status).toBe(500)
     })
-  });
+  })
 })
 
 describe('Error handling - sync fetchCallback', () => {
