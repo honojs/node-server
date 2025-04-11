@@ -224,7 +224,7 @@ export const getRequestListener = (
     }
 
     try {
-      return responseViaResponseObject(res, outgoing, options)
+      return await responseViaResponseObject(res, outgoing, options)
     } catch (e) {
       return handleResponseError(e, outgoing)
     }
