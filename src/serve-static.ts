@@ -12,6 +12,7 @@ export type ServeStaticOptions<E extends Env = Env> = {
   path?: string
   index?: string // default is 'index.html'
   precompressed?: boolean
+  absolutePath?: boolean
   rewriteRequestPath?: (path: string) => string
   onFound?: (path: string, c: Context<E>) => void | Promise<void>
   onNotFound?: (path: string, c: Context<E>) => void | Promise<void>
@@ -78,7 +79,10 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     })
 
     if (path) {
-      path = addCurrentDirPrefix(path)
+      path =
+        options.absolutePath !== undefined && options.absolutePath
+          ? path
+          : addCurrentDirPrefix(path)
     } else {
       return next()
     }
@@ -93,7 +97,10 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
       })
 
       if (path) {
-        path = addCurrentDirPrefix(path)
+        path =
+          options.absolutePath !== undefined && options.absolutePath
+            ? path
+            : addCurrentDirPrefix(path)
       } else {
         return next()
       }
