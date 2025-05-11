@@ -32,6 +32,11 @@
       "types": "./dist/conninfo.d.ts",
       "require": "./dist/conninfo.js",
       "import": "./dist/conninfo.mjs"
+    },
+    "./setup": {
+      "types": "./dist/setup.d.ts",
+      "require": "./dist/setup.js",
+      "import": "./dist/setup.mjs"
     }
   },
   "typesVersions": {
