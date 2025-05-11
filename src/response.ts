@@ -19,7 +19,7 @@ export class Response {
   #body?: BodyInit | null
   #init?: ResponseInit;
 
-  [getResponseCache](): typeof GlobalResponse {
+  [getResponseCache](): globalThis.Response {
     delete (this as any)[cacheKey]
     return ((this as any)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
   }
@@ -89,7 +89,7 @@ if (!stateKey) {
 }
 
 export function getInternalBody(
-  response: Response | typeof GlobalResponse
+  response: Response | globalThis.Response
 ): InternalBody | undefined {
   if (!stateKey) {
     return
