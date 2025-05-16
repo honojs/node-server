@@ -7,6 +7,7 @@ import {
   toRequestError,
 } from './request'
 import { cacheKey, getInternalBody, Response as LightweightResponse } from './response'
+import type { InternalCache } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import { X_ALREADY_SENT } from './utils/response/constants'
@@ -49,7 +50,7 @@ const responseViaCache = (
   outgoing: ServerResponse | Http2ServerResponse
 ): undefined | Promise<undefined | void> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let [status, body, header] = (res as any)[cacheKey]
+  let [status, body, header] = (res as any)[cacheKey] as InternalCache
   if (header instanceof Headers) {
     header = buildOutgoingHttpHeaders(header)
   }
@@ -92,8 +93,7 @@ const responseViaResponseObject = async (
 
   const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const internalBody = getInternalBody(res as any)
+  const internalBody = getInternalBody(res as Response)
   if (internalBody) {
     const { length, source, stream } = internalBody
     if (source instanceof Uint8Array && source.byteLength !== length) {

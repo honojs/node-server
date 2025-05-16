@@ -13,14 +13,24 @@ const responseCache = Symbol('responseCache')
 const getResponseCache = Symbol('getResponseCache')
 export const cacheKey = Symbol('cache')
 
+export type InternalCache = [
+  number,
+  string | ReadableStream,
+  Record<string, string> | Headers | OutgoingHttpHeaders,
+]
+interface LiteResponse {
+  [responseCache]?: globalThis.Response
+  [cacheKey]?: InternalCache
+}
+
 export const GlobalResponse = global.Response
 export class Response {
   #body?: BodyInit | null
   #init?: ResponseInit;
 
   [getResponseCache](): globalThis.Response {
-    delete (this as any)[cacheKey]
-    return ((this as any)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
+    delete (this as LiteResponse)[cacheKey]
+    return ((this as LiteResponse)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
   }
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
@@ -49,7 +59,7 @@ export class Response {
   }
 
   get headers(): Headers {
-    const cache = (this as any)[cacheKey]
+    const cache = (this as LiteResponse)[cacheKey] as InternalCache
     if (cache) {
       if (!(cache[2] instanceof Headers)) {
         cache[2] = new Headers(cache[2] as HeadersInit)
