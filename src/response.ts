@@ -68,18 +68,20 @@ export class Response {
     }
     return this[getResponseCache]().headers
   }
+
+  get status() {
+    return (
+      ((this as LiteResponse)[cacheKey] as InternalCache | undefined)?.[0] ??
+      this[getResponseCache]().status
+    )
+  }
+
+  get ok() {
+    const status = this.status
+    return status >= 200 && status < 300
+  }
 }
-;[
-  'body',
-  'bodyUsed',
-  'ok',
-  'redirected',
-  'status',
-  'statusText',
-  'trailers',
-  'type',
-  'url',
-].forEach((k) => {
+;['body', 'bodyUsed', 'redirected', 'statusText', 'trailers', 'type', 'url'].forEach((k) => {
   Object.defineProperty(Response.prototype, k, {
     get() {
       return this[getResponseCache]()[k]
