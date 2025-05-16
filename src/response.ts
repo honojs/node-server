@@ -2,7 +2,6 @@
 // Define lightweight pseudo Response class and replace global.Response with it.
 
 import type { OutgoingHttpHeaders } from 'node:http'
-import { buildOutgoingHttpHeaders } from './utils'
 
 interface InternalBody {
   source: string | Uint8Array | FormData | Blob | null
@@ -41,22 +40,28 @@ export class Response {
     }
 
     if (typeof body === 'string' || typeof (body as ReadableStream)?.getReader !== 'undefined') {
-      let headers = (init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }) as
+      const headers = (init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }) as
         | Record<string, string>
         | Headers
         | OutgoingHttpHeaders
-      if (headers instanceof Headers) {
-        headers = buildOutgoingHttpHeaders(headers)
-      }
-
       ;(this as any)[cacheKey] = [init?.status || 200, body, headers]
     }
+  }
+
+  get headers(): Headers {
+    const cache = (this as any)[cacheKey]
+    if (cache) {
+      if (!(cache[2] instanceof Headers)) {
+        cache[2] = new Headers(cache[2] as HeadersInit)
+      }
+      return cache[2]
+    }
+    return this[getResponseCache]().headers
   }
 }
 ;[
   'body',
   'bodyUsed',
-  'headers',
   'ok',
   'redirected',
   'status',

@@ -49,7 +49,10 @@ const responseViaCache = (
   outgoing: ServerResponse | Http2ServerResponse
 ): undefined | Promise<undefined | void> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [status, body, header] = (res as any)[cacheKey]
+  let [status, body, header] = (res as any)[cacheKey]
+  if (header instanceof Headers) {
+    header = buildOutgoingHttpHeaders(header)
+  }
   if (typeof body === 'string') {
     header['Content-Length'] = Buffer.byteLength(body)
     outgoing.writeHead(status, header)
