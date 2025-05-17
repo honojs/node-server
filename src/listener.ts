@@ -6,7 +6,7 @@ import {
   Request as LightweightRequest,
   toRequestError,
 } from './request'
-import { cacheKey, getInternalBody, Response as LightweightResponse } from './response'
+import { cacheKey, Response as LightweightResponse } from './response'
 import type { InternalCache } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
@@ -92,28 +92,6 @@ const responseViaResponseObject = async (
   }
 
   const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
-
-  const internalBody = getInternalBody(res as Response)
-  if (internalBody) {
-    const { length, source, stream } = internalBody
-    if (source instanceof Uint8Array && source.byteLength !== length) {
-      // maybe `source` is detached, so we should send via res.body
-    } else {
-      // send via internal raw data
-      if (length) {
-        resHeaderRecord['content-length'] = length
-      }
-      outgoing.writeHead(res.status, resHeaderRecord)
-      if (typeof source === 'string' || source instanceof Uint8Array) {
-        outgoing.end(source)
-      } else if (source instanceof Blob) {
-        outgoing.end(new Uint8Array(await source.arrayBuffer()))
-      } else {
-        await writeFromReadableStream(stream, outgoing)
-      }
-      return
-    }
-  }
 
   if (res.body) {
     /**

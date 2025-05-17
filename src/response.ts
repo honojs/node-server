@@ -3,12 +3,6 @@
 
 import type { OutgoingHttpHeaders } from 'node:http'
 
-interface InternalBody {
-  source: string | Uint8Array | FormData | Blob | null
-  stream: ReadableStream
-  length: number | null
-}
-
 const responseCache = Symbol('responseCache')
 const getResponseCache = Symbol('getResponseCache')
 export const cacheKey = Symbol('cache')
@@ -97,26 +91,3 @@ export class Response {
 })
 Object.setPrototypeOf(Response, GlobalResponse)
 Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
-
-const stateKey = Reflect.ownKeys(new GlobalResponse()).find(
-  (k) => typeof k === 'symbol' && k.toString() === 'Symbol(state)'
-) as symbol | undefined
-if (!stateKey) {
-  console.warn('Failed to find Response internal state key')
-}
-
-export function getInternalBody(
-  response: Response | globalThis.Response
-): InternalBody | undefined {
-  if (!stateKey) {
-    return
-  }
-
-  if (response instanceof Response) {
-    response = (response as any)[getResponseCache]()
-  }
-
-  const state = (response as any)[stateKey] as { body?: InternalBody } | undefined
-
-  return (state && state.body) || undefined
-}

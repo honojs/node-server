@@ -107,7 +107,7 @@ describe('Basic', () => {
   })
 })
 
-describe('via internal body', () => {
+describe('via response body', () => {
   const app = new Hono()
   app.use('*', async (c, next) => {
     await next()
@@ -173,7 +173,7 @@ describe('via internal body', () => {
     const res = await request(server).get('/uint8array')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('application/octet-stream')
-    expect(res.headers['content-length']).toMatch('3')
+    expect(res.headers['content-length']).toBeUndefined()
     expect(res.body).toEqual(Buffer.from([1, 2, 3]))
   })
 
@@ -181,7 +181,7 @@ describe('via internal body', () => {
     const res = await request(server).get('/blob')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('application/octet-stream')
-    expect(res.headers['content-length']).toMatch('3')
+    expect(res.headers['content-length']).toBeUndefined()
     expect(res.body).toEqual(Buffer.from([1, 2, 3]))
   })
 
