@@ -34,6 +34,7 @@ export class Response {
   }
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
+    let headers: HeadersInit
     this.#body = body
     if (init instanceof Response) {
       const cachedGlobalResponse = (init as any)[responseCache]
@@ -44,16 +45,15 @@ export class Response {
         return
       } else {
         this.#init = init.#init
+        // clone headers to avoid sharing the same object between parent and child
+        headers = new Headers((init.#init as ResponseInit).headers)
       }
     } else {
       this.#init = init
     }
 
     if (typeof body === 'string' || typeof (body as ReadableStream)?.getReader !== 'undefined') {
-      const headers = (init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }) as
-        | Record<string, string>
-        | Headers
-        | OutgoingHttpHeaders
+      headers ||= init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }
       ;(this as any)[cacheKey] = [init?.status || 200, body, headers]
     }
   }
