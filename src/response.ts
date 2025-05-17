@@ -46,7 +46,12 @@ export class Response {
       this.#init = init
     }
 
-    if (typeof body === 'string' || typeof (body as ReadableStream)?.getReader !== 'undefined') {
+    if (
+      typeof body === 'string' ||
+      typeof (body as ReadableStream)?.getReader !== 'undefined' ||
+      body instanceof Blob ||
+      body instanceof Uint8Array
+    ) {
       headers ||= init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }
       ;(this as any)[cacheKey] = [init?.status || 200, body, headers]
     }

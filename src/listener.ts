@@ -45,21 +45,30 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
   }
 }
 
-const responseViaCache = (
+const responseViaCache = async (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
-): undefined | Promise<undefined | void> => {
+): Promise<undefined | void> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let [status, body, header] = (res as any)[cacheKey] as InternalCache
   if (header instanceof Headers) {
     header = buildOutgoingHttpHeaders(header)
   }
+
   if (typeof body === 'string') {
     header['Content-Length'] = Buffer.byteLength(body)
-    outgoing.writeHead(status, header)
+  } else if (body instanceof Uint8Array) {
+    header['Content-Length'] = body.byteLength
+  } else if (body instanceof Blob) {
+    header['Content-Length'] = body.size
+  }
+
+  outgoing.writeHead(status, header)
+  if (typeof body === 'string' || body instanceof Uint8Array) {
     outgoing.end(body)
+  } else if (body instanceof Blob) {
+    outgoing.end(new Uint8Array(await body.arrayBuffer()))
   } else {
-    outgoing.writeHead(status, header)
     return writeFromReadableStream(body, outgoing)?.catch(
       (e) => handleResponseError(e, outgoing) as undefined
     )
