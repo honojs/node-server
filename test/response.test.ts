@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { GlobalResponse, Response as LightweightResponse } from '../src/response'
+import { GlobalResponse, Response as LightweightResponse, cacheKey } from '../src/response'
 
 Object.defineProperty(global, 'Response', {
   value: LightweightResponse,
@@ -98,5 +98,24 @@ describe('Response', () => {
       parentResponse
     )
     expect(await childResponse.text()).toEqual('HONO')
+  })
+
+  describe('Fallback to GlobalResponse object', () => {
+    it('Should return value from internal cache', () => {
+      const res = new Response('Hello! Node!')
+      res.headers.set('x-test', 'test')
+      expect(res.headers.get('x-test')).toEqual('test')
+      expect(res.status).toEqual(200)
+      expect(res.ok).toEqual(true)
+      expect(cacheKey in res).toBe(true)
+    })
+
+    it('Should return value from generated GlobalResponse object', () => {
+      const res = new Response('Hello! Node!', {
+        statusText: 'OK',
+      })
+      expect(res.statusText).toEqual('OK')
+      expect(cacheKey in res).toBe(false)
+    })
   })
 })
