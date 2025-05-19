@@ -12,7 +12,7 @@ export type InternalCache = [
   string | ReadableStream,
   Record<string, string> | Headers | OutgoingHttpHeaders,
 ]
-interface LiteResponse {
+interface LightResponse {
   [responseCache]?: globalThis.Response
   [cacheKey]?: InternalCache
 }
@@ -23,8 +23,8 @@ export class Response {
   #init?: ResponseInit;
 
   [getResponseCache](): globalThis.Response {
-    delete (this as LiteResponse)[cacheKey]
-    return ((this as LiteResponse)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
+    delete (this as LightResponse)[cacheKey]
+    return ((this as LightResponse)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
   }
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
@@ -58,7 +58,7 @@ export class Response {
   }
 
   get headers(): Headers {
-    const cache = (this as LiteResponse)[cacheKey] as InternalCache
+    const cache = (this as LightResponse)[cacheKey] as InternalCache
     if (cache) {
       if (!(cache[2] instanceof Headers)) {
         cache[2] = new Headers(cache[2] as HeadersInit)
@@ -70,7 +70,7 @@ export class Response {
 
   get status() {
     return (
-      ((this as LiteResponse)[cacheKey] as InternalCache | undefined)?.[0] ??
+      ((this as LightResponse)[cacheKey] as InternalCache | undefined)?.[0] ??
       this[getResponseCache]().status
     )
   }
