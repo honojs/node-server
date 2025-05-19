@@ -6,7 +6,8 @@ import {
   Request as LightweightRequest,
   toRequestError,
 } from './request'
-import { cacheKey, getInternalBody, Response as LightweightResponse } from './response'
+import { cacheKey, Response as LightweightResponse } from './response'
+import type { InternalCache } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import { X_ALREADY_SENT } from './utils/response/constants'
@@ -44,18 +45,30 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
   }
 }
 
-const responseViaCache = (
+const responseViaCache = async (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
-): undefined | Promise<undefined | void> => {
+): Promise<undefined | void> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [status, body, header] = (res as any)[cacheKey]
+  let [status, body, header] = (res as any)[cacheKey] as InternalCache
+  if (header instanceof Headers) {
+    header = buildOutgoingHttpHeaders(header)
+  }
+
   if (typeof body === 'string') {
     header['Content-Length'] = Buffer.byteLength(body)
-    outgoing.writeHead(status, header)
+  } else if (body instanceof Uint8Array) {
+    header['Content-Length'] = body.byteLength
+  } else if (body instanceof Blob) {
+    header['Content-Length'] = body.size
+  }
+
+  outgoing.writeHead(status, header)
+  if (typeof body === 'string' || body instanceof Uint8Array) {
     outgoing.end(body)
+  } else if (body instanceof Blob) {
+    outgoing.end(new Uint8Array(await body.arrayBuffer()))
   } else {
-    outgoing.writeHead(status, header)
     return writeFromReadableStream(body, outgoing)?.catch(
       (e) => handleResponseError(e, outgoing) as undefined
     )
@@ -88,29 +101,6 @@ const responseViaResponseObject = async (
   }
 
   const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const internalBody = getInternalBody(res as any)
-  if (internalBody) {
-    const { length, source, stream } = internalBody
-    if (source instanceof Uint8Array && source.byteLength !== length) {
-      // maybe `source` is detached, so we should send via res.body
-    } else {
-      // send via internal raw data
-      if (length) {
-        resHeaderRecord['content-length'] = length
-      }
-      outgoing.writeHead(res.status, resHeaderRecord)
-      if (typeof source === 'string' || source instanceof Uint8Array) {
-        outgoing.end(source)
-      } else if (source instanceof Blob) {
-        outgoing.end(new Uint8Array(await source.arrayBuffer()))
-      } else {
-        await writeFromReadableStream(stream, outgoing)
-      }
-      return
-    }
-  }
 
   if (res.body) {
     /**

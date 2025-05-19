@@ -107,7 +107,7 @@ describe('Basic', () => {
   })
 })
 
-describe('via internal body', () => {
+describe('various response body types', () => {
   const app = new Hono()
   app.use('*', async (c, next) => {
     await next()
