@@ -7,7 +7,6 @@ import { Readable } from 'node:stream'
 import type { TLSSocket } from 'node:tls'
 
 export class RequestError extends Error {
-  static name = 'RequestError'
   constructor(
     message: string,
     options?: {
@@ -15,6 +14,7 @@ export class RequestError extends Error {
     }
   ) {
     super(message, options)
+    this.name = 'RequestError'
   }
 }
 

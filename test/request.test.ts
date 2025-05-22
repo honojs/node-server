@@ -320,3 +320,16 @@ describe('Request', () => {
     })
   })
 })
+
+describe('RequestError', () => {
+  it('should have a static name property (class name)', () => {
+    expect(RequestError.name).toBe('RequestError')
+    expect(Object.hasOwn(RequestError, 'name')).toBe(true)
+  })
+
+  it('should have an instance name property', () => {
+    const error = new RequestError('message')
+    expect(error.name).toBe('RequestError')
+    expect(Object.hasOwn(error, 'name')).toBe(true)
+  })
+})
