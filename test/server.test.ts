@@ -134,9 +134,14 @@ describe('various response body types', () => {
     })
     return response
   })
+  let resolveReadableStreamPromise: () => void
+  const readableStreamPromise = new Promise<void>((resolve) => {
+    resolveReadableStreamPromise = resolve
+  })
   app.get('/readable-stream', () => {
     const stream = new ReadableStream({
       async start(controller) {
+        await readableStreamPromise
         controller.enqueue('Hello!')
         controller.enqueue(' Node!')
         controller.close()
@@ -187,15 +192,21 @@ describe('various response body types', () => {
 
   it('Should return 200 response - GET /readable-stream', async () => {
     const expectedChunks = ['Hello!', ' Node!']
-    const res = await request(server)
+    const resPromise = request(server)
       .get('/readable-stream')
       .parse((res, fn) => {
+        // response header should be sent before sending data.
+        expect(res.headers['transfer-encoding']).toBe('chunked')
+        resolveReadableStreamPromise()
+
         res.on('data', (chunk) => {
           const str = chunk.toString()
           expect(str).toBe(expectedChunks.shift())
         })
         res.on('end', () => fn(null, ''))
       })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const res = await resPromise
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch('text/plain; charset=UTF-8')
     expect(res.headers['content-length']).toBeUndefined()
