@@ -1,6 +1,6 @@
 {
   "name": "@hono/node-server",
-  "version": "1.14.3",
+  "version": "1.14.4",
   "description": "Node.js Adapter for Hono",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
