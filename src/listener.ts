@@ -45,6 +45,14 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
   }
 }
 
+const flushHeaders = (outgoing: ServerResponse | Http2ServerResponse) => {
+  // If outgoing is ServerResponse (HTTP/1.1), it requires this to flush headers.
+  // However, Http2ServerResponse is sent without this.
+  if ('flushHeaders' in outgoing && outgoing.writable) {
+    outgoing.flushHeaders()
+  }
+}
+
 const responseViaCache = async (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
@@ -69,6 +77,7 @@ const responseViaCache = async (
   } else if (body instanceof Blob) {
     outgoing.end(new Uint8Array(await body.arrayBuffer()))
   } else {
+    flushHeaders(outgoing)
     return writeFromReadableStream(body, outgoing)?.catch(
       (e) => handleResponseError(e, outgoing) as undefined
     )
@@ -129,6 +138,7 @@ const responseViaResponseObject = async (
       !regContentType.test(contentType as string)
     ) {
       outgoing.writeHead(res.status, resHeaderRecord)
+      flushHeaders(outgoing)
 
       await writeFromReadableStream(res.body, outgoing)
     } else {
