@@ -1,10 +1,15 @@
 import { Hono } from 'hono'
+
 import request from 'supertest'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
 
 describe('Serve Static Middleware', () => {
-  const app = new Hono()
+  const app = new Hono<{
+    Variables: {
+      path: string
+    }
+  }>()
 
   app.use(
     '/static/*',
@@ -21,6 +26,19 @@ describe('Serve Static Middleware', () => {
     serveStatic({
       root: './test/assets',
       rewriteRequestPath: (path) => path.replace(/^\/dot-static/, '/.static'),
+    })
+  )
+
+  app.use(
+    '/static-with-context-path-route/*',
+    async (c, next) => {
+      c.set('path', '/static-with-context-path')
+      await next()
+    },
+    serveStatic({
+      root: './test/assets',
+      rewriteRequestPath: (path, c) =>
+        path.replace('static-with-context-path-route', c.get('path')),
     })
   )
 
@@ -101,6 +119,13 @@ describe('Serve Static Middleware', () => {
   it('Should return 404 with rewriteRequestPath', async () => {
     const res = await request(server).get('/dot-static/does-no-exists.txt')
     expect(res.status).toBe(404)
+  })
+
+  it('Should return 200 with rewriteRequestPath with the context', async () => {
+    const res = await request(server).get('/static-with-context-path-route/plain.txt')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.text).toBe('This is plain.txt')
   })
 
   it('Should return 200 response to HEAD request', async () => {

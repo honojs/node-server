@@ -12,7 +12,7 @@ export type ServeStaticOptions<E extends Env = Env> = {
   path?: string
   index?: string // default is 'index.html'
   precompressed?: boolean
-  rewriteRequestPath?: (path: string) => string
+  rewriteRequestPath?: (path: string, c: Context<E>) => string
   onFound?: (path: string, c: Context<E>) => void | Promise<void>
   onNotFound?: (path: string, c: Context<E>) => void | Promise<void>
 }
@@ -56,7 +56,10 @@ const getStats = (path: string) => {
   return stats
 }
 
-export const serveStatic = (options: ServeStaticOptions = { root: '' }): MiddlewareHandler => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const serveStatic = <E extends Env = any>(
+  options: ServeStaticOptions<E> = { root: '' }
+): MiddlewareHandler<E> => {
   return async (c, next) => {
     // Do nothing if Response is already set
     if (c.finalized) {
@@ -73,7 +76,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
     }
 
     let path = getFilePathWithoutDefaultDocument({
-      filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
+      filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename,
       root: options.root,
     })
 
@@ -87,7 +90,7 @@ export const serveStatic = (options: ServeStaticOptions = { root: '' }): Middlew
 
     if (stats && stats.isDirectory()) {
       path = getFilePath({
-        filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename) : filename,
+        filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename,
         root: options.root,
         defaultDocument: options.index ?? 'index.html',
       })
