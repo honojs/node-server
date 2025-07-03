@@ -5,8 +5,7 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
   if (stream.locked) {
     throw new TypeError('ReadableStream is locked.')
   } else if (writable.destroyed) {
-    stream.cancel()
-    return
+    return stream.cancel()
   }
   const reader = stream.getReader()
   writable.on('close', cancel)
