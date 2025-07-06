@@ -5,6 +5,7 @@ import {
   newRequest,
   Request as LightweightRequest,
   toRequestError,
+  bodyCancelledKey,
 } from './request'
 import { cacheKey, Response as LightweightResponse } from './response'
 import type { InternalCache } from './response'
@@ -196,6 +197,8 @@ export const getRequestListener = (
           req[abortControllerKey].abort(incoming.errored.toString())
         } else if (!outgoing.writableFinished) {
           req[abortControllerKey].abort('Client connection prematurely closed.')
+        } else if (req[bodyCancelledKey]) {
+          incoming.destroy(new Error('The request ended before the request body was consumed.'))
         }
       })
 

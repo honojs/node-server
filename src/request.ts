@@ -6,6 +6,8 @@ import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
 import type { TLSSocket } from 'node:tls'
 
+export const bodyCancelledKey = Symbol('bodyCancelledKey')
+
 export class RequestError extends Error {
   constructor(
     message: string,
@@ -41,12 +43,19 @@ export class Request extends GlobalRequest {
   }
 }
 
-const newRequestFromIncoming = (
-  method: string,
-  url: string,
-  incoming: IncomingMessage | Http2ServerRequest,
-  abortController: AbortController
-): Request => {
+const newRequestFromIncoming = (originalRequest: Record<string | symbol, any>): Request => {
+  const {
+    method,
+    [urlKey]: url,
+    [incomingKey]: incoming,
+    [abortControllerKey]: abortController,
+  } = originalRequest as {
+    method: string
+    [urlKey]: string
+    [incomingKey]: IncomingMessage | Http2ServerRequest
+    [abortControllerKey]: AbortController
+  }
+
   const headerRecord: [string, string][] = []
   const rawHeaders = incoming.rawHeaders
   for (let i = 0; i < rawHeaders.length; i += 2) {
@@ -85,7 +94,23 @@ const newRequestFromIncoming = (
       })
     } else {
       // lazy-consume request body
-      init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+      init.body = new ReadableStream({
+        async start(controller) {
+          const stream = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+
+          try {
+            for await (const chunk of stream) {
+              controller.enqueue(chunk)
+            }
+            controller.close()
+          } catch (error: unknown) {
+            controller.error(error)
+          }
+        },
+        cancel() {
+          originalRequest[bodyCancelledKey] = true
+        },
+      })
     }
   }
 
@@ -115,12 +140,7 @@ const requestPrototype: Record<string | symbol, any> = {
 
   [getRequestCache]() {
     this[abortControllerKey] ||= new AbortController()
-    return (this[requestCache] ||= newRequestFromIncoming(
-      this.method,
-      this[urlKey],
-      this[incomingKey],
-      this[abortControllerKey]
-    ))
+    return (this[requestCache] ||= newRequestFromIncoming(this))
   },
 }
 ;[
