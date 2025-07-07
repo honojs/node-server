@@ -28,6 +28,40 @@ describe('Basic', () => {
   app.post('/posts', (c) => {
     return c.redirect('/posts')
   })
+  app.post('/no-body-consumed', (c) => {
+    if (!c.req.raw.body) {
+      // force create new request object
+      throw new Error('No body consumed')
+    }
+    return c.text('No body consumed')
+  })
+  app.post('/body-cancelled', (c) => {
+    if (!c.req.raw.body) {
+      // force create new request object
+      throw new Error('No body consumed')
+    }
+    c.req.raw.body.cancel()
+    return c.text('No body consumed')
+  })
+  app.post('/partially-consumed', async (c) => {
+    if (!c.req.raw.body) {
+      // force create new request object
+      throw new Error('No body consumed')
+    }
+    const reader = c.req.raw.body.getReader()
+    await reader.read() // read only one chunk
+    return c.text('No body consumed')
+  })
+  app.post('/partially-consumed-and-cancelled', async (c) => {
+    if (!c.req.raw.body) {
+      // force create new request object
+      throw new Error('No body consumed')
+    }
+    const reader = c.req.raw.body.getReader()
+    await reader.read() // read only one chunk
+    reader.cancel()
+    return c.text('No body consumed')
+  })
   app.delete('/posts/:id', (c) => {
     return c.text(`DELETE ${c.req.param('id')}`)
   })
@@ -80,6 +114,60 @@ describe('Basic', () => {
     const res = await request(server).post('/posts')
     expect(res.status).toBe(302)
     expect(res.headers['location']).toBe('/posts')
+  })
+
+  it('Should return 200 response - POST /no-body-consumed', async () => {
+    const res = await request(server).post('/no-body-consumed').send('')
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('No body consumed')
+  })
+
+  it('Should return 200 response - POST /body-cancelled', async () => {
+    const res = await request(server).post('/body-cancelled').send('')
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('No body consumed')
+  })
+
+  it('Should return 200 response - POST /partially-consumed', async () => {
+    const buffer = Buffer.alloc(1024 * 10) // large buffer
+    const res = await new Promise<any>((resolve, reject) => {
+      const req = request(server)
+        .post('/partially-consumed')
+        .set('Content-Length', buffer.length.toString())
+
+      req.write(buffer)
+      req.end((err, res) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(res)
+        }
+      })
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('No body consumed')
+  })
+
+  it('Should return 200 response - POST /partially-consumed-and-cancelled', async () => {
+    const buffer = Buffer.alloc(1) // A large buffer will not make the test go far, so keep it small because it won't go far.
+    const res = await new Promise<any>((resolve, reject) => {
+      const req = request(server)
+        .post('/partially-consumed-and-cancelled')
+        .set('Content-Length', buffer.length.toString())
+
+      req.write(buffer)
+      req.end((err, res) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(res)
+        }
+      })
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('No body consumed')
   })
 
   it('Should return 201 response - DELETE /posts/123', async () => {

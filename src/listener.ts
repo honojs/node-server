@@ -197,6 +197,8 @@ export const getRequestListener = (
         } else if (!outgoing.writableFinished) {
           req[abortControllerKey].abort('Client connection prematurely closed.')
         }
+
+        incoming.destroy()
       })
 
       res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as
