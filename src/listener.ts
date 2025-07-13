@@ -174,8 +174,10 @@ export const getRequestListener = (
     hostname?: string
     errorHandler?: CustomErrorHandler
     overrideGlobalObjects?: boolean
+    autoCleanupIncoming?: boolean
   } = {}
 ) => {
+  const autoCleanupIncoming = options.autoCleanupIncoming ?? true
   if (options.overrideGlobalObjects !== false && global.Request !== LightweightRequest) {
     Object.defineProperty(global, 'Request', {
       value: LightweightRequest,
@@ -197,7 +199,8 @@ export const getRequestListener = (
       // so generate a pseudo Request object with only the minimum required information.
       req = newRequest(incoming, options.hostname)
 
-      let incomingEnded = incoming.method === 'GET' || incoming.method === 'HEAD'
+      let incomingEnded =
+        !autoCleanupIncoming || incoming.method === 'GET' || incoming.method === 'HEAD'
       if (!incomingEnded) {
         ;(incoming as IncomingMessageWithWrapBodyStream)[wrapBodyStream] = true
         incoming.on('end', () => {
