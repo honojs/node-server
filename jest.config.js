@@ -1,6 +1,6 @@
 module.exports = {
   testMatch: ['**/test/**/*.+(ts)', '**/src/**/(*.)+(test).+(ts)'],
-  modulePathIgnorePatterns: ["test/setup.ts"],
+  modulePathIgnorePatterns: ["test/setup.ts", "test/app.ts"],
   transform: {
     '^.+\\.(ts)$': 'ts-jest',
   },
