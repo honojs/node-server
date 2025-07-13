@@ -1,9 +1,12 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
-import type { Http2ServerRequest, Http2ServerResponse } from 'node:http2'
+import { Http2ServerRequest } from 'node:http2'
+import type { Http2ServerResponse } from 'node:http2'
+import type { IncomingMessageWithWrapBodyStream } from './request'
 import {
   abortControllerKey,
   newRequest,
   Request as LightweightRequest,
+  wrapBodyStream,
   toRequestError,
 } from './request'
 import { cacheKey, Response as LightweightResponse } from './response'
@@ -12,6 +15,11 @@ import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
 import { X_ALREADY_SENT } from './utils/response/constants'
 import './globals'
+
+const outgoingEnded = Symbol('outgoingEnded')
+type OutgoingHasOutgoingEnded = Http2ServerResponse & {
+  [outgoingEnded]?: () => void
+}
 
 const regBuffer = /^no$/i
 const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
@@ -78,10 +86,12 @@ const responseViaCache = async (
     outgoing.end(new Uint8Array(await body.arrayBuffer()))
   } else {
     flushHeaders(outgoing)
-    return writeFromReadableStream(body, outgoing)?.catch(
+    await writeFromReadableStream(body, outgoing)?.catch(
       (e) => handleResponseError(e, outgoing) as undefined
     )
   }
+
+  ;(outgoing as OutgoingHasOutgoingEnded)[outgoingEnded]?.()
 }
 
 const responseViaResponseObject = async (
@@ -154,6 +164,8 @@ const responseViaResponseObject = async (
     outgoing.writeHead(res.status, resHeaderRecord)
     outgoing.end()
   }
+
+  ;(outgoing as OutgoingHasOutgoingEnded)[outgoingEnded]?.()
 }
 
 export const getRequestListener = (
@@ -185,17 +197,58 @@ export const getRequestListener = (
       // so generate a pseudo Request object with only the minimum required information.
       req = newRequest(incoming, options.hostname)
 
+      let incomingEnded = incoming.method === 'GET' || incoming.method === 'HEAD'
+      if (!incomingEnded) {
+        ;(incoming as IncomingMessageWithWrapBodyStream)[wrapBodyStream] = true
+        incoming.on('end', () => {
+          incomingEnded = true
+        })
+
+        if (incoming instanceof Http2ServerRequest) {
+          // a Http2ServerResponse instance requires additional processing on exit
+          // since outgoing.on('close') is not called even after outgoing.end() is called
+          // when the state is incomplete
+          ;(outgoing as OutgoingHasOutgoingEnded)[outgoingEnded] = () => {
+            // incoming is not consumed to the end
+            if (!incomingEnded) {
+              setTimeout(() => {
+                // in the case of a simple POST request, the cleanup process may be done automatically
+                // and end is called at this point. At that point, nothing is done.
+                if (!incomingEnded) {
+                  setTimeout(() => {
+                    incoming.destroy()
+                    // Http2ServerResponse will not terminate without also calling outgoing.destroy()
+                    outgoing.destroy()
+                  })
+                }
+              })
+            }
+          }
+        }
+      }
+
       // Detect if request was aborted.
       outgoing.on('close', () => {
         const abortController = req[abortControllerKey] as AbortController | undefined
-        if (!abortController) {
-          return
+        if (abortController) {
+          if (incoming.errored) {
+            req[abortControllerKey].abort(incoming.errored.toString())
+          } else if (!outgoing.writableFinished) {
+            req[abortControllerKey].abort('Client connection prematurely closed.')
+          }
         }
 
-        if (incoming.errored) {
-          req[abortControllerKey].abort(incoming.errored.toString())
-        } else if (!outgoing.writableFinished) {
-          req[abortControllerKey].abort('Client connection prematurely closed.')
+        // incoming is not consumed to the end
+        if (!incomingEnded) {
+          setTimeout(() => {
+            // in the case of a simple POST request, the cleanup process may be done automatically
+            // and end is called at this point. At that point, nothing is done.
+            if (!incomingEnded) {
+              setTimeout(() => {
+                incoming.destroy()
+              })
+            }
+          })
         }
       })
 

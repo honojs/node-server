@@ -41,6 +41,8 @@ export class Request extends GlobalRequest {
   }
 }
 
+export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
+export const wrapBodyStream = Symbol('wrapBodyStream')
 const newRequestFromIncoming = (
   method: string,
   url: string,
@@ -81,6 +83,23 @@ const newRequestFromIncoming = (
         start(controller) {
           controller.enqueue(incoming.rawBody)
           controller.close()
+        },
+      })
+    } else if ((incoming as IncomingMessageWithWrapBodyStream)[wrapBodyStream]) {
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+      init.body = new ReadableStream({
+        async pull(controller) {
+          try {
+            reader ||= Readable.toWeb(incoming).getReader()
+            const { done, value } = await reader.read()
+            if (done) {
+              controller.close()
+            } else {
+              controller.enqueue(value)
+            }
+          } catch (error) {
+            controller.error(error)
+          }
         },
       })
     } else {
