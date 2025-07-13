@@ -9,6 +9,8 @@ import { serve } from '../src/server'
 import type { ServerType } from '../src/types'
 import { app } from './app'
 
+const nodeVersionV20OrLater = parseInt(process.version.slice(1).split('.')[0]) >= 20
+
 describe('autoCleanupIncoming: true (default)', () => {
   let address: AddressInfo
   let server: ServerType
@@ -157,6 +159,11 @@ describe('autoCleanupIncoming: true (default)', () => {
       await Promise.all([reqPromise, resPromise])
       expect(responseBody).toBe('Body cancelled')
     })
+
+    if (!nodeVersionV20OrLater) {
+      it.skip('Skipped - Automatic cleanup with partially consumed pattern is not supported in v18. Skip test.', () => {})
+      return
+    }
 
     it('Should return 200 response - POST /partially-consumed', async () => {
       let responseBody = ''
@@ -393,6 +400,11 @@ describe('autoCleanupIncoming: false', () => {
       await Promise.all([reqPromise, resPromise])
       expect(responseBody).toBe('Body length: 6')
     })
+
+    if (!nodeVersionV20OrLater) {
+      it.skip('Skipped - The following features are also functional in v18, but the expected test results are different, so the tests are not run in v18', () => {})
+      return
+    }
 
     it('Should return 200 response - POST /no-body-consumed', async () => {
       let responseBody = ''
