@@ -4,6 +4,7 @@
 import type { IncomingMessage } from 'node:http'
 import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
+import type { ReadableStreamDefaultReader } from 'node:stream/web'
 import type { TLSSocket } from 'node:tls'
 
 export class RequestError extends Error {
