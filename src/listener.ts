@@ -220,7 +220,7 @@ export const getRequestListener = (
                 if (!incomingEnded) {
                   setTimeout(() => {
                     incoming.destroy()
-                    // Http2ServerResponse will not terminate without also calling outgoing.destroy()
+                    // a Http2ServerResponse instance will not terminate without also calling outgoing.destroy()
                     outgoing.destroy()
                   })
                 }
