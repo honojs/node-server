@@ -60,18 +60,30 @@ const getStats = (path: string) => {
   return stats
 }
 
+const isAbsolutePath = (path: string) => {
+  const isUnixAbsolutePath = path.startsWith('/')
+  const hasDriveLetter = /^[a-zA-Z]:\\/.test(path)
+  const isUncPath = /^\\\\[^\\]+\\[^\\]+/.test(path)
+  return isUnixAbsolutePath || hasDriveLetter || isUncPath
+}
+
+const windowsPathToUnixPath = (path: string) => {
+  return path.replace(/^[a-zA-Z]:/, '').replace(/\\/g, '/')
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const serveStatic = <E extends Env = any>(
   options: ServeStaticOptions<E> = { root: '' }
 ): MiddlewareHandler<E> => {
-  let isAbsolutePath = false
+  let absolutePath = false
   let optionRoot: string
   let optionPath: string
 
   if (options.root) {
-    if (options.root.startsWith('/')) {
-      isAbsolutePath = true
-      optionRoot = new URL(`file://${options.root}`).pathname
+    if (isAbsolutePath(options.root)) {
+      absolutePath = true
+      optionRoot = windowsPathToUnixPath(options.root)
+      optionRoot = new URL(`file://${optionRoot}`).pathname
     } else {
       optionRoot = options.root
     }
@@ -79,8 +91,9 @@ export const serveStatic = <E extends Env = any>(
 
   if (options.path) {
     if (options.path.startsWith('/')) {
-      isAbsolutePath = true
-      optionPath = new URL(`file://${options.path}`).pathname
+      absolutePath = true
+      optionPath = windowsPathToUnixPath(options.path)
+      optionPath = new URL(`file://${optionPath}`).pathname
     } else {
       optionPath = options.path
     }
@@ -107,7 +120,7 @@ export const serveStatic = <E extends Env = any>(
     })
 
     if (path) {
-      path = isAbsolutePath ? addRootPrefix(path) : addCurrentDirPrefix(path)
+      path = absolutePath ? addRootPrefix(path) : addCurrentDirPrefix(path)
     } else {
       return next()
     }
@@ -122,7 +135,7 @@ export const serveStatic = <E extends Env = any>(
       })
 
       if (path) {
-        path = isAbsolutePath ? addRootPrefix(path) : addCurrentDirPrefix(path)
+        path = absolutePath ? addRootPrefix(path) : addCurrentDirPrefix(path)
       } else {
         return next()
       }
