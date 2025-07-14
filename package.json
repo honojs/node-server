@@ -54,7 +54,7 @@
     }
   },
   "scripts": {
-    "test": "node --expose-gc ./node_modules/.bin/jest",
+    "test": "node --expose-gc node_modules/jest/bin/jest.js",
     "build": "tsup --external hono",
     "watch": "tsup --watch",
     "postbuild": "publint",
