@@ -48,6 +48,10 @@ const addCurrentDirPrefix = (path: string) => {
   return `./${path}`
 }
 
+const addRootPrefix = (path: string) => {
+  return `/${path}`
+}
+
 const getStats = (path: string) => {
   let stats: Stats | undefined
   try {
@@ -60,6 +64,28 @@ const getStats = (path: string) => {
 export const serveStatic = <E extends Env = any>(
   options: ServeStaticOptions<E> = { root: '' }
 ): MiddlewareHandler<E> => {
+  let isAbsolutePath = false
+  let optionRoot: string
+  let optionPath: string
+
+  if (options.root) {
+    if (options.root.startsWith('/')) {
+      isAbsolutePath = true
+      optionRoot = new URL(`file://${options.root}`).pathname
+    } else {
+      optionRoot = options.root
+    }
+  }
+
+  if (options.path) {
+    if (options.path.startsWith('/')) {
+      isAbsolutePath = true
+      optionPath = new URL(`file://${options.path}`).pathname
+    } else {
+      optionPath = options.path
+    }
+  }
+
   return async (c, next) => {
     // Do nothing if Response is already set
     if (c.finalized) {
@@ -69,7 +95,7 @@ export const serveStatic = <E extends Env = any>(
     let filename: string
 
     try {
-      filename = options.path ?? decodeURIComponent(c.req.path)
+      filename = optionPath ?? decodeURIComponent(c.req.path)
     } catch {
       await options.onNotFound?.(c.req.path, c)
       return next()
@@ -77,11 +103,11 @@ export const serveStatic = <E extends Env = any>(
 
     let path = getFilePathWithoutDefaultDocument({
       filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename,
-      root: options.root,
+      root: optionRoot,
     })
 
     if (path) {
-      path = addCurrentDirPrefix(path)
+      path = isAbsolutePath ? addRootPrefix(path) : addCurrentDirPrefix(path)
     } else {
       return next()
     }
@@ -91,12 +117,12 @@ export const serveStatic = <E extends Env = any>(
     if (stats && stats.isDirectory()) {
       path = getFilePath({
         filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename,
-        root: options.root,
+        root: optionRoot,
         defaultDocument: options.index ?? 'index.html',
       })
 
       if (path) {
-        path = addCurrentDirPrefix(path)
+        path = isAbsolutePath ? addRootPrefix(path) : addCurrentDirPrefix(path)
       } else {
         return next()
       }

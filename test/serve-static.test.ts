@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-
 import request from 'supertest'
+import path from 'node:path'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
 
@@ -225,5 +225,36 @@ describe('Serve Static Middleware', () => {
     expect(res.headers['content-encoding']).toBeUndefined()
     expect(res.headers['vary']).toBeUndefined()
     expect(res.text).toBe('Hello Not Compressed')
+  })
+
+  describe('Absolute path', () => {
+    const rootPaths = [path.join(__dirname, 'assets'), __dirname + '/../test/assets']
+    rootPaths.forEach((root) => {
+      describe(root, () => {
+        const app = new Hono()
+        const server = createAdaptorServer(app)
+        app.use('/static/*', serveStatic({ root }))
+        app.use('/favicon.ico', serveStatic({ path: root + '/favicon.ico' }))
+
+        it(`Should return index.html`, async () => {
+          const res = await request(server).get('/static')
+          expect(res.status).toBe(200)
+          expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
+          expect(res.text).toBe('<h1>Hello Hono</h1>')
+        })
+
+        it(`Should return correct headers and data for text`, async () => {
+          const res = await request(server).get('/static/plain.txt')
+          expect(res.status).toBe(200)
+          expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+          expect(res.text).toBe('This is plain.txt')
+        })
+        it('Should return correct headers for icons', async () => {
+          const res = await request(server).get('/favicon.ico')
+          expect(res.status).toBe(200)
+          expect(res.headers['content-type']).toBe('image/x-icon')
+        })
+      })
+    })
   })
 })
