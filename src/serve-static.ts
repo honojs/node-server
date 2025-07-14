@@ -83,7 +83,7 @@ export const serveStatic = <E extends Env = any>(
     if (isAbsolutePath(options.root)) {
       absolutePath = true
       optionRoot = windowsPathToUnixPath(options.root)
-      optionRoot = new URL(`file://${options.root}`).pathname
+      optionRoot = new URL(`file://${optionRoot}`).pathname
     } else {
       optionRoot = options.root
     }
