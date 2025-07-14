@@ -82,6 +82,7 @@ export const serveStatic = <E extends Env = any>(
   if (options.root) {
     if (isAbsolutePath(options.root)) {
       absolutePath = true
+      optionRoot = windowsPathToUnixPath(options.root)
       optionRoot = new URL(`file://${options.root}`).pathname
     } else {
       optionRoot = options.root
@@ -89,9 +90,10 @@ export const serveStatic = <E extends Env = any>(
   }
 
   if (options.path) {
-    if (options.path.startsWith('/')) {
+    if (isAbsolutePath(options.path)) {
       absolutePath = true
-      optionPath = new URL(`file://${options.path}`).pathname
+      optionPath = windowsPathToUnixPath(options.path)
+      optionPath = new URL(`file://${optionPath}`).pathname
     } else {
       optionPath = options.path
     }
@@ -140,8 +142,6 @@ export const serveStatic = <E extends Env = any>(
 
       stats = getStats(path)
     }
-
-    path = windowsPathToUnixPath(path)
 
     if (!stats) {
       await options.onNotFound?.(path, c)
