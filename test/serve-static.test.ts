@@ -228,13 +228,16 @@ describe('Serve Static Middleware', () => {
   })
 
   describe('Absolute path', () => {
-    const rootPaths = [path.join(__dirname, 'assets'), __dirname + '/../test/assets']
+    const rootPaths = [
+      path.join(__dirname, 'assets'),
+      __dirname + path.sep + '..' + path.sep + 'test' + path.sep + 'assets',
+    ]
     rootPaths.forEach((root) => {
       describe(root, () => {
         const app = new Hono()
         const server = createAdaptorServer(app)
         app.use('/static/*', serveStatic({ root }))
-        app.use('/favicon.ico', serveStatic({ path: root + '/favicon.ico' }))
+        app.use('/favicon.ico', serveStatic({ path: root + path.sep + 'favicon.ico' }))
 
         it('Should return index.html', async () => {
           const res = await request(server).get('/static')
