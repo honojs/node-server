@@ -1,4 +1,6 @@
-import { buildOutgoingHttpHeaders } from '../src/utils'
+import { console } from 'node:inspector/promises'
+import { Writable } from 'node:stream'
+import { buildOutgoingHttpHeaders, writeFromReadableStream } from '../src/utils'
 
 describe('buildOutgoingHttpHeaders', () => {
   it('original content-type is preserved', () => {
@@ -69,5 +71,20 @@ describe('buildOutgoingHttpHeaders', () => {
     expect(result).toEqual({
       'content-type': 'text/plain; charset=UTF-8',
     })
+  })
+})
+
+describe('writeFromReadableStream', () => {
+  it('does handle rejections from canceled streams', async () => {
+    const stream = new ReadableStream({
+      async cancel() {
+        throw new Error('Aborted')
+      },
+    })
+
+    const destroyedWritable = new Writable()
+    destroyedWritable.destroy()
+
+    await expect(writeFromReadableStream(stream, destroyedWritable)).rejects.toThrow('Aborted')
   })
 })
