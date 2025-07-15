@@ -26,7 +26,7 @@ const ENCODINGS = {
 } as const
 const ENCODINGS_ORDERED_KEYS = Object.keys(ENCODINGS) as (keyof typeof ENCODINGS)[]
 
-const createStreamBody = (stream: ReadStream) => {
+export const createStreamBody = (stream: ReadStream) => {
   const body = new ReadableStream({
     start(controller) {
       stream.on('data', (chunk) => {
@@ -48,7 +48,7 @@ const addCurrentDirPrefix = (path: string) => {
   return `./${path}`
 }
 
-const getStats = (path: string) => {
+export const getStats = (path: string) => {
   let stats: Stats | undefined
   try {
     stats = lstatSync(path)
