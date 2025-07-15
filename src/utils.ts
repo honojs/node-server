@@ -5,38 +5,60 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
   if (stream.locked) {
     throw new TypeError('ReadableStream is locked.')
   } else if (writable.destroyed) {
-    stream.cancel()
     return
   }
+
   const reader = stream.getReader()
-  writable.on('close', cancel)
-  writable.on('error', cancel)
-  reader.read().then(flow, cancel)
+  let clientDisconnected = false
+
+  const handleClientDisconnect = () => {
+    clientDisconnected = true
+  }
+
+  const handleError = () => {
+    clientDisconnected = true
+  }
+
+  writable.on('close', handleClientDisconnect)
+  writable.on('error', handleError)
+
+  reader.read().then(flow, handleStreamError)
+
   return reader.closed.finally(() => {
-    writable.off('close', cancel)
-    writable.off('error', cancel)
+    writable.off('close', handleClientDisconnect)
+    writable.off('error', handleError)
   })
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function cancel(error?: any) {
-    reader.cancel(error).catch(() => {})
-    if (error) {
-      writable.destroy(error)
+  function handleStreamError(error: any) {
+    if (!clientDisconnected) {
+      if (error) {
+        writable.destroy(error)
+      }
     }
   }
+
   function onDrain() {
-    reader.read().then(flow, cancel)
+    if (!clientDisconnected) {
+      reader.read().then(flow, handleStreamError)
+    }
   }
+
   function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void | Promise<void> {
+    if (clientDisconnected) {
+      return
+    }
+
     try {
       if (done) {
         writable.end()
       } else if (!writable.write(value)) {
         writable.once('drain', onDrain)
       } else {
-        return reader.read().then(flow, cancel)
+        return reader.read().then(flow, handleStreamError)
       }
     } catch (e) {
-      cancel(e)
+      handleStreamError(e)
     }
   }
 }
