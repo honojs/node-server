@@ -56,7 +56,7 @@ const getStats = (path: string) => {
 export const serveStatic = <E extends Env = any>(
   options: ServeStaticOptions<E> = { root: '' }
 ): MiddlewareHandler<E> => {
-  const optionRoot = options.root || '.'
+  const root = resolve(options.root || '.')
   const optionPath = options.path
 
   return async (c, next) => {
@@ -86,15 +86,14 @@ export const serveStatic = <E extends Env = any>(
     const requestPath = options.rewriteRequestPath
       ? options.rewriteRequestPath(filename, c)
       : filename
-    const rootResolved = resolve(optionRoot)
     let path: string
 
     if (optionPath) {
       // Use path option directly if specified
-      path = resolve(optionRoot, optionPath)
+      path = resolve(root, optionPath)
     } else {
       // Build with root + requestPath
-      path = resolve(join(optionRoot, requestPath))
+      path = resolve(join(root, requestPath))
     }
 
     let stats = getStats(path)
@@ -104,7 +103,7 @@ export const serveStatic = <E extends Env = any>(
       path = resolve(join(path, indexFile))
 
       // Security check: prevent path traversal attacks
-      if (!optionPath && !path.startsWith(rootResolved)) {
+      if (!optionPath && !path.startsWith(root)) {
         await options.onNotFound?.(path, c)
         return next()
       }
