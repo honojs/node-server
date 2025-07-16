@@ -68,7 +68,9 @@ describe('Serve Static Middleware', () => {
     expect(res.status).toBe(200)
     expect(res.text).toBe('<h1>Hello Hono</h1>')
     expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
-    expect(res.headers['x-custom']).toMatch(/Found the file at .*\/test\/assets\/static\/index\.html$/)
+    expect(res.headers['x-custom']).toMatch(
+      /Found the file at .*\/test\/assets\/static\/index\.html$/
+    )
   })
 
   it('Should return hono.html', async () => {
