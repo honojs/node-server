@@ -263,6 +263,34 @@ describe('Serve Static Middleware', () => {
     })
   })
 
+  describe('Root and path combination tests', () => {
+    const rootPaths = [
+      path.join(__dirname, 'assets'),
+      path.join(__dirname, 'assets'),
+      __dirname + path.sep + '..' + path.sep + 'test' + path.sep + 'assets',
+    ]
+    rootPaths.forEach((root) => {
+      describe(root, () => {
+        const app = new Hono()
+        const server = createAdaptorServer(app)
+
+        app.use(
+          '/favicon.ico',
+          serveStatic({
+            root: './test/assets',
+            path: 'favicon.ico',
+          })
+        )
+
+        it('Should return 200 response if both root and path set', async () => {
+          const res = await request(server).get('/favicon.ico')
+          expect(res.status).toBe(200)
+          expect(res.headers['content-type']).toBe('image/x-icon')
+        })
+      })
+    })
+  })
+
   describe('Security tests', () => {
     const app = new Hono()
     const server = createAdaptorServer(app)

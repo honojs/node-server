@@ -91,7 +91,7 @@ export const serveStatic = <E extends Env = any>(
 
     if (optionPath) {
       // Use path option directly if specified
-      path = resolve(optionPath)
+      path = resolve(optionRoot, optionPath)
     } else {
       // Build with root + requestPath
       path = resolve(join(optionRoot, requestPath))
