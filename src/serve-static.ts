@@ -1,8 +1,8 @@
 import type { Context, Env, MiddlewareHandler } from 'hono'
-import { getFilePath, getFilePathWithoutDefaultDocument } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
-import { createReadStream, lstatSync } from 'node:fs'
 import type { ReadStream, Stats } from 'node:fs'
+import { createReadStream, lstatSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 export type ServeStaticOptions<E extends Env = Env> = {
   /**
@@ -44,14 +44,6 @@ const createStreamBody = (stream: ReadStream) => {
   return body
 }
 
-const addCurrentDirPrefix = (path: string) => {
-  return `./${path}`
-}
-
-const addRootPrefix = (path: string) => {
-  return `/${path}`
-}
-
 const getStats = (path: string) => {
   let stats: Stats | undefined
   try {
@@ -60,44 +52,12 @@ const getStats = (path: string) => {
   return stats
 }
 
-const isAbsolutePath = (path: string) => {
-  const isUnixAbsolutePath = path.startsWith('/')
-  const hasDriveLetter = /^[a-zA-Z]:\\/.test(path)
-  const isUncPath = /^\\\\[^\\]+\\[^\\]+/.test(path)
-  return isUnixAbsolutePath || hasDriveLetter || isUncPath
-}
-
-const windowsPathToUnixPath = (path: string) => {
-  return path.replace(/^[a-zA-Z]:/, '').replace(/\\/g, '/')
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const serveStatic = <E extends Env = any>(
   options: ServeStaticOptions<E> = { root: '' }
 ): MiddlewareHandler<E> => {
-  let absolutePath = false
-  let optionRoot: string
-  let optionPath: string
-
-  if (options.root) {
-    if (isAbsolutePath(options.root)) {
-      absolutePath = true
-      optionRoot = windowsPathToUnixPath(options.root)
-      optionRoot = new URL(`file://${optionRoot}`).pathname
-    } else {
-      optionRoot = options.root
-    }
-  }
-
-  if (options.path) {
-    if (isAbsolutePath(options.path)) {
-      absolutePath = true
-      optionPath = windowsPathToUnixPath(options.path)
-      optionPath = new URL(`file://${optionPath}`).pathname
-    } else {
-      optionPath = options.path
-    }
-  }
+  const optionRoot = options.root || '.'
+  const optionPath = options.path
 
   return async (c, next) => {
     // Do nothing if Response is already set
@@ -108,35 +68,44 @@ export const serveStatic = <E extends Env = any>(
     let filename: string
 
     try {
+      const rawPath = optionPath ?? c.req.path
+      // Prevent encoded path traversal attacks
+      if (!optionPath) {
+        const decodedPath = decodeURIComponent(rawPath)
+        if (decodedPath.includes('..')) {
+          await options.onNotFound?.(rawPath, c)
+          return next()
+        }
+      }
       filename = optionPath ?? decodeURIComponent(c.req.path)
     } catch {
       await options.onNotFound?.(c.req.path, c)
       return next()
     }
 
-    let path = getFilePathWithoutDefaultDocument({
-      filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename,
-      root: optionRoot,
-    })
+    const requestPath = options.rewriteRequestPath
+      ? options.rewriteRequestPath(filename, c)
+      : filename
+    const rootResolved = resolve(optionRoot)
+    let path: string
 
-    if (path) {
-      path = absolutePath ? addRootPrefix(path) : addCurrentDirPrefix(path)
+    if (optionPath) {
+      // Use path option directly if specified
+      path = resolve(optionPath)
     } else {
-      return next()
+      // Build with root + requestPath
+      path = resolve(join(optionRoot, requestPath))
     }
 
     let stats = getStats(path)
 
     if (stats && stats.isDirectory()) {
-      path = getFilePath({
-        filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename,
-        root: optionRoot,
-        defaultDocument: options.index ?? 'index.html',
-      })
+      const indexFile = options.index ?? 'index.html'
+      path = resolve(join(path, indexFile))
 
-      if (path) {
-        path = absolutePath ? addRootPrefix(path) : addCurrentDirPrefix(path)
-      } else {
+      // Security check: prevent path traversal attacks
+      if (!optionPath && !path.startsWith(rootResolved)) {
+        await options.onNotFound?.(path, c)
         return next()
       }
 

@@ -68,7 +68,7 @@ describe('Serve Static Middleware', () => {
     expect(res.status).toBe(200)
     expect(res.text).toBe('<h1>Hello Hono</h1>')
     expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
-    expect(res.headers['x-custom']).toBe('Found the file at ./test/assets/static/index.html')
+    expect(res.headers['x-custom']).toMatch(/Found the file at .*\/test\/assets\/static\/index\.html$/)
   })
 
   it('Should return hono.html', async () => {
@@ -167,8 +167,8 @@ describe('Serve Static Middleware', () => {
   it('Should handle the `onNotFound` option', async () => {
     const res = await request(server).get('/on-not-found/foo.txt')
     expect(res.status).toBe(404)
-    expect(notFoundMessage).toBe(
-      './not-found/on-not-found/foo.txt is not found, request to /on-not-found/foo.txt'
+    expect(notFoundMessage).toMatch(
+      /.*\/not-found\/on-not-found\/foo\.txt is not found, request to \/on-not-found\/foo\.txt$/
     )
   })
 
@@ -258,6 +258,32 @@ describe('Serve Static Middleware', () => {
           expect(res.headers['content-type']).toBe('image/x-icon')
         })
       })
+    })
+  })
+
+  describe('Security tests', () => {
+    const app = new Hono()
+    const server = createAdaptorServer(app)
+    app.use('/static/*', serveStatic({ root: './test/assets' }))
+
+    it('Should prevent path traversal attacks with double dots', async () => {
+      const res = await request(server).get('/static/../secret.txt')
+      expect(res.status).toBe(404)
+    })
+
+    it('Should prevent path traversal attacks with multiple levels', async () => {
+      const res = await request(server).get('/static/../../package.json')
+      expect(res.status).toBe(404)
+    })
+
+    it('Should prevent path traversal attacks with mixed separators', async () => {
+      const res = await request(server).get('/static/..\\..\\package.json')
+      expect(res.status).toBe(404)
+    })
+
+    it('Should prevent path traversal attacks with encoded dots', async () => {
+      const res = await request(server).get('/static/%2e%2e%2fsecret.txt')
+      expect(res.status).toBe(404)
     })
   })
 })
