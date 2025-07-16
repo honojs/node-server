@@ -69,7 +69,7 @@ describe('Serve Static Middleware', () => {
     expect(res.text).toBe('<h1>Hello Hono</h1>')
     expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
     expect(res.headers['x-custom']).toMatch(
-      /Found the file at .*\/test\/assets\/static\/index\.html$/
+      /Found the file at .*[\/\\]test[\/\\]assets[\/\\]static[\/\\]index\.html$/
     )
   })
 
@@ -170,7 +170,7 @@ describe('Serve Static Middleware', () => {
     const res = await request(server).get('/on-not-found/foo.txt')
     expect(res.status).toBe(404)
     expect(notFoundMessage).toMatch(
-      /.*\/not-found\/on-not-found\/foo\.txt is not found, request to \/on-not-found\/foo\.txt$/
+      /.*[\/\\]not-found[\/\\]on-not-found[\/\\]foo\.txt is not found, request to \/on-not-found\/foo\.txt$/
     )
   })
 
