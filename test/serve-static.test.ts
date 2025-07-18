@@ -269,23 +269,26 @@ describe('Serve Static Middleware', () => {
       path.join(__dirname, 'assets'),
       __dirname + path.sep + '..' + path.sep + 'test' + path.sep + 'assets',
     ]
+    const optionPaths = ['favicon.ico', '/favicon.ico']
     rootPaths.forEach((root) => {
-      describe(root, () => {
-        const app = new Hono()
-        const server = createAdaptorServer(app)
+      optionPaths.forEach((optionPath) => {
+        describe(`${root} + ${optionPath}`, () => {
+          const app = new Hono()
+          const server = createAdaptorServer(app)
 
-        app.use(
-          '/favicon.ico',
-          serveStatic({
-            root: './test/assets',
-            path: 'favicon.ico',
+          app.use(
+            '/favicon.ico',
+            serveStatic({
+              root,
+              path: optionPath,
+            })
+          )
+
+          it('Should return 200 response if both root and path set', async () => {
+            const res = await request(server).get('/favicon.ico')
+            expect(res.status).toBe(200)
+            expect(res.headers['content-type']).toBe('image/x-icon')
           })
-        )
-
-        it('Should return 200 response if both root and path set', async () => {
-          const res = await request(server).get('/favicon.ico')
-          expect(res.status).toBe(200)
-          expect(res.headers['content-type']).toBe('image/x-icon')
         })
       })
     })

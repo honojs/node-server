@@ -86,15 +86,12 @@ export const serveStatic = <E extends Env = any>(
     const requestPath = options.rewriteRequestPath
       ? options.rewriteRequestPath(filename, c)
       : filename
-    let path: string
 
-    if (optionPath) {
-      // Use path option directly if specified
-      path = resolve(root, optionPath)
-    } else {
-      // Build with root + requestPath
-      path = resolve(join(root, requestPath))
-    }
+    let path = optionPath
+      ? options.root
+        ? resolve(join(root, optionPath))
+        : optionPath
+      : resolve(join(root, requestPath))
 
     let stats = getStats(path)
 
