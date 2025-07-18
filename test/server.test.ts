@@ -184,7 +184,7 @@ describe('various response body types', () => {
   app.use('/etag/*', etag())
   app.get('/etag/buffer', () => {
     const response = new Response(Buffer.from('Hello Hono!'), {
-      headers: { 'content-type': 'text/plain' },
+      headers: { 'content-type': 'text/plain', 'content-length': '11' },
     })
     return response
   })

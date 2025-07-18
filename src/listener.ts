@@ -1,18 +1,18 @@
-import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
+import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:http'
 import { Http2ServerRequest } from 'node:http2'
 import type { Http2ServerResponse } from 'node:http2'
 import type { IncomingMessageWithWrapBodyStream } from './request'
 import {
+  Request as LightweightRequest,
   abortControllerKey,
   newRequest,
-  Request as LightweightRequest,
-  wrapBodyStream,
   toRequestError,
+  wrapBodyStream,
 } from './request'
-import { cacheKey, Response as LightweightResponse } from './response'
+import { Response as LightweightResponse, cacheKey } from './response'
 import type { InternalCache } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
-import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
+import { buildOutgoingHttpHeaders, writeFromReadableStream } from './utils'
 import { X_ALREADY_SENT } from './utils/response/constants'
 import './globals'
 
@@ -145,7 +145,8 @@ const responseViaResponseObject = async (
       contentLength ||
       // nginx buffering variant
       (accelBuffering && regBuffer.test(accelBuffering as string)) ||
-      !regContentType.test(contentType as string)
+      !regContentType.test(contentType as string) ||
+      res.body instanceof ReadableStream
     ) {
       outgoing.writeHead(res.status, resHeaderRecord)
       flushHeaders(outgoing)
