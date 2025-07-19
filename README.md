@@ -168,7 +168,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 app.use('/static/*', serveStatic({ root: './' }))
 ```
 
-Note that `root` must be _relative_ to the current working directory from which the app was started. Absolute paths are not supported.
+If using a relative path, `root` will be relative to the current working directory from which the app was started.
 
 This can cause confusion when running your application locally.
 

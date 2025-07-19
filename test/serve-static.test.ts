@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-
 import request from 'supertest'
+import path from 'node:path'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
 
@@ -68,7 +68,9 @@ describe('Serve Static Middleware', () => {
     expect(res.status).toBe(200)
     expect(res.text).toBe('<h1>Hello Hono</h1>')
     expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
-    expect(res.headers['x-custom']).toBe('Found the file at ./test/assets/static/index.html')
+    expect(res.headers['x-custom']).toMatch(
+      /Found the file at .*[\/\\]test[\/\\]assets[\/\\]static[\/\\]index\.html$/
+    )
   })
 
   it('Should return hono.html', async () => {
@@ -167,8 +169,8 @@ describe('Serve Static Middleware', () => {
   it('Should handle the `onNotFound` option', async () => {
     const res = await request(server).get('/on-not-found/foo.txt')
     expect(res.status).toBe(404)
-    expect(notFoundMessage).toBe(
-      './not-found/on-not-found/foo.txt is not found, request to /on-not-found/foo.txt'
+    expect(notFoundMessage).toMatch(
+      /.*[\/\\]not-found[\/\\]on-not-found[\/\\]foo\.txt is not found, request to \/on-not-found\/foo\.txt$/
     )
   })
 
@@ -225,5 +227,96 @@ describe('Serve Static Middleware', () => {
     expect(res.headers['content-encoding']).toBeUndefined()
     expect(res.headers['vary']).toBeUndefined()
     expect(res.text).toBe('Hello Not Compressed')
+  })
+
+  describe('Absolute path', () => {
+    const rootPaths = [
+      path.join(__dirname, 'assets'),
+      __dirname + path.sep + '..' + path.sep + 'test' + path.sep + 'assets',
+    ]
+    rootPaths.forEach((root) => {
+      describe(root, () => {
+        const app = new Hono()
+        const server = createAdaptorServer(app)
+        app.use('/static/*', serveStatic({ root }))
+        app.use('/favicon.ico', serveStatic({ path: root + path.sep + 'favicon.ico' }))
+
+        it('Should return index.html', async () => {
+          const res = await request(server).get('/static')
+          expect(res.status).toBe(200)
+          expect(res.headers['content-type']).toBe('text/html; charset=utf-8')
+          expect(res.text).toBe('<h1>Hello Hono</h1>')
+        })
+
+        it('Should return correct headers and data for text', async () => {
+          const res = await request(server).get('/static/plain.txt')
+          expect(res.status).toBe(200)
+          expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+          expect(res.text).toBe('This is plain.txt')
+        })
+        it('Should return correct headers for icons', async () => {
+          const res = await request(server).get('/favicon.ico')
+          expect(res.status).toBe(200)
+          expect(res.headers['content-type']).toBe('image/x-icon')
+        })
+      })
+    })
+  })
+
+  describe('Root and path combination tests', () => {
+    const rootPaths = [
+      path.join(__dirname, 'assets'),
+      path.join(__dirname, 'assets'),
+      __dirname + path.sep + '..' + path.sep + 'test' + path.sep + 'assets',
+    ]
+    const optionPaths = ['favicon.ico', '/favicon.ico']
+    rootPaths.forEach((root) => {
+      optionPaths.forEach((optionPath) => {
+        describe(`${root} + ${optionPath}`, () => {
+          const app = new Hono()
+          const server = createAdaptorServer(app)
+
+          app.use(
+            '/favicon.ico',
+            serveStatic({
+              root,
+              path: optionPath,
+            })
+          )
+
+          it('Should return 200 response if both root and path set', async () => {
+            const res = await request(server).get('/favicon.ico')
+            expect(res.status).toBe(200)
+            expect(res.headers['content-type']).toBe('image/x-icon')
+          })
+        })
+      })
+    })
+  })
+
+  describe('Security tests', () => {
+    const app = new Hono()
+    const server = createAdaptorServer(app)
+    app.use('/static/*', serveStatic({ root: './test/assets' }))
+
+    it('Should prevent path traversal attacks with double dots', async () => {
+      const res = await request(server).get('/static/../secret.txt')
+      expect(res.status).toBe(404)
+    })
+
+    it('Should prevent path traversal attacks with multiple levels', async () => {
+      const res = await request(server).get('/static/../../package.json')
+      expect(res.status).toBe(404)
+    })
+
+    it('Should prevent path traversal attacks with mixed separators', async () => {
+      const res = await request(server).get('/static/..\\..\\package.json')
+      expect(res.status).toBe(404)
+    })
+
+    it('Should prevent path traversal attacks with encoded dots', async () => {
+      const res = await request(server).get('/static/%2e%2e%2fsecret.txt')
+      expect(res.status).toBe(404)
+    })
   })
 })
