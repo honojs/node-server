@@ -2,7 +2,7 @@ import type { Context, Env, MiddlewareHandler } from 'hono'
 import { getMimeType } from 'hono/utils/mime'
 import type { ReadStream, Stats } from 'node:fs'
 import { createReadStream, lstatSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 export type ServeStaticOptions<E extends Env = Env> = {
   /**
@@ -56,7 +56,7 @@ const getStats = (path: string) => {
 export const serveStatic = <E extends Env = any>(
   options: ServeStaticOptions<E> = { root: '' }
 ): MiddlewareHandler<E> => {
-  const root = resolve(options.root || '.')
+  const root = options.root || ''
   const optionPath = options.path
 
   return async (c, next) => {
@@ -67,44 +67,30 @@ export const serveStatic = <E extends Env = any>(
 
     let filename: string
 
-    try {
-      const rawPath = optionPath ?? c.req.path
-      // Prevent encoded path traversal attacks
-      if (!optionPath) {
-        const decodedPath = decodeURIComponent(rawPath)
-        if (decodedPath.includes('..')) {
-          await options.onNotFound?.(rawPath, c)
-          return next()
+    if (optionPath) {
+      filename = optionPath
+    } else {
+      try {
+        filename = decodeURIComponent(c.req.path)
+        if (/(?:^|[\/\\])\.\.(?:$|[\/\\])/.test(filename)) {
+          throw new Error()
         }
+      } catch {
+        await options.onNotFound?.(c.req.path, c)
+        return next()
       }
-      filename = optionPath ?? decodeURIComponent(c.req.path)
-    } catch {
-      await options.onNotFound?.(c.req.path, c)
-      return next()
     }
 
-    const requestPath = options.rewriteRequestPath
-      ? options.rewriteRequestPath(filename, c)
-      : filename
-
-    let path = optionPath
-      ? options.root
-        ? resolve(join(root, optionPath))
-        : optionPath
-      : resolve(join(root, requestPath))
+    let path = join(
+      root,
+      !optionPath && options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename
+    )
 
     let stats = getStats(path)
 
     if (stats && stats.isDirectory()) {
       const indexFile = options.index ?? 'index.html'
-      path = resolve(join(path, indexFile))
-
-      // Security check: prevent path traversal attacks
-      if (!optionPath && !path.startsWith(root)) {
-        await options.onNotFound?.(path, c)
-        return next()
-      }
-
+      path = join(path, indexFile)
       stats = getStats(path)
     }
 
