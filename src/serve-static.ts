@@ -72,7 +72,7 @@ export const serveStatic = <E extends Env = any>(
       // Prevent encoded path traversal attacks
       if (!optionPath) {
         const decodedPath = decodeURIComponent(rawPath)
-        if (decodedPath.includes('..')) {
+        if (/(?:^|[\/\\])\.\.(?:$|[\/\\])/.test(decodedPath)) {
           await options.onNotFound?.(rawPath, c)
           return next()
         }

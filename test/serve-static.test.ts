@@ -318,5 +318,10 @@ describe('Serve Static Middleware', () => {
       const res = await request(server).get('/static/%2e%2e%2fsecret.txt')
       expect(res.status).toBe(404)
     })
+
+    it('Should accept filename with double dots', async () => {
+      const res = await request(server).get('/static/foo..bar.txt')
+      expect(res.status).toBe(200)
+    })
   })
 })
