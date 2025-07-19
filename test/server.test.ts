@@ -1,4 +1,3 @@
-import { Response as PonyfillResponse } from '@whatwg-node/fetch'
 import { Hono } from 'hono'
 import { basicAuth } from 'hono/basic-auth'
 import { compress } from 'hono/compress'
@@ -13,37 +12,9 @@ import { GlobalRequest, Request as LightweightRequest, getAbortController } from
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 import { createAdaptorServer, serve } from '../src/server'
 import type { HttpBindings } from '../src/types'
+import { app } from './app'
 
 describe('Basic', () => {
-  const app = new Hono()
-  app.get('/', (c) => c.text('Hello! Node!'))
-  app.get('/url', (c) => c.text(c.req.url))
-
-  app.get('/posts', (c) => {
-    return c.text(`Page ${c.req.query('page')}`)
-  })
-  app.get('/user-agent', (c) => {
-    return c.text(c.req.header('user-agent') as string)
-  })
-  app.post('/posts', (c) => {
-    return c.redirect('/posts')
-  })
-  app.delete('/posts/:id', (c) => {
-    return c.text(`DELETE ${c.req.param('id')}`)
-  })
-  // @ts-expect-error the response is string
-  app.get('/invalid', () => {
-    return '<h1>HTML</h1>'
-  })
-  app.get('/ponyfill', () => {
-    return new PonyfillResponse('Pony')
-  })
-
-  app.on('trace', '/', (c) => {
-    const headers = c.req.raw.headers // build new request object
-    return c.text(`headers: ${JSON.stringify(headers)}`)
-  })
-
   const server = createAdaptorServer(app)
 
   it('Should return 200 response - GET /', async () => {
@@ -80,6 +51,60 @@ describe('Basic', () => {
     const res = await request(server).post('/posts')
     expect(res.status).toBe(302)
     expect(res.headers['location']).toBe('/posts')
+  })
+
+  it('Should return 200 response - POST /no-body-consumed', async () => {
+    const res = await request(server).post('/no-body-consumed').send('')
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('No body consumed')
+  })
+
+  it('Should return 200 response - POST /body-cancelled', async () => {
+    const res = await request(server).post('/body-cancelled').send('')
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('Body cancelled')
+  })
+
+  it('Should return 200 response - POST /partially-consumed', async () => {
+    const buffer = Buffer.alloc(1024 * 10) // large buffer
+    const res = await new Promise<any>((resolve, reject) => {
+      const req = request(server)
+        .post('/partially-consumed')
+        .set('Content-Length', buffer.length.toString())
+
+      req.write(buffer)
+      req.end((err, res) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(res)
+        }
+      })
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('Partially consumed')
+  })
+
+  it('Should return 200 response - POST /partially-consumed-and-cancelled', async () => {
+    const buffer = Buffer.alloc(1) // A large buffer will not make the test go far, so keep it small because it won't go far.
+    const res = await new Promise<any>((resolve, reject) => {
+      const req = request(server)
+        .post('/partially-consumed-and-cancelled')
+        .set('Content-Length', buffer.length.toString())
+
+      req.write(buffer)
+      req.end((err, res) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(res)
+        }
+      })
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('Partially consumed and cancelled')
   })
 
   it('Should return 201 response - DELETE /posts/123', async () => {

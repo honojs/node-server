@@ -4,6 +4,7 @@
 import type { IncomingMessage } from 'node:http'
 import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
+import type { ReadableStreamDefaultReader } from 'node:stream/web'
 import type { TLSSocket } from 'node:tls'
 
 export class RequestError extends Error {
@@ -41,6 +42,8 @@ export class Request extends GlobalRequest {
   }
 }
 
+export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
+export const wrapBodyStream = Symbol('wrapBodyStream')
 const newRequestFromIncoming = (
   method: string,
   url: string,
@@ -81,6 +84,23 @@ const newRequestFromIncoming = (
         start(controller) {
           controller.enqueue(incoming.rawBody)
           controller.close()
+        },
+      })
+    } else if ((incoming as IncomingMessageWithWrapBodyStream)[wrapBodyStream]) {
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+      init.body = new ReadableStream({
+        async pull(controller) {
+          try {
+            reader ||= Readable.toWeb(incoming).getReader()
+            const { done, value } = await reader.read()
+            if (done) {
+              controller.close()
+            } else {
+              controller.enqueue(value)
+            }
+          } catch (error) {
+            controller.error(error)
+          }
         },
       })
     } else {

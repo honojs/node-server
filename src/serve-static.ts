@@ -1,8 +1,8 @@
 import type { Context, Env, MiddlewareHandler } from 'hono'
-import { getFilePath, getFilePathWithoutDefaultDocument } from 'hono/utils/filepath'
 import { getMimeType } from 'hono/utils/mime'
-import { createReadStream, lstatSync } from 'node:fs'
 import type { ReadStream, Stats } from 'node:fs'
+import { createReadStream, lstatSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 export type ServeStaticOptions<E extends Env = Env> = {
   /**
@@ -44,10 +44,6 @@ const createStreamBody = (stream: ReadStream) => {
   return body
 }
 
-const addCurrentDirPrefix = (path: string) => {
-  return `./${path}`
-}
-
 const getStats = (path: string) => {
   let stats: Stats | undefined
   try {
@@ -60,6 +56,9 @@ const getStats = (path: string) => {
 export const serveStatic = <E extends Env = any>(
   options: ServeStaticOptions<E> = { root: '' }
 ): MiddlewareHandler<E> => {
+  const root = resolve(options.root || '.')
+  const optionPath = options.path
+
   return async (c, next) => {
     // Do nothing if Response is already set
     if (c.finalized) {
@@ -69,35 +68,40 @@ export const serveStatic = <E extends Env = any>(
     let filename: string
 
     try {
-      filename = options.path ?? decodeURIComponent(c.req.path)
+      const rawPath = optionPath ?? c.req.path
+      // Prevent encoded path traversal attacks
+      if (!optionPath) {
+        const decodedPath = decodeURIComponent(rawPath)
+        if (decodedPath.includes('..')) {
+          await options.onNotFound?.(rawPath, c)
+          return next()
+        }
+      }
+      filename = optionPath ?? decodeURIComponent(c.req.path)
     } catch {
       await options.onNotFound?.(c.req.path, c)
       return next()
     }
 
-    let path = getFilePathWithoutDefaultDocument({
-      filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename,
-      root: options.root,
-    })
+    const requestPath = options.rewriteRequestPath
+      ? options.rewriteRequestPath(filename, c)
+      : filename
 
-    if (path) {
-      path = addCurrentDirPrefix(path)
-    } else {
-      return next()
-    }
+    let path = optionPath
+      ? options.root
+        ? resolve(join(root, optionPath))
+        : optionPath
+      : resolve(join(root, requestPath))
 
     let stats = getStats(path)
 
     if (stats && stats.isDirectory()) {
-      path = getFilePath({
-        filename: options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename,
-        root: options.root,
-        defaultDocument: options.index ?? 'index.html',
-      })
+      const indexFile = options.index ?? 'index.html'
+      path = resolve(join(path, indexFile))
 
-      if (path) {
-        path = addCurrentDirPrefix(path)
-      } else {
+      // Security check: prevent path traversal attacks
+      if (!optionPath && !path.startsWith(root)) {
+        await options.onNotFound?.(path, c)
         return next()
       }
 

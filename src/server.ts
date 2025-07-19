@@ -8,6 +8,7 @@ export const createAdaptorServer = (options: Options): ServerType => {
   const requestListener = getRequestListener(fetchCallback, {
     hostname: options.hostname,
     overrideGlobalObjects: options.overrideGlobalObjects,
+    autoCleanupIncoming: options.autoCleanupIncoming,
   })
   // ts will complain about createServerHTTP and createServerHTTP2 not being callable, which works just fine
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

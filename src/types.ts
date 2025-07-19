@@ -70,6 +70,7 @@ export type ServerOptions =
 export type Options = {
   fetch: FetchCallback
   overrideGlobalObjects?: boolean
+  autoCleanupIncoming?: boolean
   port?: number
   hostname?: string
 } & ServerOptions

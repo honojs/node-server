@@ -7,24 +7,32 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
   } else if (writable.destroyed) {
     return stream.cancel()
   }
+
   const reader = stream.getReader()
-  writable.on('close', cancel)
-  writable.on('error', cancel)
-  reader.read().then(flow, cancel)
+
+  const handleError = () => {
+    // ignore the error
+  }
+
+  writable.on('error', handleError)
+
+  reader.read().then(flow, handleStreamError)
+
   return reader.closed.finally(() => {
-    writable.off('close', cancel)
-    writable.off('error', cancel)
+    writable.off('error', handleError)
   })
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function cancel(error?: any) {
-    reader.cancel(error).catch(() => {})
+  function handleStreamError(error: any) {
     if (error) {
       writable.destroy(error)
     }
   }
+
   function onDrain() {
-    reader.read().then(flow, cancel)
+    reader.read().then(flow, handleStreamError)
   }
+
   function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void | Promise<void> {
     try {
       if (done) {
@@ -32,10 +40,10 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
       } else if (!writable.write(value)) {
         writable.once('drain', onDrain)
       } else {
-        return reader.read().then(flow, cancel)
+        return reader.read().then(flow, handleStreamError)
       }
     } catch (e) {
-      cancel(e)
+      handleStreamError(e)
     }
   }
 }
