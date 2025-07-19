@@ -9,46 +9,31 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
   }
 
   const reader = stream.getReader()
-  let clientDisconnected = false
-
-  const handleClientDisconnect = () => {
-    clientDisconnected = true
-  }
 
   const handleError = () => {
-    clientDisconnected = true
+    // ignore the error
   }
 
-  writable.on('close', handleClientDisconnect)
   writable.on('error', handleError)
 
   reader.read().then(flow, handleStreamError)
 
   return reader.closed.finally(() => {
-    writable.off('close', handleClientDisconnect)
     writable.off('error', handleError)
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function handleStreamError(error: any) {
-    if (!clientDisconnected) {
-      if (error) {
-        writable.destroy(error)
-      }
+    if (error) {
+      writable.destroy(error)
     }
   }
 
   function onDrain() {
-    if (!clientDisconnected) {
-      reader.read().then(flow, handleStreamError)
-    }
+    reader.read().then(flow, handleStreamError)
   }
 
   function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void | Promise<void> {
-    if (clientDisconnected) {
-      return
-    }
-
     try {
       if (done) {
         writable.end()
