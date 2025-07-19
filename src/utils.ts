@@ -1,22 +1,23 @@
 import type { OutgoingHttpHeaders } from 'node:http'
 import type { Writable } from 'node:stream'
 
-export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writable: Writable) {
-  if (stream.locked) {
-    throw new TypeError('ReadableStream is locked.')
-  } else if (writable.destroyed) {
-    return
-  }
+export async function readWithoutBlocking(
+  readPromise: Promise<ReadableStreamReadResult<Uint8Array>>
+): Promise<ReadableStreamReadResult<Uint8Array> | undefined> {
+  return Promise.race([readPromise, Promise.resolve().then(() => Promise.resolve(undefined))])
+}
 
-  const reader = stream.getReader()
-
+export function writeFromReadableStreamDefaultReader(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  writable: Writable,
+  currentReadPromise?: Promise<ReadableStreamReadResult<Uint8Array>> | undefined
+) {
   const handleError = () => {
     // ignore the error
   }
 
   writable.on('error', handleError)
-
-  reader.read().then(flow, handleStreamError)
+  ;(currentReadPromise ?? reader.read()).then(flow, handleStreamError)
 
   return reader.closed.finally(() => {
     writable.off('error', handleError)
@@ -46,6 +47,16 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
       handleStreamError(e)
     }
   }
+}
+
+export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writable: Writable) {
+  if (stream.locked) {
+    throw new TypeError('ReadableStream is locked.')
+  } else if (writable.destroyed) {
+    return
+  }
+
+  return writeFromReadableStreamDefaultReader(stream.getReader(), writable)
 }
 
 export const buildOutgoingHttpHeaders = (
