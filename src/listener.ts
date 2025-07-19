@@ -125,7 +125,7 @@ const responseViaResponseObject = async (
     /**
      * If content-encoding is set, we assume that the response should be not decoded.
      * Else if transfer-encoding is set, we assume that the response should be streamed.
-     * Else if content-length is set, we assume that the response content has been taken care of.
+     * Else if content-length and etag are not set, we assume that the response should be streamed.
      * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
      * Else if content-type is not application/json nor text/* but can be text/event-stream,
      * we assume that the response should be streamed.
@@ -137,16 +137,16 @@ const responseViaResponseObject = async (
       'content-length': contentLength,
       'x-accel-buffering': accelBuffering,
       'content-type': contentType,
+      etag,
     } = resHeaderRecord
 
     if (
       transferEncoding ||
       contentEncoding ||
-      contentLength ||
+      (!contentLength && !etag) ||
       // nginx buffering variant
       (accelBuffering && regBuffer.test(accelBuffering as string)) ||
-      !regContentType.test(contentType as string) ||
-      res.body instanceof ReadableStream
+      !regContentType.test(contentType as string)
     ) {
       outgoing.writeHead(res.status, resHeaderRecord)
       flushHeaders(outgoing)
