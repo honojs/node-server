@@ -1,18 +1,18 @@
-import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
+import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:http'
 import { Http2ServerRequest } from 'node:http2'
 import type { Http2ServerResponse } from 'node:http2'
 import type { IncomingMessageWithWrapBodyStream } from './request'
 import {
+  Request as LightweightRequest,
   abortControllerKey,
   newRequest,
-  Request as LightweightRequest,
-  wrapBodyStream,
   toRequestError,
+  wrapBodyStream,
 } from './request'
-import { cacheKey, Response as LightweightResponse } from './response'
+import { Response as LightweightResponse, cacheKey } from './response'
 import type { InternalCache } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
-import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
+import { buildOutgoingHttpHeaders, writeFromReadableStream } from './utils'
 import { X_ALREADY_SENT } from './utils/response/constants'
 import './globals'
 
@@ -125,7 +125,7 @@ const responseViaResponseObject = async (
     /**
      * If content-encoding is set, we assume that the response should be not decoded.
      * Else if transfer-encoding is set, we assume that the response should be streamed.
-     * Else if content-length is set, we assume that the response content has been taken care of.
+     * Else if content-length and etag are not set, we assume that the response should be streamed.
      * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
      * Else if content-type is not application/json nor text/* but can be text/event-stream,
      * we assume that the response should be streamed.
@@ -137,12 +137,13 @@ const responseViaResponseObject = async (
       'content-length': contentLength,
       'x-accel-buffering': accelBuffering,
       'content-type': contentType,
+      etag,
     } = resHeaderRecord
 
     if (
       transferEncoding ||
       contentEncoding ||
-      contentLength ||
+      (!contentLength && !etag) ||
       // nginx buffering variant
       (accelBuffering && regBuffer.test(accelBuffering as string)) ||
       !regContentType.test(contentType as string)

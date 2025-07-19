@@ -104,7 +104,10 @@ describe('Error handling - sync fetchCallback', () => {
 
   it('Should set the response if error handler returns a response', async () => {
     errorHandler.mockImplementationOnce((err: Error) => {
-      return new Response(`${err}`, { status: 500, headers: { 'my-custom-header': 'hi' } })
+      return new Response(`${err}`, {
+        status: 500,
+        headers: { 'my-custom-header': 'hi' },
+      })
     })
 
     const res = await request(server).get('/throw-error')
@@ -148,7 +151,10 @@ describe('Error handling - async fetchCallback', () => {
 
   it('Should set the response if error handler returns a response', async () => {
     errorHandler.mockImplementationOnce((err: Error) => {
-      return new Response(`${err}`, { status: 500, headers: { 'my-custom-header': 'hi' } })
+      return new Response(`${err}`, {
+        status: 500,
+        headers: { 'my-custom-header': 'hi' },
+      })
     })
 
     const res = await request(server).get('/throw-error')
@@ -342,5 +348,57 @@ describe('overrideGlobalObjects', () => {
       expect(global.Request).toBe(GlobalRequest)
       expect(global.Response).toBe(GlobalResponse)
     })
+  })
+})
+
+describe('ReadableStream response body', () => {
+  it('Should stream response when body is a ReadableStream', async () => {
+    const streamData = 'Hello, streaming world!'
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+        controller.enqueue(encoder.encode(streamData))
+        controller.close()
+      },
+    })
+
+    const fetchCallback = jest.fn(() => {
+      return new Response(stream, {
+        headers: { 'content-type': 'text/plain' },
+      })
+    })
+
+    const requestListener = getRequestListener(fetchCallback)
+    const server = createServer(requestListener)
+
+    const res = await request(server).get('/stream').send()
+    expect(res.status).toBe(200)
+    expect(res.text).toBe(streamData)
+    expect(res.headers['content-type']).toBe('text/plain')
+  })
+
+  it('Should stream response when body is ReadableStream even with application/json content-type', async () => {
+    const jsonData = { message: 'streaming json' }
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+        controller.enqueue(encoder.encode(JSON.stringify(jsonData)))
+        controller.close()
+      },
+    })
+
+    const fetchCallback = jest.fn(() => {
+      return new Response(stream, {
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const requestListener = getRequestListener(fetchCallback)
+    const server = createServer(requestListener)
+
+    const res = await request(server).get('/stream-json').send()
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual(jsonData)
+    expect(res.headers['content-type']).toBe('application/json')
   })
 })
