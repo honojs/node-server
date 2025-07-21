@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
 import { Http2ServerRequest } from 'node:http2'
 import type { Http2ServerResponse } from 'node:http2'
+import type { Writable } from 'node:stream'
 import type { IncomingMessageWithWrapBodyStream } from './request'
 import {
   abortControllerKey,
@@ -12,7 +13,12 @@ import {
 import { cacheKey, Response as LightweightResponse } from './response'
 import type { InternalCache } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
-import { writeFromReadableStream, buildOutgoingHttpHeaders } from './utils'
+import {
+  readWithoutBlocking,
+  writeFromReadableStream,
+  writeFromReadableStreamDefaultReader,
+  buildOutgoingHttpHeaders,
+} from './utils'
 import { X_ALREADY_SENT } from './utils/response/constants'
 import './globals'
 
@@ -20,9 +26,6 @@ const outgoingEnded = Symbol('outgoingEnded')
 type OutgoingHasOutgoingEnded = Http2ServerResponse & {
   [outgoingEnded]?: () => void
 }
-
-const regBuffer = /^no$/i
-const regContentType = /^(application\/json\b|text\/(?!event-stream\b))/i
 
 const handleRequestError = (): Response =>
   new Response(null, {
@@ -122,41 +125,51 @@ const responseViaResponseObject = async (
   const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
 
   if (res.body) {
-    /**
-     * If content-encoding is set, we assume that the response should be not decoded.
-     * Else if transfer-encoding is set, we assume that the response should be streamed.
-     * Else if content-length is set, we assume that the response content has been taken care of.
-     * Else if x-accel-buffering is set to no, we assume that the response should be streamed.
-     * Else if content-type is not application/json nor text/* but can be text/event-stream,
-     * we assume that the response should be streamed.
-     */
+    const reader = res.body.getReader()
 
-    const {
-      'transfer-encoding': transferEncoding,
-      'content-encoding': contentEncoding,
-      'content-length': contentLength,
-      'x-accel-buffering': accelBuffering,
-      'content-type': contentType,
-    } = resHeaderRecord
+    const values: Uint8Array[] = []
+    let done = false
+    let currentReadPromise: Promise<ReadableStreamReadResult<Uint8Array>> | undefined = undefined
 
-    if (
-      transferEncoding ||
-      contentEncoding ||
-      contentLength ||
-      // nginx buffering variant
-      (accelBuffering && regBuffer.test(accelBuffering as string)) ||
-      !regContentType.test(contentType as string)
-    ) {
-      outgoing.writeHead(res.status, resHeaderRecord)
-      flushHeaders(outgoing)
+    // In the case of synchronous responses, usually a maximum of two readings is done
+    for (let i = 0; i < 2; i++) {
+      currentReadPromise = reader.read()
+      const chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
+        console.error(e)
+        done = true
+      })
+      if (!chunk) {
+        // Error occurred or currentReadPromise is not yet resolved.
+        // If an error occurs, immediately break the loop.
+        // If currentReadPromise is not yet resolved, pass it to writeFromReadableStreamDefaultReader.
+        break
+      }
+      currentReadPromise = undefined
 
-      await writeFromReadableStream(res.body, outgoing)
+      if (chunk.value) {
+        values.push(chunk.value)
+      }
+      if (chunk.done) {
+        done = true
+        break
+      }
+    }
+
+    if (done && !('content-length' in resHeaderRecord)) {
+      resHeaderRecord['content-length'] = values.reduce((acc, value) => acc + value.length, 0)
+    }
+
+    outgoing.writeHead(res.status, resHeaderRecord)
+    values.forEach((value) => {
+      ;(outgoing as Writable).write(value)
+    })
+    if (done) {
+      outgoing.end()
     } else {
-      const buffer = await res.arrayBuffer()
-      resHeaderRecord['content-length'] = buffer.byteLength
-
-      outgoing.writeHead(res.status, resHeaderRecord)
-      outgoing.end(new Uint8Array(buffer))
+      if (values.length === 0) {
+        flushHeaders(outgoing)
+      }
+      await writeFromReadableStreamDefaultReader(reader, outgoing, currentReadPromise)
     }
   } else if (resHeaderRecord[X_ALREADY_SENT]) {
     // do nothing, the response has already been sent
