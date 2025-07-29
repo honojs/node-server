@@ -139,6 +139,14 @@ const responseViaResponseObject = async (
         done = true
       })
       if (!chunk) {
+        if (i === 1 && resHeaderRecord['transfer-encoding'] !== 'chunked') {
+          // XXX: In Node.js v24, some response bodies are not read all the way through until the next task queue,
+          // so wait a moment and retry. (e.g. new Blob([new Uint8Array(contents)]) )
+          await new Promise((resolve) => setTimeout(resolve))
+          i--
+          continue
+        }
+
         // Error occurred or currentReadPromise is not yet resolved.
         // If an error occurs, immediately break the loop.
         // If currentReadPromise is not yet resolved, pass it to writeFromReadableStreamDefaultReader.
