@@ -137,6 +137,8 @@ describe('various response body types', () => {
     const largeText = 'a'.repeat(1024 * 1024 * 10)
     let server: ServerType
     let resolveReadableStreamPromise: () => void
+    let resolveEventStreamPromise: () => void
+    let resolveEventStreamWithoutTransferEncodingPromise: () => void
     beforeAll(() => {
       const app = new Hono()
       app.use('*', async (c, next) => {
@@ -182,6 +184,43 @@ describe('various response body types', () => {
           },
         })
         return new Response(stream)
+      })
+      const eventStreamPromise = new Promise<void>((resolve) => {
+        resolveEventStreamPromise = resolve
+      })
+      app.get('/event-stream', () => {
+        const stream = new ReadableStream({
+          async start(controller) {
+            controller.enqueue('data: First!\n\n')
+            await eventStreamPromise
+            controller.enqueue('data: Second!\n\n')
+            controller.close()
+          },
+        })
+        return new Response(stream, {
+          headers: {
+            'content-type': 'text/event-stream',
+            'transfer-encoding': 'chunked',
+          },
+        })
+      })
+      const eventStreamWithoutTransferEncodingPromise = new Promise<void>((resolve) => {
+        resolveEventStreamWithoutTransferEncodingPromise = resolve
+      })
+      app.get('/event-stream-without-transfer-encoding', () => {
+        const stream = new ReadableStream({
+          async start(controller) {
+            controller.enqueue('data: First!\n\n')
+            await eventStreamWithoutTransferEncodingPromise
+            controller.enqueue('data: Second!\n\n')
+            controller.close()
+          },
+        })
+        return new Response(stream, {
+          headers: {
+            'content-type': 'text/event-stream',
+          },
+        })
       })
       app.get('/buffer', () => {
         const response = new Response(Buffer.from('Hello Hono!'), {
@@ -252,6 +291,54 @@ describe('various response body types', () => {
       const res = await resPromise
       expect(res.status).toBe(200)
       expect(res.headers['content-type']).toMatch('text/plain; charset=UTF-8')
+      expect(res.headers['content-length']).toBeUndefined()
+      expect(expectedChunks.length).toBe(0) // all chunks are received
+    })
+
+    it('Should return 200 response - GET /event-stream', async () => {
+      const expectedChunks = ['data: First!\n\n', 'data: Second!\n\n']
+      const resPromise = request(server)
+        .get('/event-stream')
+        .parse((res, fn) => {
+          // response header should be sent before sending data.
+          expect(res.headers['transfer-encoding']).toBe('chunked')
+          resolveEventStreamPromise()
+
+          res.on('data', (chunk) => {
+            const str = chunk.toString()
+            expect(str).toBe(expectedChunks.shift())
+          })
+          res.on('end', () => fn(null, ''))
+        })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      const res = await resPromise
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch('text/event-stream')
+      expect(res.headers['content-length']).toBeUndefined()
+      expect(expectedChunks.length).toBe(0) // all chunks are received
+    })
+
+    it('Should return 200 response - GET /event-stream-without-transfer-encoding', async () => {
+      const expectedChunks = ['data: First!\n\n', 'data: Second!\n\n']
+      const resPromise = request(server)
+        .get('/event-stream-without-transfer-encoding')
+        .parse((res, fn) => {
+          
+          res.on('data', (chunk) => {
+            const str = chunk.toString()
+            expect(str).toBe(expectedChunks.shift())
+
+            if (expectedChunks.length === 1) {
+              // receive first chunk
+              resolveEventStreamWithoutTransferEncodingPromise()
+            }
+          })
+          res.on('end', () => fn(null, ''))
+        })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      const res = await resPromise
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch('text/event-stream')
       expect(res.headers['content-length']).toBeUndefined()
       expect(expectedChunks.length).toBe(0) // all chunks are received
     })

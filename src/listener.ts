@@ -131,9 +131,10 @@ const responseViaResponseObject = async (
     let done = false
     let currentReadPromise: Promise<ReadableStreamReadResult<Uint8Array>> | undefined = undefined
 
-    // In the case of synchronous responses, usually a maximum of two readings is done
-    for (let i = 0; i < 2; i++) {
-      currentReadPromise = reader.read()
+    // In the case of synchronous responses, usually a maximum of two (or three in special cases) readings is done
+    let maxReadCount = 2
+    for (let i = 0; i < maxReadCount; i++) {
+      currentReadPromise ||= reader.read()
       const chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
         console.error(e)
         done = true
@@ -143,7 +144,7 @@ const responseViaResponseObject = async (
           // XXX: In Node.js v24, some response bodies are not read all the way through until the next task queue,
           // so wait a moment and retry. (e.g. new Blob([new Uint8Array(contents)]) )
           await new Promise((resolve) => setTimeout(resolve))
-          i--
+          maxReadCount = 3
           continue
         }
 
