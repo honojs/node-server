@@ -323,7 +323,6 @@ describe('various response body types', () => {
       const resPromise = request(server)
         .get('/event-stream-without-transfer-encoding')
         .parse((res, fn) => {
-          
           res.on('data', (chunk) => {
             const str = chunk.toString()
             expect(str).toBe(expectedChunks.shift())
