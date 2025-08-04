@@ -216,19 +216,20 @@ export const newRequest = (
       throw new RequestError('Unsupported scheme')
     }
   } else {
-    const forwardedProto = incoming.headers['x-forwarded-proto']
-    const proto = forwardedProto
-      ? (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)
-          .split(',', 1)[0]
-          .trim()
-          .toLowerCase()
-      : null
-    scheme =
-      proto === 'https' || proto === 'http'
-        ? proto
-        : incoming.socket && (incoming.socket as TLSSocket).encrypted
-          ? 'https'
-          : 'http'
+    // Check socket encryption first (most trusted)
+    if (incoming.socket && (incoming.socket as TLSSocket).encrypted) {
+      scheme = 'https'
+    } else {
+      // Check x-forwarded-proto header
+      const forwardedProto = incoming.headers['x-forwarded-proto']
+      const proto = forwardedProto
+        ? (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)
+            .split(',', 1)[0]
+            .trim()
+            .toLowerCase()
+        : null
+      scheme = proto === 'https' || proto === 'http' ? proto : 'http'
+    }
   }
 
   const url = new URL(`${scheme}://${host}${incomingUrl}`)

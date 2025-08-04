@@ -354,6 +354,24 @@ describe('Request', () => {
         expect(req).toBeInstanceOf(GlobalRequest)
         expect(req.url).toBe('https://localhost/foo.txt')
       })
+
+      it('should prioritize encrypted socket over x-forwarded-proto header', async () => {
+        const socket = new Socket() as TLSSocket
+        socket.encrypted = true
+        const req = newRequest(
+          // @ts-expect-error x-forwarded-proto is not in IncomingHttpHeaders
+          {
+            socket,
+            headers: {
+              host: 'localhost',
+              'x-forwarded-proto': 'http', // This should be ignored
+            },
+            url: '/foo.txt',
+          }
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('https://localhost/foo.txt') // Should be https despite header
+      })
     })
   })
 
