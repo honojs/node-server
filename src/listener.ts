@@ -74,6 +74,7 @@ const responseViaCache = async (
     header = buildOutgoingHttpHeaders(header)
   }
 
+  // in `responseViaCache`, if body is not stream, Transfer-Encoding is considered not chunked
   if (typeof body === 'string') {
     header['Content-Length'] = Buffer.byteLength(body)
   } else if (body instanceof Uint8Array) {
@@ -131,41 +132,43 @@ const responseViaResponseObject = async (
     let done = false
     let currentReadPromise: Promise<ReadableStreamReadResult<Uint8Array>> | undefined = undefined
 
-    // In the case of synchronous responses, usually a maximum of two (or three in special cases) readings is done
-    let maxReadCount = 2
-    for (let i = 0; i < maxReadCount; i++) {
-      currentReadPromise ||= reader.read()
-      const chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
-        console.error(e)
-        done = true
-      })
-      if (!chunk) {
-        if (i === 1 && resHeaderRecord['transfer-encoding'] !== 'chunked') {
-          // XXX: In Node.js v24, some response bodies are not read all the way through until the next task queue,
-          // so wait a moment and retry. (e.g. new Blob([new Uint8Array(contents)]) )
-          await new Promise((resolve) => setTimeout(resolve))
-          maxReadCount = 3
-          continue
+    if (resHeaderRecord['transfer-encoding'] !== 'chunked') {
+      // In the case of synchronous responses, usually a maximum of two (or three in special cases) readings is done
+      let maxReadCount = 2
+      for (let i = 0; i < maxReadCount; i++) {
+        currentReadPromise ||= reader.read()
+        const chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
+          console.error(e)
+          done = true
+        })
+        if (!chunk) {
+          if (i === 1) {
+            // XXX: In Node.js v24, some response bodies are not read all the way through until the next task queue,
+            // so wait a moment and retry. (e.g. new Blob([new Uint8Array(contents)]) )
+            await new Promise((resolve) => setTimeout(resolve))
+            maxReadCount = 3
+            continue
+          }
+
+          // Error occurred or currentReadPromise is not yet resolved.
+          // If an error occurs, immediately break the loop.
+          // If currentReadPromise is not yet resolved, pass it to writeFromReadableStreamDefaultReader.
+          break
         }
+        currentReadPromise = undefined
 
-        // Error occurred or currentReadPromise is not yet resolved.
-        // If an error occurs, immediately break the loop.
-        // If currentReadPromise is not yet resolved, pass it to writeFromReadableStreamDefaultReader.
-        break
+        if (chunk.value) {
+          values.push(chunk.value)
+        }
+        if (chunk.done) {
+          done = true
+          break
+        }
       }
-      currentReadPromise = undefined
 
-      if (chunk.value) {
-        values.push(chunk.value)
+      if (done && !('content-length' in resHeaderRecord)) {
+        resHeaderRecord['content-length'] = values.reduce((acc, value) => acc + value.length, 0)
       }
-      if (chunk.done) {
-        done = true
-        break
-      }
-    }
-
-    if (done && !('content-length' in resHeaderRecord)) {
-      resHeaderRecord['content-length'] = values.reduce((acc, value) => acc + value.length, 0)
     }
 
     outgoing.writeHead(res.status, resHeaderRecord)
