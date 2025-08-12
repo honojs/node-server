@@ -185,6 +185,20 @@ describe('various response body types', () => {
         })
         return new Response(stream)
       })
+      app.get('/readable-stream-with-transfer-encoding', () => {
+        const stream = new ReadableStream({
+          async start(controller) {
+            controller.enqueue('Hello!') // send one chunk synchronously
+            controller.close()
+          },
+        })
+        return new Response(stream, {
+          headers: {
+            'content-type': 'text/plain; charset=UTF-8',
+            'transfer-encoding': 'chunked',
+          },
+        })
+      })
       const eventStreamPromise = new Promise<void>((resolve) => {
         resolveEventStreamPromise = resolve
       })
@@ -293,6 +307,14 @@ describe('various response body types', () => {
       expect(res.headers['content-type']).toMatch('text/plain; charset=UTF-8')
       expect(res.headers['content-length']).toBeUndefined()
       expect(expectedChunks.length).toBe(0) // all chunks are received
+    })
+
+    it('Should return 200 response - GET /readable-stream-with-transfer-encoding', async () => {
+      const res = await request(server).get('/readable-stream-with-transfer-encoding')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch('text/plain; charset=UTF-8')
+      expect(res.headers['transfer-encoding']).toBe('chunked')
+      expect(res.headers['content-length']).toBeUndefined()
     })
 
     it('Should return 200 response - GET /event-stream', async () => {
