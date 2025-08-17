@@ -325,3 +325,24 @@ describe('Serve Static Middleware', () => {
     })
   })
 })
+
+describe('Serve Static Middleware with wrong path', () => {
+  it('Should show an error when the path is wrong', async () => {
+    const logSpy = jest.spyOn(console, 'error')
+
+    const app = new Hono<{
+      Variables: {
+        path: string
+      }
+    }>()
+
+    app.use(
+      '*',
+      serveStatic({
+        root: './public',
+      })
+    )
+
+    expect(logSpy).toHaveBeenCalledWith("serveStatic: root path './public' is not found, are you sure it's correct?")
+  })
+})

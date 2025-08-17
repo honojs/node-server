@@ -1,7 +1,7 @@
 import type { Context, Env, MiddlewareHandler } from 'hono'
 import { getMimeType } from 'hono/utils/mime'
 import type { ReadStream, Stats } from 'node:fs'
-import { createReadStream, lstatSync } from 'node:fs'
+import { createReadStream, lstatSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 export type ServeStaticOptions<E extends Env = Env> = {
@@ -58,6 +58,10 @@ export const serveStatic = <E extends Env = any>(
 ): MiddlewareHandler<E> => {
   const root = options.root || ''
   const optionPath = options.path
+
+  if (root !== '' && !existsSync(root)) {
+    console.error(`serveStatic: root path '${root}' is not found, are you sure it's correct?`)
+  }
 
   return async (c, next) => {
     // Do nothing if Response is already set
