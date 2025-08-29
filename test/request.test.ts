@@ -35,6 +35,27 @@ describe('Request', () => {
       expect(req.keepalive).toBe(false)
     })
 
+    it('Should not generate GlobalRequest when accessing method, url or headers', async () => {
+      const req = newRequest({
+        method: 'GET',
+        url: '/',
+        headers: {
+          host: 'localhost',
+        },
+        rawHeaders: ['host', 'localhost'],
+      } as IncomingMessage)
+
+      // keep lightweight request even if accessing method, url or headers
+      expect(req.method).toBe('GET')
+      expect(req.url).toBe('http://localhost/')
+      expect(req.headers.get('host')).toBe('localhost')
+      expect(req[abortControllerKey]).toBeUndefined()
+
+      // generate GlobalRequest
+      expect(req.keepalive).toBe(false)
+      expect(req[abortControllerKey]).toBeDefined()
+    })
+
     it('Should resolve double dots in URL', async () => {
       const req = newRequest({
         headers: {
