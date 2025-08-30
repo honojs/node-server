@@ -42,14 +42,7 @@ export class Request extends GlobalRequest {
   }
 }
 
-export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
-export const wrapBodyStream = Symbol('wrapBodyStream')
-const newRequestFromIncoming = (
-  method: string,
-  url: string,
-  incoming: IncomingMessage | Http2ServerRequest,
-  abortController: AbortController
-): Request => {
+const newHeadersFromIncoming = (incoming: IncomingMessage | Http2ServerRequest) => {
   const headerRecord: [string, string][] = []
   const rawHeaders = incoming.rawHeaders
   for (let i = 0; i < rawHeaders.length; i += 2) {
@@ -58,10 +51,21 @@ const newRequestFromIncoming = (
       headerRecord.push([key, value])
     }
   }
+  return new Headers(headerRecord)
+}
 
+export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
+export const wrapBodyStream = Symbol('wrapBodyStream')
+const newRequestFromIncoming = (
+  method: string,
+  url: string,
+  headers: Headers,
+  incoming: IncomingMessage | Http2ServerRequest,
+  abortController: AbortController
+): Request => {
   const init = {
     method: method,
-    headers: headerRecord,
+    headers,
     signal: abortController.signal,
   } as RequestInit
 
@@ -116,6 +120,7 @@ const getRequestCache = Symbol('getRequestCache')
 const requestCache = Symbol('requestCache')
 const incomingKey = Symbol('incomingKey')
 const urlKey = Symbol('urlKey')
+const headersKey = Symbol('headersKey')
 export const abortControllerKey = Symbol('abortControllerKey')
 export const getAbortController = Symbol('getAbortController')
 
@@ -128,6 +133,10 @@ const requestPrototype: Record<string | symbol, any> = {
     return this[urlKey]
   },
 
+  get headers() {
+    return (this[headersKey] ||= newHeadersFromIncoming(this[incomingKey]))
+  },
+
   [getAbortController]() {
     this[getRequestCache]()
     return this[abortControllerKey]
@@ -138,6 +147,7 @@ const requestPrototype: Record<string | symbol, any> = {
     return (this[requestCache] ||= newRequestFromIncoming(
       this.method,
       this[urlKey],
+      this.headers,
       this[incomingKey],
       this[abortControllerKey]
     ))
@@ -149,7 +159,6 @@ const requestPrototype: Record<string | symbol, any> = {
   'cache',
   'credentials',
   'destination',
-  'headers',
   'integrity',
   'mode',
   'redirect',
