@@ -98,5 +98,6 @@
   },
   "peerDependencies": {
     "hono": "^4"
-  }
+  },
+  "packageManager": "bun@1.2.20"
 }
