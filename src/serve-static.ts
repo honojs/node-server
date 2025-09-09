@@ -149,8 +149,8 @@ export const serveStatic = <E extends Env = any>(
     c.header('Date', stats.birthtime.toUTCString())
 
     const parts = range.replace(/bytes=/, '').split('-', 2)
-    const start = parts[0] ? parseInt(parts[0], 10) : 0
-    let end = parts[1] ? parseInt(parts[1], 10) : stats.size - 1
+    const start = parseInt(parts[0] ?? "", 10) || 0
+    let end = parseInt(parts[1], 10) || size - 1
     if (size < end - start + 1) {
       end = size - 1
     }
