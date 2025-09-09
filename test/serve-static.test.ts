@@ -167,7 +167,6 @@ describe('Serve Static Middleware', () => {
   })
 
   it('Should handle invalid range header gracefully without NaN error', async () => {
-    // Test with completely invalid range header - should not crash with NaN error
     const res = await request(server).get('/static/plain.txt').set('range', 'hello')
     expect(res.status).toBe(206)
     expect(res.headers['content-length']).toBe('17')
