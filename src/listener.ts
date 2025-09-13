@@ -103,7 +103,7 @@ const responseViaResponseObject = async (
   outgoing: ServerResponse | Http2ServerResponse,
   options: { errorHandler?: CustomErrorHandler } = {}
 ) => {
-  if (typeof res.then === 'function') {
+  if ("then" in res && typeof res.then === 'function') {
     if (options.errorHandler) {
       try {
         res = await res
