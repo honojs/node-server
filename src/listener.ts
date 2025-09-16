@@ -98,12 +98,15 @@ const responseViaCache = async (
   ;(outgoing as OutgoingHasOutgoingEnded)[outgoingEnded]?.()
 }
 
+const isPromise = (res: Response | Promise<Response>): res is Promise<Response> =>
+  typeof (res as Promise<Response>).then === 'function'
+
 const responseViaResponseObject = async (
   res: Response | Promise<Response>,
   outgoing: ServerResponse | Http2ServerResponse,
   options: { errorHandler?: CustomErrorHandler } = {}
 ) => {
-  if (res instanceof Promise) {
+  if (isPromise(res)) {
     if (options.errorHandler) {
       try {
         res = await res
