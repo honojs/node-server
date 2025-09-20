@@ -32,6 +32,9 @@ const createStreamBody = (stream: ReadStream) => {
       stream.on('data', (chunk) => {
         controller.enqueue(chunk)
       })
+      stream.on('error', (err) => {
+        controller.error(err)
+      })
       stream.on('end', () => {
         controller.close()
       })
