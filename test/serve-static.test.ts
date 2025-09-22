@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import request from 'supertest'
+import { chmodSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
@@ -329,6 +330,30 @@ describe('Serve Static Middleware', () => {
     it('Should accept filename with double dots', async () => {
       const res = await request(server).get('/static/foo..bar.txt')
       expect(res.status).toBe(200)
+    })
+  })
+
+  describe('Stream error handling', () => {
+    const testFile = path.join(__dirname, 'assets', 'static', 'plain.txt')
+    console.log(testFile)
+    let originalMode: number
+
+    beforeEach(() => {
+      const stats = statSync(testFile)
+      originalMode = stats.mode
+      // Remove read permission to trigger stream error
+      chmodSync(testFile, 0o000)
+    })
+
+    afterEach(() => {
+      chmodSync(testFile, originalMode)
+    })
+
+    it('Should handle read permission errors gracefully', async () => {
+      const app = new Hono()
+      app.use('/static/*', serveStatic({ root: './test/assets' }))
+      const server = createAdaptorServer(app)
+      await expect(request(server).get('/static/plain.txt')).rejects.toThrow()
     })
   })
 })
