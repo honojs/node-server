@@ -349,12 +349,16 @@ describe('Serve Static Middleware', () => {
       chmodSync(testFile, originalMode)
     })
 
-    it('Should handle read permission errors gracefully', async () => {
-      const app = new Hono()
-      app.use('/static/*', serveStatic({ root: './test/assets' }))
-      const server = createAdaptorServer(app)
-      await expect(request(server).get('/static/plain.txt')).rejects.toThrow()
-    })
+    // Skip on Windows as chmod doesn't work for file permissions
+    ;(process.platform === 'win32' ? it.skip : it)(
+      'Should handle read permission errors gracefully',
+      async () => {
+        const app = new Hono()
+        app.use('/static/*', serveStatic({ root: './test/assets' }))
+        const server = createAdaptorServer(app)
+        await expect(request(server).get('/static/plain.txt')).rejects.toThrow()
+      }
+    )
   })
 })
 
