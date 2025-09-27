@@ -78,14 +78,15 @@ describe('buildOutgoingHttpHeaders', () => {
 })
 
 describe('writeFromReadableStream', () => {
-  it('should handle client disconnection gracefully without canceling stream', async () => {
+  it('should handle client disconnection', async () => {
     let enqueueCalled = false
     let cancelCalled = false
+    let enqueueTimeout: NodeJS.Timeout | undefined
 
     // Create test ReadableStream
     const stream = new ReadableStream({
       start(controller) {
-        setTimeout(() => {
+        enqueueTimeout = setTimeout(() => {
           try {
             controller.enqueue(new TextEncoder().encode('test'))
             enqueueCalled = true
@@ -97,6 +98,7 @@ describe('writeFromReadableStream', () => {
       },
       cancel() {
         cancelCalled = true
+        clearTimeout(enqueueTimeout)
       },
     })
 
@@ -110,8 +112,8 @@ describe('writeFromReadableStream', () => {
 
     await writeFromReadableStream(stream, writable)
 
-    expect(enqueueCalled).toBe(true) // enqueue should succeed
-    expect(cancelCalled).toBe(false) // cancel should not be called
+    expect(enqueueCalled).toBe(false) // enqueue should not be called
+    expect(cancelCalled).toBe(true) // cancel should be called
   })
 })
 

@@ -12,15 +12,17 @@ export function writeFromReadableStreamDefaultReader(
   writable: Writable,
   currentReadPromise?: Promise<ReadableStreamReadResult<Uint8Array>> | undefined
 ) {
-  const handleError = () => {
-    // ignore the error
+  const cancel = (error?: unknown) => {
+    reader.cancel(error).catch(() => {})
   }
 
-  writable.on('error', handleError)
+  writable.on('close', cancel)
+  writable.on('error', cancel)
   ;(currentReadPromise ?? reader.read()).then(flow, handleStreamError)
 
   return reader.closed.finally(() => {
-    writable.off('error', handleError)
+    writable.off('close', cancel)
+    writable.off('error', cancel)
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
