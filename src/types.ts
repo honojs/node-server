@@ -71,6 +71,7 @@ export type Options = {
   fetch: FetchCallback
   overrideGlobalObjects?: boolean
   autoCleanupIncoming?: boolean
+  requestsPerForcedGC?: number
   port?: number
   hostname?: string
 } & ServerOptions
