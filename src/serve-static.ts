@@ -105,7 +105,6 @@ export const serveStatic = <E extends Env = any>(
       await options.onNotFound?.(path, c)
       return next()
     }
-    await options.onFound?.(path, c)
 
     const mimeType = getMimeType(path)
     c.header('Content-Type', mimeType || 'application/octet-stream')
@@ -133,37 +132,38 @@ export const serveStatic = <E extends Env = any>(
       }
     }
 
+    let result
     const size = stats.size
+    const range = c.req.header('range') || ''
 
     if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
       c.header('Content-Length', size.toString())
       c.status(200)
-      return c.body(null)
-    }
-
-    const range = c.req.header('range') || ''
-
-    if (!range) {
+      result = c.body(null)
+    } else if (!range) {
       c.header('Content-Length', size.toString())
-      return c.body(createStreamBody(createReadStream(path)), 200)
+      result = c.body(createStreamBody(createReadStream(path)), 200)
+    } else {
+      c.header('Accept-Ranges', 'bytes')
+      c.header('Date', stats.birthtime.toUTCString())
+
+      const parts = range.replace(/bytes=/, '').split('-', 2)
+      const start = parseInt(parts[0], 10) || 0
+      let end = parseInt(parts[1], 10) || size - 1
+      if (size < end - start + 1) {
+        end = size - 1
+      }
+
+      const chunksize = end - start + 1
+      const stream = createReadStream(path, { start, end })
+
+      c.header('Content-Length', chunksize.toString())
+      c.header('Content-Range', `bytes ${start}-${end}/${stats.size}`)
+
+      result = c.body(createStreamBody(stream), 206)
     }
 
-    c.header('Accept-Ranges', 'bytes')
-    c.header('Date', stats.birthtime.toUTCString())
-
-    const parts = range.replace(/bytes=/, '').split('-', 2)
-    const start = parseInt(parts[0], 10) || 0
-    let end = parseInt(parts[1], 10) || size - 1
-    if (size < end - start + 1) {
-      end = size - 1
-    }
-
-    const chunksize = end - start + 1
-    const stream = createReadStream(path, { start, end })
-
-    c.header('Content-Length', chunksize.toString())
-    c.header('Content-Range', `bytes ${start}-${end}/${stats.size}`)
-
-    return c.body(createStreamBody(stream), 206)
+    await options.onFound?.(path, c)
+    return result
   }
 }
