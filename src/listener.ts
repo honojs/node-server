@@ -203,9 +203,14 @@ export const getRequestListener = (
     errorHandler?: CustomErrorHandler
     overrideGlobalObjects?: boolean
     autoCleanupIncoming?: boolean
+    requestsPerForcedGC?: number
   } = {}
 ) => {
   const autoCleanupIncoming = options.autoCleanupIncoming ?? true
+  const requestsPerForcedGC = options.requestsPerForcedGC ?? 0
+  let requestCount = 0
+  const gc = global.gc as () => void
+
   if (options.overrideGlobalObjects !== false && global.Request !== LightweightRequest) {
     Object.defineProperty(global, 'Request', {
       value: LightweightRequest,
@@ -213,6 +218,9 @@ export const getRequestListener = (
     Object.defineProperty(global, 'Response', {
       value: LightweightResponse,
     })
+  }
+  if (requestsPerForcedGC && !gc) {
+    throw new Error('`global.gc` is not available. Please run node with `--expose-gc` flag.')
   }
 
   return async (
@@ -280,6 +288,14 @@ export const getRequestListener = (
               })
             }
           })
+        }
+
+        if (requestsPerForcedGC) {
+          requestCount++
+          if (requestCount >= requestsPerForcedGC) {
+            gc()
+            requestCount = 0
+          }
         }
       })
 
