@@ -18,6 +18,9 @@ describe('Serve Static Middleware', () => {
       root: './test/assets',
       onFound: (path, c) => {
         c.header('X-Custom', `Found the file at ${path}`)
+        if (c.req.query('type')) {
+          c.header('Content-Type', c.req.query('type'))
+        }
       },
     })
   )
@@ -180,6 +183,14 @@ describe('Serve Static Middleware', () => {
     expect(notFoundMessage).toMatch(
       /not-found[\/\\]on-not-found[\/\\]foo\.txt is not found, request to \/on-not-found\/foo\.txt$/
     )
+  })
+
+  it('Should handle the `onFound` option', async () => {
+    const res = await request(server).get(
+      '/static/data.json?type=application/json;%20charset=utf-8'
+    )
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/json; charset=utf-8')
   })
 
   it('Should handle double dots in URL', async () => {
