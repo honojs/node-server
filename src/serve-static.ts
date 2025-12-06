@@ -1,7 +1,7 @@
 import type { Context, Env, MiddlewareHandler } from 'hono'
 import { getMimeType } from 'hono/utils/mime'
 import type { ReadStream, Stats } from 'node:fs'
-import { createReadStream, lstatSync, existsSync } from 'node:fs'
+import { createReadStream, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 export type ServeStaticOptions<E extends Env = Env> = {
@@ -50,7 +50,7 @@ const createStreamBody = (stream: ReadStream) => {
 const getStats = (path: string) => {
   let stats: Stats | undefined
   try {
-    stats = lstatSync(path)
+    stats = statSync(path)
   } catch {}
   return stats
 }
