@@ -198,7 +198,8 @@ describe('Serve Static Middleware', () => {
     expect(res.status).toBe(404)
   })
 
-  it('Should follow symlinks', async () => {
+  // Skip on Windows as symlink behavior is different
+  ;(process.platform === 'win32' ? it.skip : it)('Should follow symlinks', async () => {
     const symlinkPath = path.join(__dirname, 'assets', 'static', 'symlink.html')
     const symlinkTarget = path.join(__dirname, 'assets', 'static', 'index.html')
     try {
