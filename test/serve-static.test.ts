@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import request from 'supertest'
-import { chmodSync, statSync } from 'node:fs'
+import { chmodSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import path from 'node:path'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
@@ -196,6 +196,22 @@ describe('Serve Static Middleware', () => {
   it('Should handle double dots in URL', async () => {
     const res = await request(server).get('/static/../secret.txt')
     expect(res.status).toBe(404)
+  })
+
+  it('Should follow symlinks', async () => {
+    const symlinkPath = path.join(__dirname, 'assets', 'static', 'symlink.html')
+    const symlinkTarget = path.join(__dirname, 'assets', 'static', 'index.html')
+    try {
+      // force: true so it doesn't throw if the symlink doesn't exist
+      rmSync(symlinkPath, { force: true })
+      symlinkSync(symlinkTarget, symlinkPath)
+
+      const res = await request(server).get('/static/symlink.html')
+      expect(res.status).toBe(200)
+      expect(res.text).toBe('<h1>Hello Hono</h1>')
+    } finally {
+      rmSync(symlinkPath, { force: true })
+    }
   })
 
   it('Should handle URIError thrown while decoding URI component', async () => {
