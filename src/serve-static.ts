@@ -1,7 +1,7 @@
 import type { Context, Env, MiddlewareHandler } from 'hono'
 import { getMimeType } from 'hono/utils/mime'
-import { ReadStream, Stats, realpathSync } from 'node:fs'
-import { createReadStream, lstatSync, existsSync } from 'node:fs'
+import type { ReadStream, Stats } from 'node:fs'
+import { createReadStream, lstatSync, existsSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 
 export type ServeStaticOptions<E extends Env = Env> = {
