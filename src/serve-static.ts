@@ -92,11 +92,24 @@ export const serveStatic = <E extends Env = any>(
       root,
       !optionPath && options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename
     )
+
+    try {
+      path = realpathSync(path)
+    } catch {
+      await options.onNotFound?.(path, c)
+      return next()
+    }
+
     let stats = getStats(path)
 
     if (stats && stats.isDirectory()) {
       const indexFile = options.index ?? 'index.html'
-      path = realpathSync(join(path, indexFile))
+      try {
+        path = realpathSync(join(path, indexFile))
+      } catch {
+        await options.onNotFound?.(path, c)
+        return next()
+      }
       stats = getStats(path)
     }
 
