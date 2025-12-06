@@ -1,6 +1,6 @@
 import type { Context, Env, MiddlewareHandler } from 'hono'
 import { getMimeType } from 'hono/utils/mime'
-import type { ReadStream, Stats } from 'node:fs'
+import { ReadStream, Stats, realpathSync } from 'node:fs'
 import { createReadStream, lstatSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -92,12 +92,11 @@ export const serveStatic = <E extends Env = any>(
       root,
       !optionPath && options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename
     )
-
     let stats = getStats(path)
 
     if (stats && stats.isDirectory()) {
       const indexFile = options.index ?? 'index.html'
-      path = join(path, indexFile)
+      path = realpathSync(join(path, indexFile))
       stats = getStats(path)
     }
 
