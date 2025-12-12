@@ -326,6 +326,23 @@ app.get('/', (c) => {
 serve(app)
 ```
 
+## Listen to a UNIX domain socket
+
+You can configure the HTTP server to listen to a UNIX domain socket instead of a TCP port.
+
+```ts
+import { createAdaptorServer } from '@hono/node-server'
+
+// ...
+
+const socketPath ='/tmp/example.sock'
+
+const server = createAdaptorServer(app)
+server.listen(socketPath, () => {
+  console.log(`Listening on ${socketPath}`)
+})
+```
+
 ## Related projects
 
 - Hono - <https://hono.dev>
