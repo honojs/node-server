@@ -3,6 +3,8 @@ import { getMimeType } from 'hono/utils/mime'
 import type { ReadStream, Stats } from 'node:fs'
 import { createReadStream, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { versions } from 'node:process'
+import { Readable } from 'node:stream'
 
 export type ServeStaticOptions<E extends Env = Env> = {
   /**
@@ -26,7 +28,18 @@ const ENCODINGS = {
 } as const
 const ENCODINGS_ORDERED_KEYS = Object.keys(ENCODINGS) as (keyof typeof ENCODINGS)[]
 
+// In Node.js versions that do not have the following PR applied, using Readable.toWeb may cause unexpected exceptions.
+// https://github.com/nodejs/node/pull/54206
+const pr54206Applied = () => {
+  const [major, minor] = versions.node.split('.').map((component) => parseInt(component))
+  return major >= 23 || (major === 22 && minor >= 7) || (major === 20 && minor >= 18)
+}
+const useReadableToWeb = pr54206Applied()
+
 const createStreamBody = (stream: ReadStream) => {
+  if (useReadableToWeb) {
+    return Readable.toWeb(stream) as ReadableStream
+  }
   const body = new ReadableStream({
     start(controller) {
       stream.on('data', (chunk) => {
