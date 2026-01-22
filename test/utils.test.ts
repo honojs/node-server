@@ -3,7 +3,7 @@ import {
   buildOutgoingHttpHeaders,
   writeFromReadableStream,
   readWithoutBlocking,
-  writeFromReadableStreamDefaultReader
+  writeFromReadableStreamDefaultReader,
 } from '../src/utils'
 
 describe('buildOutgoingHttpHeaders', () => {
@@ -123,7 +123,8 @@ describe('writeFromReadableStream - issue #233', () => {
     let cancelCallCount = 0
 
     const mockReader = {
-      read: jest.fn()
+      read: jest
+        .fn()
         .mockResolvedValueOnce({ done: false, value: new Uint8Array([1, 2, 3]) })
         .mockImplementation(() => new Promise(() => {})), // Never resolves - simulates waiting for data
       cancel: jest.fn().mockImplementation(() => {
