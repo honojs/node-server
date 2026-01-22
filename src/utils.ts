@@ -12,7 +12,13 @@ export function writeFromReadableStreamDefaultReader(
   writable: Writable,
   currentReadPromise?: Promise<ReadableStreamReadResult<Uint8Array>> | undefined
 ) {
+  let cancelled = false
+
   const cancel = (error?: unknown) => {
+    if (cancelled) {
+      return
+    }
+    cancelled = true
     reader.cancel(error).catch(() => {})
   }
 

@@ -3,6 +3,7 @@ import {
   buildOutgoingHttpHeaders,
   writeFromReadableStream,
   readWithoutBlocking,
+  writeFromReadableStreamDefaultReader
 } from '../src/utils'
 
 describe('buildOutgoingHttpHeaders', () => {
@@ -114,6 +115,45 @@ describe('writeFromReadableStream', () => {
 
     expect(enqueueCalled).toBe(false) // enqueue should not be called
     expect(cancelCalled).toBe(true) // cancel should be called
+  })
+})
+
+describe('writeFromReadableStream - issue #233', () => {
+  it('should not call reader.cancel() multiple times', async () => {
+    let cancelCallCount = 0
+
+    const mockReader = {
+      read: jest.fn()
+        .mockResolvedValueOnce({ done: false, value: new Uint8Array([1, 2, 3]) })
+        .mockImplementation(() => new Promise(() => {})), // Never resolves - simulates waiting for data
+      cancel: jest.fn().mockImplementation(() => {
+        cancelCallCount++
+        return Promise.resolve()
+      }),
+      closed: new Promise(() => {}), // Never resolves
+      releaseLock: jest.fn(),
+    } as unknown as ReadableStreamDefaultReader<Uint8Array>
+
+    const writable = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+    })
+
+    writeFromReadableStreamDefaultReader(mockReader, writable)
+
+    // Wait for first chunk to be processed
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Emit both close and error events (simulating client disconnect)
+    writable.emit('close')
+    writable.emit('error', new Error('connection reset'))
+    writable.destroy()
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // cancel should only be called once, not multiple times
+    expect(cancelCallCount).toBe(1)
   })
 })
 
