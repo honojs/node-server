@@ -4,6 +4,9 @@
   "description": "Node.js Adapter for Hono",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "hono-node-server": "./dist/serve.js"
+  },
   "files": [
     "dist"
   ],
