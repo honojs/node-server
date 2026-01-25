@@ -335,7 +335,7 @@ import { createAdaptorServer } from '@hono/node-server'
 
 // ...
 
-const socketPath ='/tmp/example.sock'
+const socketPath = '/tmp/example.sock'
 
 const server = createAdaptorServer(app)
 server.listen(socketPath, () => {
@@ -348,9 +348,10 @@ server.listen(socketPath, () => {
 - Hono - <https://hono.dev>
 - Hono GitHub repository - <https://github.com/honojs/hono>
 
-## Author
+## Authors
 
-Yusuke Wada <https://github.com/yusukebe>
+- Yusuke Wada <https://github.com/yusukebe>
+- Taku Amano <https://github.com/usualoma>
 
 ## License
 
