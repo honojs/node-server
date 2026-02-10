@@ -123,6 +123,16 @@ const urlKey = Symbol('urlKey')
 const headersKey = Symbol('headersKey')
 export const abortControllerKey = Symbol('abortControllerKey')
 export const getAbortController = Symbol('getAbortController')
+const bodyBufferKey = Symbol('bodyBuffer')
+
+const readBodyDirect = (incoming: IncomingMessage | Http2ServerRequest): Promise<Buffer> => {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    incoming.on('data', (chunk: Buffer) => chunks.push(chunk))
+    incoming.on('end', () => resolve(chunks.length === 1 ? chunks[0] : Buffer.concat(chunks)))
+    incoming.on('error', reject)
+  })
+}
 
 const requestPrototype: Record<string | symbol, any> = {
   get method() {
@@ -144,7 +154,28 @@ const requestPrototype: Record<string | symbol, any> = {
 
   [getRequestCache]() {
     this[abortControllerKey] ||= new AbortController()
-    return (this[requestCache] ||= newRequestFromIncoming(
+    if (this[requestCache]) {
+      return this[requestCache]
+    }
+    // If body was already read directly, use cached buffer instead of re-reading stream
+    const incoming = this[incomingKey]
+    if (this[bodyBufferKey] && !(incoming.method === 'GET' || incoming.method === 'HEAD')) {
+      const buf = this[bodyBufferKey] as Buffer
+      const init = {
+        method: incoming.method,
+        headers: this.headers,
+        signal: this[abortControllerKey].signal,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(buf))
+            controller.close()
+          },
+        }),
+      } as RequestInit
+      ;(init as any).duplex = 'half'
+      return (this[requestCache] = new Request(this[urlKey], init))
+    }
+    return (this[requestCache] = newRequestFromIncoming(
       this.method,
       this[urlKey],
       this.headers,
@@ -173,12 +204,69 @@ const requestPrototype: Record<string | symbol, any> = {
     },
   })
 })
-;['arrayBuffer', 'blob', 'clone', 'formData', 'json', 'text'].forEach((k) => {
+;['clone', 'formData'].forEach((k) => {
   Object.defineProperty(requestPrototype, k, {
     value: function () {
       return this[getRequestCache]()[k]()
     },
   })
+})
+// Direct body reading: bypass getRequestCache() → new AbortController() → newHeadersFromIncoming()
+// → new Request(url, init) → Readable.toWeb() chain. Read directly from Node.js IncomingMessage.
+Object.defineProperty(requestPrototype, 'text', {
+  value: function (): Promise<string> {
+    if (this[requestCache]) {
+      return this[requestCache].text()
+    }
+    const incoming = this[incomingKey] as IncomingMessage | Http2ServerRequest
+    if (incoming.method === 'GET' || incoming.method === 'HEAD') {
+      return Promise.resolve('')
+    }
+    if ('rawBody' in incoming && (incoming as any).rawBody instanceof Buffer) {
+      return Promise.resolve((incoming as any).rawBody.toString())
+    }
+    return readBodyDirect(incoming).then((buf) => {
+      this[bodyBufferKey] = buf
+      return buf.toString()
+    })
+  },
+})
+Object.defineProperty(requestPrototype, 'json', {
+  value: function (): Promise<any> {
+    if (this[requestCache]) {
+      return this[requestCache].json()
+    }
+    return this.text().then(JSON.parse)
+  },
+})
+Object.defineProperty(requestPrototype, 'arrayBuffer', {
+  value: function (): Promise<ArrayBuffer> {
+    if (this[requestCache]) {
+      return this[requestCache].arrayBuffer()
+    }
+    const incoming = this[incomingKey] as IncomingMessage | Http2ServerRequest
+    if (incoming.method === 'GET' || incoming.method === 'HEAD') {
+      return Promise.resolve(new ArrayBuffer(0))
+    }
+    if ('rawBody' in incoming && (incoming as any).rawBody instanceof Buffer) {
+      const raw = (incoming as any).rawBody as Buffer
+      return Promise.resolve(
+        raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer
+      )
+    }
+    return readBodyDirect(incoming).then((buf) => {
+      this[bodyBufferKey] = buf
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+    })
+  },
+})
+Object.defineProperty(requestPrototype, 'blob', {
+  value: function (): Promise<Blob> {
+    if (this[requestCache]) {
+      return this[requestCache].blob()
+    }
+    return this.arrayBuffer().then((buf: ArrayBuffer) => new Blob([buf]))
+  },
 })
 Object.setPrototypeOf(requestPrototype, Request.prototype)
 
@@ -228,15 +316,27 @@ export const newRequest = (
     scheme = incoming.socket && (incoming.socket as TLSSocket).encrypted ? 'https' : 'http'
   }
 
-  const url = new URL(`${scheme}://${host}${incomingUrl}`)
-
-  // check by length for performance.
-  // if suspicious, check by host. host header sometimes contains port.
-  if (url.hostname.length !== host.length && url.hostname !== host.replace(/:\d+$/, '')) {
-    throw new RequestError('Invalid host header')
+  // Fast path: avoid new URL() allocation for common requests.
+  // Fall back to new URL() only when path normalization is needed (e.g. `..` sequences).
+  if (incomingUrl.indexOf('..') === -1) {
+    // Validate host header doesn't contain URL-breaking characters
+    for (let i = 0; i < host.length; i++) {
+      const c = host.charCodeAt(i)
+      if (c < 0x21 || c === 0x2f || c === 0x23 || c === 0x3f || c === 0x40 || c === 0x5c) {
+        // reject control chars, space, / # ? @ \
+        throw new RequestError('Invalid host header')
+      }
+    }
+    req[urlKey] = `${scheme}://${host}${incomingUrl}`
+  } else {
+    const url = new URL(`${scheme}://${host}${incomingUrl}`)
+    // check by length for performance.
+    // if suspicious, check by host. host header sometimes contains port.
+    if (url.hostname.length !== host.length && url.hostname !== host.replace(/:\d+$/, '')) {
+      throw new RequestError('Invalid host header')
+    }
+    req[urlKey] = url.href
   }
-
-  req[urlKey] = url.href
 
   return req
 }
