@@ -2,54 +2,79 @@
   "name": "@hono/node-server",
   "version": "1.19.9",
   "description": "Node.js Adapter for Hono",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/index.cjs",
+  "types": "dist/index.d.cts",
   "files": [
     "dist"
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.mjs"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./serve-static": {
-      "types": "./dist/serve-static.d.ts",
-      "require": "./dist/serve-static.js",
-      "import": "./dist/serve-static.mjs"
+      "import": {
+        "types": "./dist/serve-static.d.mts",
+        "default": "./dist/serve-static.mjs"
+      },
+      "require": {
+        "types": "./dist/serve-static.d.cts",
+        "default": "./dist/serve-static.cjs"
+      }
     },
     "./vercel": {
-      "types": "./dist/vercel.d.ts",
-      "require": "./dist/vercel.js",
-      "import": "./dist/vercel.mjs"
+      "import": {
+        "types": "./dist/vercel.d.mts",
+        "default": "./dist/vercel.mjs"
+      },
+      "require": {
+        "types": "./dist/vercel.d.cts",
+        "default": "./dist/vercel.cjs"
+      }
     },
     "./utils/*": {
-      "types": "./dist/utils/*.d.ts",
-      "require": "./dist/utils/*.js",
-      "import": "./dist/utils/*.mjs"
+      "import": {
+        "types": "./dist/utils/*.d.mts",
+        "default": "./dist/utils/*.mjs"
+      },
+      "require": {
+        "types": "./dist/utils/*.d.cts",
+        "default": "./dist/utils/*.cjs"
+      }
     },
     "./conninfo": {
-      "types": "./dist/conninfo.d.ts",
-      "require": "./dist/conninfo.js",
-      "import": "./dist/conninfo.mjs"
+      "import": {
+        "types": "./dist/conninfo.d.mts",
+        "default": "./dist/conninfo.mjs"
+      },
+      "require": {
+        "types": "./dist/conninfo.d.cts",
+        "default": "./dist/conninfo.cjs"
+      }
     }
   },
   "typesVersions": {
     "*": {
       ".": [
-        "./dist/index.d.ts"
+        "./dist/index.d.cts"
       ],
       "serve-static": [
-        "./dist/serve-static.d.ts"
+        "./dist/serve-static.d.cts"
       ],
       "vercel": [
-        "./dist/vercel.d.ts"
+        "./dist/vercel.d.cts"
       ],
       "utils/*": [
-        "./dist/utils/*.d.ts"
+        "./dist/utils/*.d.cts"
       ],
       "conninfo": [
-        "./dist/conninfo.d.ts"
+        "./dist/conninfo.d.cts"
       ]
     }
   },
