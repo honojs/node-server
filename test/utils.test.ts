@@ -187,8 +187,7 @@ describe('readWithoutBlocking', () => {
     const reader = response.body!.getReader()
     const readPromise = reader.read()
 
-    const result = await readWithoutBlocking(readPromise)
-    expect(result).toBeUndefined()
+    await expect(readPromise).rejects.toThrow('test')
   })
 
   it('should return undefined if stream is errored', async () => {
