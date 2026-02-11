@@ -177,7 +177,22 @@ describe('readWithoutBlocking', () => {
     expect(result3).toEqual({ done: true, value: undefined })
   })
 
-  it('should return undefined if stream is closed', async () => {
+  it('should return undefined value if stream is closed in start', async () => {
+    const body = new ReadableStream({
+      async start(controller) {
+        controller.close()
+      },
+    })
+
+    const response = new Response(body)
+    const reader = response.body!.getReader()
+    const readPromise = reader.read()
+
+    const result = await readWithoutBlocking(readPromise)
+    expect(result).toStrictEqual({ done: true, value: undefined })
+  })
+
+  it('should return undefined if stream is errored in start', async () => {
     const body = new ReadableStream({
       async start() {
         throw new Error('test')
@@ -187,7 +202,7 @@ describe('readWithoutBlocking', () => {
     const reader = response.body!.getReader()
     const readPromise = reader.read()
 
-    await expect(readPromise).rejects.toThrow('test')
+    await expect(readWithoutBlocking(readPromise)).rejects.toThrow('test')
   })
 
   it('should return undefined if stream is errored', async () => {
@@ -200,7 +215,6 @@ describe('readWithoutBlocking', () => {
     const reader = response.body!.getReader()
     const readPromise = reader.read()
 
-    const result = await readWithoutBlocking(readPromise).catch(() => undefined)
-    expect(result).toBeUndefined()
+    await expect(readWithoutBlocking(readPromise)).rejects.toThrow('test')
   })
 })
