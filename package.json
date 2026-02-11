@@ -55,8 +55,8 @@
   },
   "scripts": {
     "test": "node --expose-gc node_modules/jest/bin/jest.js",
-    "build": "tsup --external hono",
-    "watch": "tsup --watch",
+    "build": "tsdown --external hono",
+    "watch": "tsdown --watch",
     "postbuild": "publint",
     "prerelease": "bun run build && bun run test",
     "release": "np",
@@ -93,7 +93,7 @@
     "publint": "^0.1.16",
     "supertest": "^6.3.3",
     "ts-jest": "^29.1.1",
-    "tsup": "^7.2.0",
+    "tsdown": "^0.20.3",
     "typescript": "^5.3.2"
   },
   "peerDependencies": {
