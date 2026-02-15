@@ -69,16 +69,22 @@ export const buildOutgoingHttpHeaders = (
     headers = new Headers(headers ?? undefined)
   }
 
-  const cookies = []
-  for (const [k, v] of headers) {
-    if (k === 'set-cookie') {
-      cookies.push(v)
-    } else {
+  if (headers.has('set-cookie')) {
+    const cookies = []
+    for (const [k, v] of headers) {
+      if (k === 'set-cookie') {
+        cookies.push(v)
+      } else {
+        res[k] = v
+      }
+    }
+    if (cookies.length > 0) {
+      res['set-cookie'] = cookies
+    }
+  } else {
+    for (const [k, v] of headers) {
       res[k] = v
     }
-  }
-  if (cookies.length > 0) {
-    res['set-cookie'] = cookies
   }
   res['content-type'] ??= 'text/plain; charset=UTF-8'
 
