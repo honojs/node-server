@@ -3,6 +3,7 @@ import type { ServerHttp2Stream } from 'node:http2'
 import { Http2ServerRequest } from 'node:http2'
 import { Socket } from 'node:net'
 import { Duplex } from 'node:stream'
+import type { TLSSocket } from 'node:tls'
 import {
   newRequest,
   Request as LightweightRequest,
@@ -278,6 +279,119 @@ describe('Request', () => {
             )
           )
         }).toThrow(RequestError)
+      })
+    })
+
+    describe('x-forwarded-proto header', () => {
+      it('should use https scheme when x-forwarded-proto is https', async () => {
+        const req = newRequest(
+          // @ts-expect-error x-forwarded-proto is not in IncomingHttpHeaders
+          {
+            headers: {
+              host: 'localhost',
+              'x-forwarded-proto': 'https',
+            },
+            url: '/foo.txt',
+          }
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('https://localhost/foo.txt')
+      })
+
+      it('should use http scheme when x-forwarded-proto is http', async () => {
+        const req = newRequest(
+          // @ts-expect-error x-forwarded-proto is not in IncomingHttpHeaders
+          {
+            headers: {
+              host: 'localhost',
+              'x-forwarded-proto': 'http',
+            },
+            url: '/foo.txt',
+          }
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('http://localhost/foo.txt')
+      })
+
+      it('should use first value when x-forwarded-proto has multiple values', async () => {
+        const req = newRequest(
+          // @ts-expect-error x-forwarded-proto is not in IncomingHttpHeaders
+          {
+            headers: {
+              host: 'localhost',
+              'x-forwarded-proto': 'https,http',
+            },
+            url: '/foo.txt',
+          }
+        )
+        expect(req).toBeInstanceOf(global.Request)
+        expect(req.url).toBe('https://localhost/foo.txt')
+      })
+
+      it('should handle x-forwarded-proto with spaces around values', async () => {
+        const req = newRequest(
+          // @ts-expect-error x-forwarded-proto is not in IncomingHttpHeaders
+          {
+            headers: {
+              host: 'localhost',
+              'x-forwarded-proto': ' https , http ',
+            },
+            url: '/foo.txt',
+          }
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('https://localhost/foo.txt')
+      })
+
+      it('should handle array of x-forwarded-proto values', async () => {
+        const req = newRequest(
+          // @ts-expect-error x-forwarded-proto is not in IncomingHttpHeaders
+          {
+            headers: {
+              host: 'localhost',
+              'x-forwarded-proto': ['https', 'http'],
+            },
+            url: '/foo.txt',
+          }
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('https://localhost/foo.txt')
+      })
+
+      it('should fallback to socket encryption when x-forwarded-proto is invalid', async () => {
+        const socket = new Socket() as TLSSocket
+        socket.encrypted = true
+        const req = newRequest(
+          // @ts-expect-error x-forwarded-proto is not in IncomingHttpHeaders
+          {
+            socket,
+            headers: {
+              host: 'localhost',
+              'x-forwarded-proto': 'invalid-protocol',
+            },
+            url: '/foo.txt',
+          }
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('https://localhost/foo.txt')
+      })
+
+      it('should prioritize encrypted socket over x-forwarded-proto header', async () => {
+        const socket = new Socket() as TLSSocket
+        socket.encrypted = true
+        const req = newRequest(
+          // @ts-expect-error x-forwarded-proto is not in IncomingHttpHeaders
+          {
+            socket,
+            headers: {
+              host: 'localhost',
+              'x-forwarded-proto': 'http', // This should be ignored
+            },
+            url: '/foo.txt',
+          }
+        )
+        expect(req).toBeInstanceOf(GlobalRequest)
+        expect(req.url).toBe('https://localhost/foo.txt') // Should be https despite header
       })
     })
   })
