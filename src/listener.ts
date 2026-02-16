@@ -22,6 +22,14 @@ import {
 import { X_ALREADY_SENT } from './utils/response/constants'
 import './globals'
 
+// Handle "ReadableStream is already closed" errors from undici (issue #233)
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'ERR_INVALID_STATE' && err.message.includes('ReadableStream')) {
+    return
+  }
+  throw err
+})
+
 const outgoingEnded = Symbol('outgoingEnded')
 type OutgoingHasOutgoingEnded = Http2ServerResponse & {
   [outgoingEnded]?: () => void
