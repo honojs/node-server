@@ -30,6 +30,8 @@ export type Http2Bindings = {
   outgoing: Http2ServerResponse
 }
 
+export type { UpgradeBindings } from './websocket'
+
 export type FetchCallback = (
   request: Request,
   env: HttpBindings | Http2Bindings
@@ -73,6 +75,7 @@ export type Options = {
   autoCleanupIncoming?: boolean
   port?: number
   hostname?: string
+  websocket?: boolean
 } & ServerOptions
 
 export type CustomErrorHandler = (err: unknown) => void | Response | Promise<void | Response>

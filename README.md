@@ -77,6 +77,32 @@ serve(app, (info) => {
 })
 ```
 
+## WebSocket
+
+You can upgrade WebSocket connections with `upgradeWebSocket` from `@hono/node-server`.
+To enable upgrade handling, pass `websocket: true` to `serve()` or `createAdaptorServer()` options.
+
+```ts
+import { serve, upgradeWebSocket } from '@hono/node-server'
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+app.get(
+  '/ws',
+  upgradeWebSocket(() => ({
+    onMessage(event, ws) {
+      ws.send(event.data)
+    },
+  }))
+)
+
+serve({
+  fetch: app.fetch,
+  websocket: true,
+})
+```
+
 For example, run it using `ts-node`. Then an HTTP server will be launched. The default port is `3000`.
 
 ```sh
@@ -135,6 +161,21 @@ If the application accepts connections from arbitrary clients, this cleanup must
 serve({
   fetch: app.fetch,
   autoCleanupIncoming: false,
+})
+```
+
+### `websocket`
+
+The default value is `false`. Set `true` when using `upgradeWebSocket`.
+
+```ts
+import { serve, upgradeWebSocket } from '@hono/node-server'
+
+// ...
+
+serve({
+  fetch: app.fetch,
+  websocket: true,
 })
 ```
 
