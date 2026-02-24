@@ -10,7 +10,7 @@ export const cacheKey = Symbol('cache')
 export type InternalCache = [
   number,
   string | ReadableStream,
-  Record<string, string> | Headers | OutgoingHttpHeaders,
+  Record<string, string> | Headers | OutgoingHttpHeaders | undefined,
 ]
 interface LightResponse {
   [responseCache]?: globalThis.Response
@@ -28,7 +28,7 @@ export class Response {
   }
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
-    let headers: HeadersInit
+    let headers: HeadersInit | undefined
     this.#body = body
     if (init instanceof Response) {
       const cachedGlobalResponse = (init as any)[responseCache]
@@ -52,8 +52,7 @@ export class Response {
       body instanceof Blob ||
       body instanceof Uint8Array
     ) {
-      headers ||= init?.headers || { 'content-type': 'text/plain; charset=UTF-8' }
-      ;(this as any)[cacheKey] = [init?.status || 200, body, headers]
+      ;(this as any)[cacheKey] = [init?.status || 200, body, headers || init?.headers]
     }
   }
 
@@ -61,7 +60,9 @@ export class Response {
     const cache = (this as LightResponse)[cacheKey] as InternalCache
     if (cache) {
       if (!(cache[2] instanceof Headers)) {
-        cache[2] = new Headers(cache[2] as HeadersInit)
+        cache[2] = new Headers(
+          (cache[2] || { 'content-type': 'text/plain; charset=UTF-8' }) as HeadersInit
+        )
       }
       return cache[2]
     }
