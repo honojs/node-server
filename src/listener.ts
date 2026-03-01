@@ -77,6 +77,10 @@ const responseViaCache = async (
   } else if (header instanceof Headers) {
     hasContentLength = header.has('content-length')
     header = buildOutgoingHttpHeaders(header)
+  } else if (Array.isArray(header)) {
+    const headerObj = new Headers(header)
+    hasContentLength = headerObj.has('content-length')
+    header = buildOutgoingHttpHeaders(headerObj)
   } else {
     for (const key in header) {
       if (key.length === 14 && key.toLowerCase() === 'content-length') {

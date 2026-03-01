@@ -10,7 +10,7 @@ export const cacheKey = Symbol('cache')
 export type InternalCache = [
   number,
   string | ReadableStream,
-  Record<string, string> | Headers | OutgoingHttpHeaders | undefined,
+  Record<string, string> | [string, string][] | Headers | OutgoingHttpHeaders | undefined,
 ]
 interface LightResponse {
   [responseCache]?: globalThis.Response
