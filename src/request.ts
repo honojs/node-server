@@ -398,7 +398,10 @@ export const newRequest = (
     }
 
     // if suspicious, check by host. host header sometimes contains port.
-    if (urlObj.hostname.length !== host.length && urlObj.hostname !== host.replace(/:\d+$/, '')) {
+    if (
+      urlObj.hostname.length !== host.length &&
+      urlObj.hostname !== (host.includes(':') ? host.replace(/:\d+$/, '') : host).toLowerCase()
+    ) {
       throw new RequestError('Invalid host header')
     }
     req[urlKey] = urlObj.href
