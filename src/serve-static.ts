@@ -68,6 +68,25 @@ const getStats = (path: string) => {
   return stats
 }
 
+type Decoder = (str: string) => string
+
+const tryDecode = (str: string, decoder: Decoder): string => {
+  try {
+    return decoder(str)
+  } catch {
+    // Decode only valid %xx sequences in chunks; keep undecodable parts as-is
+    return str.replace(/(?:%[0-9A-Fa-f]{2})+/g, (match) => {
+      try {
+        return decoder(match)
+      } catch {
+        return match
+      }
+    })
+  }
+}
+
+const tryDecodeURI = (str: string) => tryDecode(str, decodeURI)
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const serveStatic = <E extends Env = any>(
   options: ServeStaticOptions<E> = { root: '' }
@@ -91,7 +110,7 @@ export const serveStatic = <E extends Env = any>(
       filename = optionPath
     } else {
       try {
-        filename = decodeURIComponent(c.req.path)
+        filename = tryDecodeURI(c.req.path)
         if (/(?:^|[\/\\])\.\.(?:$|[\/\\])/.test(filename)) {
           throw new Error()
         }
