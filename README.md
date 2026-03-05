@@ -80,10 +80,11 @@ serve(app, (info) => {
 ## WebSocket
 
 You can upgrade WebSocket connections with `upgradeWebSocket` from `@hono/node-server`.
-To enable upgrade handling, pass `websocket: true` to `serve()` or `createAdaptorServer()` options.
+To enable this, install `ws` (and `@types/ws`) in your project, then create and provide a `WebSocketServer` as shown in the example below.
 
 ```ts
 import { serve, upgradeWebSocket } from '@hono/node-server'
+import { WebsocketServer } from 'ws'
 import { Hono } from 'hono'
 
 const app = new Hono()
@@ -97,9 +98,10 @@ app.get(
   }))
 )
 
+const wss = new WebSocketServer({ noServer: true }) // important to create with `noServer: true`
 serve({
   fetch: app.fetch,
-  websocket: true,
+  websocket: { server: wss },
 })
 ```
 
@@ -166,16 +168,18 @@ serve({
 
 ### `websocket`
 
-The default value is `false`. Set `true` when using `upgradeWebSocket`.
+provide a websocket server to enable websocket support.
 
 ```ts
 import { serve, upgradeWebSocket } from '@hono/node-server'
+import { WebsocketServer } from 'ws'
 
 // ...
+const wss = new WebSocketServer({ noServer: true })
 
 serve({
   fetch: app.fetch,
-  websocket: true,
+  websocket: { server: wss },
 })
 ```
 

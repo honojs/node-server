@@ -19,6 +19,7 @@ import type {
   createServer as createHttpsServer,
   ServerOptions as HttpsServerOptions,
 } from 'node:https'
+import type { WebSocketServer } from 'ws'
 
 export type HttpBindings = {
   incoming: IncomingMessage
@@ -29,8 +30,6 @@ export type Http2Bindings = {
   incoming: Http2ServerRequest
   outgoing: Http2ServerResponse
 }
-
-export type { UpgradeBindings } from './websocket'
 
 export type FetchCallback = (
   request: Request,
@@ -75,7 +74,9 @@ export type Options = {
   autoCleanupIncoming?: boolean
   port?: number
   hostname?: string
-  websocket?: boolean
+  websocket?: {
+    server: WebSocketServer
+  }
 } & ServerOptions
 
 export type CustomErrorHandler = (err: unknown) => void | Response | Promise<void | Response>

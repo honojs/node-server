@@ -15,8 +15,10 @@ export const createAdaptorServer = (options: Options): ServerType => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createServer: any = options.createServer || createServerHTTP
   const server: ServerType = createServer(options.serverOptions || {}, requestListener)
-  if (options.websocket) {
-    setupWebSocket(server, fetchCallback)
+  if (options.websocket && options.websocket.server) {
+    if (options.websocket.server.options.noServer !== true) 
+      throw new Error('WebSocket server must be created with { noServer: true } option')
+    setupWebSocket({ server, fetchCallback, wss: options.websocket.server })
   }
   return server
 }

@@ -97,9 +97,6 @@
     "tsup": "^7.2.0",
     "typescript": "^5.3.2"
   },
-  "dependencies": {
-    "ws": "^8.18.3"
-  },
   "peerDependencies": {
     "hono": "^4"
   },
