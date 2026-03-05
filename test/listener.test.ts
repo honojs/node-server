@@ -6,7 +6,7 @@ import { GlobalResponse, Response as LightweightResponse } from '../src/response
 
 describe('Invalid request', () => {
   describe('default error handler', () => {
-    const requestListener = getRequestListener(jest.fn())
+    const requestListener = getRequestListener(vi.fn())
     const server = createServer(requestListener)
 
     it('Should return server error for a request w/o host header', async () => {
@@ -21,7 +21,7 @@ describe('Invalid request', () => {
   })
 
   describe('custom error handler', () => {
-    const requestListener = getRequestListener(jest.fn(), {
+    const requestListener = getRequestListener(vi.fn(), {
       errorHandler: (e) => {
         if (e instanceof RequestError) {
           return new Response(e.message, { status: 400 })
@@ -82,10 +82,10 @@ describe('Invalid request', () => {
 })
 
 describe('Error handling - sync fetchCallback', () => {
-  const fetchCallback = jest.fn(() => {
+  const fetchCallback = vi.fn(() => {
     throw new Error('thrown error')
   })
-  const errorHandler = jest.fn()
+  const errorHandler = vi.fn()
 
   const requestListener = getRequestListener(fetchCallback, { errorHandler })
 
@@ -126,10 +126,10 @@ describe('Error handling - sync fetchCallback', () => {
 })
 
 describe('Error handling - async fetchCallback', () => {
-  const fetchCallback = jest.fn(async () => {
+  const fetchCallback = vi.fn(async () => {
     throw new Error('thrown error')
   })
-  const errorHandler = jest.fn()
+  const errorHandler = vi.fn()
 
   const requestListener = getRequestListener(fetchCallback, { errorHandler })
 
@@ -303,7 +303,7 @@ describe('Abort request', () => {
 })
 
 describe('overrideGlobalObjects', () => {
-  const fetchCallback = jest.fn()
+  const fetchCallback = vi.fn()
 
   beforeEach(() => {
     Object.defineProperty(global, 'Request', {
