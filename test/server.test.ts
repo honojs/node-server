@@ -242,6 +242,37 @@ describe('various response body types', () => {
         })
         return response
       })
+      app.get('/text-with-content-length-object', () => {
+        const response = new Response('Hello Hono!', {
+          headers: { 'content-type': 'text/plain', 'content-length': '00011' },
+        })
+        return response
+      })
+      app.get('/text-with-content-length-headers', () => {
+        const response = new Response('Hello Hono!', {
+          headers: new Headers({ 'content-type': 'text/plain', 'content-length': '00011' }),
+        })
+        return response
+      })
+      app.get('/text-with-content-length-array', () => {
+        const response = new Response('Hello Hono!', {
+          headers: [
+            ['content-type', 'text/plain'],
+            ['content-length', '00011'],
+          ],
+        })
+        return response
+      })
+      app.get('/text-with-set-cookie-array', () => {
+        const response = new Response('Hello Hono!', {
+          headers: [
+            ['content-type', 'text/plain'],
+            ['set-cookie', 'a=1'],
+            ['set-cookie', 'b=2'],
+          ],
+        })
+        return response
+      })
 
       app.use('/etag/*', etag())
       app.get('/etag/buffer', () => {
@@ -369,6 +400,38 @@ describe('various response body types', () => {
       expect(res.status).toBe(200)
       expect(res.headers['content-type']).toMatch('text/plain')
       expect(res.headers['content-length']).toMatch('11')
+      expect(res.text).toBe('Hello Hono!')
+    })
+
+    it('Should return 200 response - GET /text-with-content-length-object', async () => {
+      const res = await request(server).get('/text-with-content-length-object')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch('text/plain')
+      expect(res.headers['content-length']).toBe('00011')
+      expect(res.text).toBe('Hello Hono!')
+    })
+
+    it('Should return 200 response - GET /text-with-content-length-headers', async () => {
+      const res = await request(server).get('/text-with-content-length-headers')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch('text/plain')
+      expect(res.headers['content-length']).toBe('00011')
+      expect(res.text).toBe('Hello Hono!')
+    })
+
+    it('Should return 200 response - GET /text-with-content-length-array', async () => {
+      const res = await request(server).get('/text-with-content-length-array')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch('text/plain')
+      expect(res.headers['content-length']).toBe('00011')
+      expect(res.text).toBe('Hello Hono!')
+    })
+
+    it('Should return 200 response - GET /text-with-set-cookie-array', async () => {
+      const res = await request(server).get('/text-with-set-cookie-array')
+      expect(res.status).toBe(200)
+      expect(res.headers['content-type']).toMatch('text/plain')
+      expect(res.headers['set-cookie']).toEqual(['a=1', 'b=2'])
       expect(res.text).toBe('Hello Hono!')
     })
 

@@ -70,17 +70,35 @@ const responseViaCache = async (
 ): Promise<undefined | void> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let [status, body, header] = (res as any)[cacheKey] as InternalCache
-  if (header instanceof Headers) {
+
+  let hasContentLength = false
+  if (!header) {
+    header = { 'content-type': 'text/plain; charset=UTF-8' }
+  } else if (header instanceof Headers) {
+    hasContentLength = header.has('content-length')
     header = buildOutgoingHttpHeaders(header)
+  } else if (Array.isArray(header)) {
+    const headerObj = new Headers(header)
+    hasContentLength = headerObj.has('content-length')
+    header = buildOutgoingHttpHeaders(headerObj)
+  } else {
+    for (const key in header) {
+      if (key.length === 14 && key.toLowerCase() === 'content-length') {
+        hasContentLength = true
+        break
+      }
+    }
   }
 
   // in `responseViaCache`, if body is not stream, Transfer-Encoding is considered not chunked
-  if (typeof body === 'string') {
-    header['Content-Length'] = Buffer.byteLength(body)
-  } else if (body instanceof Uint8Array) {
-    header['Content-Length'] = body.byteLength
-  } else if (body instanceof Blob) {
-    header['Content-Length'] = body.size
+  if (!hasContentLength) {
+    if (typeof body === 'string') {
+      header['Content-Length'] = Buffer.byteLength(body)
+    } else if (body instanceof Uint8Array) {
+      header['Content-Length'] = body.byteLength
+    } else if (body instanceof Blob) {
+      header['Content-Length'] = body.size
+    }
   }
 
   outgoing.writeHead(status, header)
