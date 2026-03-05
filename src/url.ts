@@ -81,7 +81,7 @@ export const buildUrl = (scheme: string, host: string, incomingUrl: string) => {
       urlObj.hostname.length !== host.length &&
       urlObj.hostname !== (host.includes(':') ? host.replace(/:\d+$/, '') : host).toLowerCase()
     ) {
-      throw new Error('Invalid host header')
+      throw 'Invalid host header'
     }
     return urlObj.href
   } else if (incomingUrl.length === 0) {
@@ -89,7 +89,7 @@ export const buildUrl = (scheme: string, host: string, incomingUrl: string) => {
   } else {
     if (incomingUrl.charCodeAt(0) !== 0x2f) {
       // '/'
-      throw new Error('Invalid URL')
+      throw 'Invalid URL'
     }
 
     for (let i = 1, len = incomingUrl.length; i < len; i++) {

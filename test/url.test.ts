@@ -57,7 +57,7 @@ describe('buildUrl', () => {
     it('Should throw error for non-origin-form request-target', async () => {
       expect(() => {
         buildUrl('http', 'localhost', '*')
-      }).toThrow(Error)
+      }).toThrow('Invalid URL')
     })
   })
 })

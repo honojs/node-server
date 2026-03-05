@@ -320,7 +320,11 @@ export const newRequest = (
   try {
     req[urlKey] = buildUrl(scheme, host, incomingUrl)
   } catch (e) {
-    throw new RequestError('Invalid URL', { cause: e })
+    if (typeof e === 'string') {
+      throw new RequestError(e)
+    } else {
+      throw new RequestError('Invalid URL', { cause: e })
+    }
   }
 
   return req
