@@ -6,13 +6,13 @@ describe('buildUrl', () => {
     it('Should throw error for unmatched closing bracket in host', async () => {
       expect(() => {
         buildUrl('http', 'host]', '/foo.txt')
-      }).toThrow('Invalid URL')
+      }).toThrow(new TypeError('Invalid URL'))
     })
 
     it('Should throw error for unmatched opening bracket in host', async () => {
       expect(() => {
         buildUrl('http', '[host', '/foo.txt')
-      }).toThrow('Invalid URL')
+      }).toThrow(new TypeError('Invalid URL'))
     })
   })
 
@@ -58,13 +58,13 @@ describe('buildUrl', () => {
     it('Should throw a RequestError for non-origin-form request-target', async () => {
       expect(() => {
         buildUrl('http', 'localhost', '*')
-      }).toThrow(RequestError)
+      }).toThrow(new RequestError('Invalid URL'))
     })
 
     it('Should throw a RequestError for invalid host header', async () => {
       expect(() => {
         buildUrl('http', 'localhost/foo', '/bar')
-      }).toThrow(RequestError)
+      }).toThrow(new RequestError('Invalid host header'))
     })
   })
 })
