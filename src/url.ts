@@ -1,3 +1,5 @@
+import { RequestError } from './error'
+
 const isPathDelimiter = (charCode: number): boolean =>
   charCode === 0x2f || charCode === 0x3f || charCode === 0x23
 
@@ -81,7 +83,7 @@ export const buildUrl = (scheme: string, host: string, incomingUrl: string) => {
       urlObj.hostname.length !== host.length &&
       urlObj.hostname !== (host.includes(':') ? host.replace(/:\d+$/, '') : host).toLowerCase()
     ) {
-      throw 'Invalid host header'
+      throw new RequestError('Invalid host header')
     }
     return urlObj.href
   } else if (incomingUrl.length === 0) {
@@ -89,7 +91,7 @@ export const buildUrl = (scheme: string, host: string, incomingUrl: string) => {
   } else {
     if (incomingUrl.charCodeAt(0) !== 0x2f) {
       // '/'
-      throw 'Invalid URL'
+      throw new RequestError('Invalid URL')
     }
 
     for (let i = 1, len = incomingUrl.length; i < len; i++) {

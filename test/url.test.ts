@@ -1,3 +1,4 @@
+import { RequestError } from '../src/error'
 import { buildUrl } from '../src/url'
 
 describe('buildUrl', () => {
@@ -54,10 +55,16 @@ describe('buildUrl', () => {
       expect(buildUrl('http', host, url)).toBe(new URL(url, `http://${host}`).href)
     })
 
-    it('Should throw error for non-origin-form request-target', async () => {
+    it('Should throw a RequestError for non-origin-form request-target', async () => {
       expect(() => {
         buildUrl('http', 'localhost', '*')
-      }).toThrow('Invalid URL')
+      }).toThrow(RequestError)
+    })
+
+    it('Should throw a RequestError for invalid host header', async () => {
+      expect(() => {
+        buildUrl('http', 'localhost/foo', '/bar')
+      }).toThrow(RequestError)
     })
   })
 })

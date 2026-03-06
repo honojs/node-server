@@ -6,19 +6,10 @@ import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
 import type { ReadableStreamDefaultReader } from 'node:stream/web'
 import type { TLSSocket } from 'node:tls'
+import { RequestError } from './error'
 import { buildUrl } from './url'
 
-export class RequestError extends Error {
-  constructor(
-    message: string,
-    options?: {
-      cause?: unknown
-    }
-  ) {
-    super(message, options)
-    this.name = 'RequestError'
-  }
-}
+export { RequestError }
 
 export const toRequestError = (e: unknown): RequestError => {
   if (e instanceof RequestError) {
@@ -320,8 +311,8 @@ export const newRequest = (
   try {
     req[urlKey] = buildUrl(scheme, host, incomingUrl)
   } catch (e) {
-    if (typeof e === 'string') {
-      throw new RequestError(e)
+    if (e instanceof RequestError) {
+      throw e
     } else {
       throw new RequestError('Invalid URL', { cause: e })
     }
