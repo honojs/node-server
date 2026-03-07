@@ -6,18 +6,10 @@ import { Http2ServerRequest } from 'node:http2'
 import { Readable } from 'node:stream'
 import type { ReadableStreamDefaultReader } from 'node:stream/web'
 import type { TLSSocket } from 'node:tls'
+import { RequestError } from './error'
+import { buildUrl } from './url'
 
-export class RequestError extends Error {
-  constructor(
-    message: string,
-    options?: {
-      cause?: unknown
-    }
-  ) {
-    super(message, options)
-    this.name = 'RequestError'
-  }
-}
+export { RequestError }
 
 export const toRequestError = (e: unknown): RequestError => {
   if (e instanceof RequestError) {
@@ -316,26 +308,14 @@ export const newRequest = (
     scheme = incoming.socket && (incoming.socket as TLSSocket).encrypted ? 'https' : 'http'
   }
 
-  // Fast path: avoid new URL() allocation for common requests.
-  // Fall back to new URL() only when path normalization is needed (e.g. `..` sequences).
-  if (incomingUrl.indexOf('..') === -1) {
-    // Validate host header doesn't contain URL-breaking characters
-    for (let i = 0; i < host.length; i++) {
-      const c = host.charCodeAt(i)
-      if (c < 0x21 || c === 0x2f || c === 0x23 || c === 0x3f || c === 0x40 || c === 0x5c) {
-        // reject control chars, space, / # ? @ \
-        throw new RequestError('Invalid host header')
-      }
+  try {
+    req[urlKey] = buildUrl(scheme, host, incomingUrl)
+  } catch (e) {
+    if (e instanceof RequestError) {
+      throw e
+    } else {
+      throw new RequestError('Invalid URL', { cause: e })
     }
-    req[urlKey] = `${scheme}://${host}${incomingUrl}`
-  } else {
-    const url = new URL(`${scheme}://${host}${incomingUrl}`)
-    // check by length for performance.
-    // if suspicious, check by host. host header sometimes contains port.
-    if (url.hostname.length !== host.length && url.hostname !== host.replace(/:\d+$/, '')) {
-      throw new RequestError('Invalid host header')
-    }
-    req[urlKey] = url.href
   }
 
   return req

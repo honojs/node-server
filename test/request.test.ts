@@ -154,6 +154,17 @@ describe('Request', () => {
       }).toThrow(RequestError)
     })
 
+    it('Should throw error if host header port is invalid', async () => {
+      expect(() => {
+        newRequest({
+          headers: {
+            host: 'localhost:65536',
+          },
+          url: '/foo.txt',
+        } as IncomingMessage)
+      }).toThrow(RequestError)
+    })
+
     it('Should be created request body from `req.rawBody` if it exists', async () => {
       const rawBody = Buffer.from('foo')
       const socket = new Socket()
