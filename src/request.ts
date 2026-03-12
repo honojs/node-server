@@ -131,12 +131,12 @@ const bodyConsumedDirectlyKey = Symbol('bodyConsumedDirectly')
 const bodyLockReaderKey = Symbol('bodyLockReader')
 const abortReasonKey = Symbol('abortReason')
 
-const throwBodyUnusable = (): never => {
-  throw new TypeError('Body is unusable')
+const newBodyUnusableError = (): TypeError => {
+  return new TypeError('Body is unusable')
 }
 
 const rejectBodyUnusable = (): Promise<never> => {
-  return Promise.reject(throwBodyUnusable())
+  return Promise.reject(newBodyUnusableError())
 }
 
 const textDecoder = new TextDecoder()
@@ -145,7 +145,7 @@ const consumeBodyDirectOnce = (
   request: Record<string | symbol, any>
 ): Promise<never> | undefined => {
   if (request[bodyConsumedDirectlyKey]) {
-    return Promise.reject(throwBodyUnusable())
+    return rejectBodyUnusable()
   }
   request[bodyConsumedDirectlyKey] = true
   return undefined
@@ -488,7 +488,7 @@ const requestPrototype: Record<string | symbol, any> = {
     value: function () {
       if (this[bodyConsumedDirectlyKey]) {
         if (k === 'clone') {
-          throwBodyUnusable()
+          throw newBodyUnusableError()
         }
         return rejectBodyUnusable()
       }
