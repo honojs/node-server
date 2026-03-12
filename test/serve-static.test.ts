@@ -330,7 +330,7 @@ describe('Serve Static Middleware', () => {
     })
   })
 
-  describe('Security tests', () => {
+  describe('Path traversal security tests', () => {
     const app = new Hono()
     const server = createAdaptorServer(app)
     app.use('/static/*', serveStatic({ root: './test/assets' }))
@@ -358,6 +358,29 @@ describe('Serve Static Middleware', () => {
     it('Should accept filename with double dots', async () => {
       const res = await request(server).get('/static/foo..bar.txt')
       expect(res.status).toBe(200)
+    })
+  })
+
+  describe('Path mismatch security tests', () => {
+    const app = new Hono()
+    const server = createAdaptorServer(app)
+
+    app.use('/static/admin/*', async (c, next) => {
+      c.header('X-Authorized', 'true')
+      await next()
+    })
+
+    app.use('/static/*', serveStatic({ root: './test/assets' }))
+
+    it('Should not allow bypass via path mismatch between middleware and serveStatic', async () => {
+      const res = await request(server).get('/static/admin/secret.txt')
+      expect(res.headers['x-authorized']).toBe('true')
+      expect(res.text).toBe('secret')
+
+      const res2 = await request(server).get('/static/admin%2Fsecret.txt')
+      expect(res2.status).toBe(404)
+      expect(res2.headers['x-authorized']).toBeUndefined()
+      expect(res2.text).not.toBe('secret')
     })
   })
 

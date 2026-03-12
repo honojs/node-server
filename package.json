@@ -1,6 +1,6 @@
 {
   "name": "@hono/node-server",
-  "version": "1.19.9",
+  "version": "1.19.11",
   "description": "Node.js Adapter for Hono",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -77,7 +77,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=18.14.1"
+    "node": ">=20"
   },
   "devDependencies": {
     "@hono/eslint-config": "^1.0.1",
