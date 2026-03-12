@@ -367,7 +367,7 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
 
 const requestPrototype: Record<string | symbol, any> = {
   get method() {
-    return (this[methodKey] ||= normalizeIncomingMethod(this[incomingKey].method))
+    return this[methodKey]
   },
 
   get url() {
@@ -536,6 +536,7 @@ export const newRequest = (
 ) => {
   const req = Object.create(requestPrototype)
   req[incomingKey] = incoming
+  req[methodKey] = normalizeIncomingMethod(incoming.method)
 
   const incomingUrl = incoming.url || ''
 
