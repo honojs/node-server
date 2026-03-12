@@ -6,13 +6,13 @@ describe('buildUrl', () => {
     it('Should throw error for unmatched closing bracket in host', async () => {
       expect(() => {
         buildUrl('http', 'host]', '/foo.txt')
-      }).toThrow(new TypeError('Invalid URL'))
+      }).toThrow('Invalid URL')
     })
 
     it('Should throw error for unmatched opening bracket in host', async () => {
       expect(() => {
         buildUrl('http', '[host', '/foo.txt')
-      }).toThrow(new TypeError('Invalid URL'))
+      }).toThrow('Invalid URL')
     })
   })
 

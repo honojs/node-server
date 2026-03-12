@@ -886,7 +886,7 @@ describe('Request', () => {
         body: stream,
       })
       expect(req2).toBeInstanceOf(GlobalRequest)
-      expect(req2.text()).resolves.toBe('bar')
+      await expect(req2.text()).resolves.toBe('bar')
     })
 
     it('should skip to set `duplex: "half"` if init option is a Request object', async () => {
@@ -902,7 +902,7 @@ describe('Request', () => {
       })
       const req2 = new Request('http://localhost/subapp', req)
       expect(req2).toBeInstanceOf(GlobalRequest)
-      expect(req2.text()).resolves.toBe('bar')
+      await expect(req2.text()).resolves.toBe('bar')
     })
   })
 })
