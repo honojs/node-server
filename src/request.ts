@@ -121,6 +121,7 @@ const getRequestCache = Symbol('getRequestCache')
 const requestCache = Symbol('requestCache')
 const incomingKey = Symbol('incomingKey')
 const urlKey = Symbol('urlKey')
+const methodKey = Symbol('methodKey')
 const headersKey = Symbol('headersKey')
 export const abortControllerKey = Symbol('abortControllerKey')
 export const getAbortController = Symbol('getAbortController')
@@ -366,7 +367,7 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
 
 const requestPrototype: Record<string | symbol, any> = {
   get method() {
-    return normalizeIncomingMethod(this[incomingKey].method)
+    return (this[methodKey] ||= normalizeIncomingMethod(this[incomingKey].method))
   },
 
   get url() {
