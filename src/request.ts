@@ -34,8 +34,8 @@ export class Request extends GlobalRequest {
     }
     // Check if body is ReadableStream like. This makes it compatbile with ReadableStream polyfills.
     if (typeof (options?.body as ReadableStream)?.getReader !== 'undefined') {
-      // node 18 fetch needs half duplex mode when request body is stream
-      // if already set, do nothing since a Request object was passed to the options or explicitly set by the user.
+      // Half duplex mode is required when request body is a stream.
+      // If already set, do nothing since a Request object was passed to the options or explicitly set by the user.
       ;(options as any).duplex ??= 'half'
     }
     super(input, options)
