@@ -57,8 +57,8 @@ describe('buildUrl', () => {
       ['https', 'LOCALHOST:443', '/foo.txt'],
       ['https', 'LOCALHOST:8080', '/foo.txt'],
       ['https', 'Localhost:3000', '/foo.txt'],
-    ])('Should normalize %s to %s', async (scheme, host, url) => {
-      expect(buildUrl(scheme, host, url)).toBe(new URL(url, `${scheme}://${host}`).href)
+    ])('Should successfully normalize `%s://%s%s`', async (scheme, host, path) => {
+      expect(buildUrl(scheme, host, path)).toBe(new URL(path, `${scheme}://${host}`).href)
     })
 
     it('Should throw a RequestError for non-origin-form request-target', async () => {
