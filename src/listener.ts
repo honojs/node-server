@@ -4,7 +4,7 @@ import type { Http2ServerResponse } from 'node:http2'
 import type { Writable } from 'node:stream'
 import type { IncomingMessageWithWrapBodyStream } from './request'
 import {
-  abortControllerKey,
+  abortRequest,
   newRequest,
   Request as LightweightRequest,
   wrapBodyStream,
@@ -277,13 +277,14 @@ export const getRequestListener = (
 
       // Detect if request was aborted.
       outgoing.on('close', () => {
-        const abortController = req[abortControllerKey] as AbortController | undefined
-        if (abortController) {
-          if (incoming.errored) {
-            req[abortControllerKey].abort(incoming.errored.toString())
-          } else if (!outgoing.writableFinished) {
-            req[abortControllerKey].abort('Client connection prematurely closed.')
-          }
+        let abortReason: string | undefined
+        if (incoming.errored) {
+          abortReason = incoming.errored.toString()
+        } else if (!outgoing.writableFinished) {
+          abortReason = 'Client connection prematurely closed.'
+        }
+        if (abortReason !== undefined) {
+          req[abortRequest](abortReason)
         }
 
         // incoming is not consumed to the end
