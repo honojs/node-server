@@ -58,7 +58,7 @@ for (let c = 0x61; c <= 0x7a; c++) {
   safeHostChar[c] = 1
 }
 ;(() => {
-  const chars = '.-_'
+  const chars = '.-_:'
   for (let i = 0; i < chars.length; i++) {
     safeHostChar[chars.charCodeAt(i)] = 1
   }
@@ -68,11 +68,25 @@ export const buildUrl = (scheme: string, host: string, incomingUrl: string) => {
   const url = `${scheme}://${host}${incomingUrl}`
 
   let needsHostValidationByURL = false
+  let portStart = -1
   for (let i = 0, len = host.length; i < len; i++) {
     const c = host.charCodeAt(i)
     if (c > 0x7f || safeHostChar[c] === 0) {
       needsHostValidationByURL = true
       break
+    }
+    if (c === 0x3a) {
+      // ':'
+      portStart = i
+    }
+  }
+
+  // Validate port range if present in safe host
+  if (!needsHostValidationByURL && portStart !== -1) {
+    const portStr = host.substring(portStart + 1)
+    const port = parseInt(portStr, 10)
+    if (portStr.length === 0 || port !== port || port < 0 || port > 65535) {
+      needsHostValidationByURL = true
     }
   }
 
