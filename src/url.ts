@@ -58,7 +58,7 @@ for (let c = 0x61; c <= 0x7a; c++) {
   safeHostChar[c] = 1
 }
 ;(() => {
-  const chars = '.-_'
+  const chars = '.-_:'
   for (let i = 0; i < chars.length; i++) {
     safeHostChar[chars.charCodeAt(i)] = 1
   }
@@ -73,6 +73,31 @@ export const buildUrl = (scheme: string, host: string, incomingUrl: string) => {
     if (c > 0x7f || safeHostChar[c] === 0) {
       needsHostValidationByURL = true
       break
+    }
+    if (c === 0x3a) {
+      // ':'
+      i++
+      const firstDigit = host.charCodeAt(i)
+
+      // if the number starts with 1-9 and ranges from 1000-59999, then there is no need for normalization, so proceed
+      if (
+        firstDigit < 0x31 ||
+        firstDigit > 0x39 ||
+        i + 4 > len ||
+        i + (firstDigit < 0x36 ? 5 : 4) < len
+      ) {
+        needsHostValidationByURL = true
+        break
+      }
+      for (; i < len; i++) {
+        const c = host.charCodeAt(i)
+        if (c < 0x30 || c > 0x39) {
+          needsHostValidationByURL = true
+          break
+        }
+      }
+
+      // valid port number
     }
   }
 
