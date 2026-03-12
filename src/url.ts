@@ -68,7 +68,6 @@ export const buildUrl = (scheme: string, host: string, incomingUrl: string) => {
   const url = `${scheme}://${host}${incomingUrl}`
 
   let needsHostValidationByURL = false
-  let portStart = -1
   for (let i = 0, len = host.length; i < len; i++) {
     const c = host.charCodeAt(i)
     if (c > 0x7f || safeHostChar[c] === 0) {
@@ -77,16 +76,28 @@ export const buildUrl = (scheme: string, host: string, incomingUrl: string) => {
     }
     if (c === 0x3a) {
       // ':'
-      portStart = i
-    }
-  }
+      i++
+      const firstDigit = host.charCodeAt(i)
 
-  // Validate port range if present in safe host
-  if (!needsHostValidationByURL && portStart !== -1) {
-    const portStr = host.substring(portStart + 1)
-    const port = parseInt(portStr, 10)
-    if (portStr.length === 0 || port !== port || port < 0 || port > 65535) {
-      needsHostValidationByURL = true
+      // if the number starts with 1-9 and ranges from 1000-59999, then there is no need for normalization, so proceed
+      if (
+        firstDigit < 0x31 ||
+        firstDigit > 0x39 ||
+        i + 4 > len ||
+        i + (firstDigit < 0x36 ? 5 : 4) < len
+      ) {
+        needsHostValidationByURL = true
+        break
+      }
+      for (; i < len; i++) {
+        const c = host.charCodeAt(i)
+        if (c < 0x30 || c > 0x39) {
+          needsHostValidationByURL = true
+          break
+        }
+      }
+
+      // valid port number
     }
   }
 
