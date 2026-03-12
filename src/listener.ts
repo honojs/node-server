@@ -20,7 +20,6 @@ import {
   buildOutgoingHttpHeaders,
 } from './utils'
 import { X_ALREADY_SENT } from './utils/response/constants'
-import './globals'
 
 const outgoingEnded = Symbol('outgoingEnded')
 type OutgoingHasOutgoingEnded = Http2ServerResponse & {
