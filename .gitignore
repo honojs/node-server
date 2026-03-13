@@ -1,5 +1,7 @@
 dist
 
+.claude/settings.local.json
+
 node_modules
 .yarn/*
 yarn-error.log

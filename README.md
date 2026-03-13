@@ -38,13 +38,7 @@ Statistics        Avg      Stdev        Max
 
 ## Requirements
 
-It works on Node.js versions greater than 18.x. The specific required Node.js versions are as follows:
-
-- 18.x => 18.14.1+
-- 19.x => 19.7.0+
-- 20.x => 20.0.0+
-
-Essentially, you can simply use the latest version of each major release.
+It works on Node.js versions greater than 20.x.
 
 ## Installation
 
