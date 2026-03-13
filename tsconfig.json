@@ -10,8 +10,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "types": [
-      "jest",
       "node",
+      "vitest/globals",
     ],
     "rootDir": ".",
     "outDir": "./dist",
