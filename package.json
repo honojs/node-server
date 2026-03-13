@@ -55,8 +55,8 @@
   },
   "scripts": {
     "test": "vitest",
-    "build": "tsup --external hono",
-    "watch": "tsup --watch",
+    "build": "tsdown --external hono",
+    "watch": "tsdown --watch",
     "postbuild": "publint",
     "prerelease": "bun run build && bun run test",
     "release": "np",
@@ -90,7 +90,7 @@
     "prettier": "^3.2.4",
     "publint": "^0.1.16",
     "supertest": "^6.3.3",
-    "tsup": "^7.2.0",
+    "tsdown": "^0.20.3",
     "typescript": "^5.3.2",
     "vitest": "^4.0.18"
   },
