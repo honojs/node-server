@@ -20,7 +20,7 @@
         "vitest": "^4.0.18",
       },
       "peerDependencies": {
-        "hono": "^4.12.7",
+        "hono": "^4",
       },
     },
   },
