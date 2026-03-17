@@ -58,7 +58,7 @@
     "build": "tsdown --external hono",
     "watch": "tsdown --watch",
     "postbuild": "publint",
-    "prerelease": "bun run build && bun run test",
+    "prerelease": "bun run build && bun run test --run",
     "release": "np",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
