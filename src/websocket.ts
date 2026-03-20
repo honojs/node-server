@@ -1,5 +1,5 @@
-import type { UpgradeWebSocket } from 'hono/ws'
-import { defineWebSocketHelper, WSContext } from 'hono/ws'
+import type { UpgradeWebSocket, WSContext } from 'hono/ws'
+import { defineWebSocketHelper } from 'hono/ws'
 import type { RawData, WebSocket, WebSocketServer } from 'ws'
 import type { IncomingMessage } from 'node:http'
 import { STATUS_CODES } from 'node:http'
@@ -83,8 +83,8 @@ const createUpgradeRequest = (request: IncomingMessage): Request => {
 }
 
 export const setupWebSocket = (options: {
-  server: ServerType,
-  fetchCallback: FetchCallback,
+  server: ServerType
+  fetchCallback: FetchCallback
   wss: WebSocketServer
 }): void => {
   const { server, fetchCallback, wss } = options
@@ -93,7 +93,7 @@ export const setupWebSocket = (options: {
     IncomingMessage,
     { resolve: (ws: WebSocket) => void; connectionSymbol: symbol }
   >()
-  
+
   wss.on('connection', (ws, request) => {
     const waiter = waiterMap.get(request)
     if (waiter) {

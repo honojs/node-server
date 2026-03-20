@@ -16,7 +16,7 @@ export const createAdaptorServer = (options: Options): ServerType => {
   const createServer: any = options.createServer || createServerHTTP
   const server: ServerType = createServer(options.serverOptions || {}, requestListener)
   if (options.websocket && options.websocket.server) {
-    if (options.websocket.server.options.noServer !== true) 
+    if (options.websocket.server.options.noServer !== true)
       throw new Error('WebSocket server must be created with { noServer: true } option')
     setupWebSocket({ server, fetchCallback, wss: options.websocket.server })
   }

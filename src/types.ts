@@ -1,3 +1,4 @@
+import type { WebSocketServer } from 'ws'
 import type {
   createServer,
   IncomingMessage,
@@ -19,7 +20,6 @@ import type {
   createServer as createHttpsServer,
   ServerOptions as HttpsServerOptions,
 } from 'node:https'
-import type { WebSocketServer } from 'ws'
 
 export type HttpBindings = {
   incoming: IncomingMessage

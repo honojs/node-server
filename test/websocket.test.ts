@@ -5,7 +5,8 @@ import { createAdaptorServer, upgradeWebSocket } from '../src'
 
 describe('WebSocket', () => {
   const startServer = (app: Hono) => {
-    const server = createAdaptorServer({ fetch: app.fetch, websocket: true })
+    const wss = new WebSocketServer({ noServer: true })
+    const server = createAdaptorServer({ fetch: app.fetch, websocket: { server: wss } })
     return new Promise<{ server: ReturnType<typeof createAdaptorServer>; address: AddressInfo }>(
       (resolve) => {
         server.listen(0, () => {
