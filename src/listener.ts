@@ -41,6 +41,18 @@ const drainIncoming = (incoming: IncomingMessage | Http2ServerRequest): void => 
   }
   incomingWithDrainState[incomingDraining] = true
 
+  // HTTP/2: streams are multiplexed, so we can close immediately
+  // without risking TCP RST racing the response.
+  if (incoming instanceof Http2ServerRequest) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(incoming as any).stream?.close?.(h2constants.NGHTTP2_NO_ERROR)
+    } catch {
+      // stream may already be closed
+    }
+    return
+  }
+
   let bytesRead = 0
   const cleanup = () => {
     clearTimeout(timer)
@@ -51,19 +63,9 @@ const drainIncoming = (incoming: IncomingMessage | Http2ServerRequest): void => 
 
   const forceClose = () => {
     cleanup()
-    if (incoming instanceof Http2ServerRequest) {
-      // HTTP2: RST_STREAM(NO_ERROR) for graceful close
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(incoming as any).stream?.close?.(h2constants.NGHTTP2_NO_ERROR)
-      } catch {
-        // stream may already be closed
-      }
-    } else {
-      const socket = incoming.socket
-      if (socket && !socket.destroyed) {
-        socket.destroySoon()
-      }
+    const socket = incoming.socket
+    if (socket && !socket.destroyed) {
+      socket.destroySoon()
     }
   }
 
