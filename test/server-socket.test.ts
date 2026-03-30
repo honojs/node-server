@@ -3,7 +3,11 @@ import { bodyLimit } from 'hono/body-limit'
 import fs from 'node:fs'
 import { request as requestHTTP } from 'node:http'
 import type { IncomingMessage } from 'node:http'
-import { connect as connectHTTP2, createSecureServer as createHTTP2Server } from 'node:http2'
+import {
+  connect as connectHTTP2,
+  constants as h2constants,
+  createSecureServer as createHTTP2Server,
+} from 'node:http2'
 import type { ClientHttp2Session } from 'node:http2'
 import { request as requestHTTPS, createServer as createHTTPSServer } from 'node:https'
 import { connect as connectNet } from 'node:net'
@@ -292,6 +296,9 @@ describe('autoCleanupIncoming: true (default)', () => {
       expect(responseStatus).toBe(413)
       if (!expectEmptyBody) {
         expect(responseBody).toBe('Payload Too Large')
+      }
+      if ('rstCode' in req) {
+        expect(req.rstCode).toBe(h2constants.NGHTTP2_NO_ERROR)
       }
       // Should not get ECONNRESET before receiving the response
       if (requestError) {
