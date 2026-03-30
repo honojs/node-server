@@ -249,6 +249,14 @@ describe('autoCleanupIncoming: true (default)', () => {
       let responseBody = ''
       let responseStatus = 0
       let requestError: Error | null = null
+      let sendTimer: ReturnType<typeof setTimeout> | undefined
+
+      const cleanupSendTimer = () => {
+        if (sendTimer) {
+          clearTimeout(sendTimer)
+          sendTimer = undefined
+        }
+      }
 
       const req = request(
         {
@@ -275,6 +283,7 @@ describe('autoCleanupIncoming: true (default)', () => {
 
       req.on('close', reqClose)
       req.on('error', (err) => {
+        cleanupSendTimer()
         requestError = err
       })
 
@@ -288,11 +297,12 @@ describe('autoCleanupIncoming: true (default)', () => {
         }
         req.write(Buffer.alloc(Math.min(chunkSize, totalSize - offset)))
         offset += chunkSize
-        setTimeout(sendChunk, 5)
+        sendTimer = setTimeout(sendChunk, 5)
       }
       sendChunk()
 
       await Promise.all([reqPromise, resPromise])
+      cleanupSendTimer()
       expect(responseStatus).toBe(413)
       if (!expectEmptyBody) {
         expect(responseBody).toBe('Payload Too Large')
