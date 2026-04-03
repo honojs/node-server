@@ -46,10 +46,10 @@ export class Request extends GlobalRequest {
 const newHeadersFromIncoming = (incoming: IncomingMessage | Http2ServerRequest) => {
   const headerRecord: [string, string][] = []
   const rawHeaders = incoming.rawHeaders
-  for (let i = 0; i < rawHeaders.length; i += 2) {
-    const { [i]: key, [i + 1]: value } = rawHeaders
+  for (let i = 0, len = rawHeaders.length; i < len; i += 2) {
+    const key = rawHeaders[i]
     if (key.charCodeAt(0) !== /*:*/ 0x3a) {
-      headerRecord.push([key, value])
+      headerRecord.push([key, rawHeaders[i + 1]])
     }
   }
   return new Headers(headerRecord)
@@ -466,6 +466,26 @@ const requestPrototype: Record<string | symbol, any> = {
     return false
   },
 }
+Object.defineProperty(requestPrototype, 'signal', {
+  get() {
+    // Fast path: known-valid methods don't need full Request construction.
+    switch (this[methodKey] as string) {
+      case 'GET':
+      case 'HEAD':
+      case 'POST':
+      case 'PUT':
+      case 'DELETE':
+      case 'OPTIONS':
+      case 'PATCH':
+      case 'TRACE':
+        return this[getAbortController]().signal
+      default:
+        // Unknown/forbidden methods fall through to getRequestCache() which throws
+        // for methods like 'connect', 'track', non-uppercase 'trace', etc.
+        return this[getRequestCache]().signal
+    }
+  },
+})
 ;[
   'cache',
   'credentials',
@@ -475,7 +495,6 @@ const requestPrototype: Record<string | symbol, any> = {
   'redirect',
   'referrer',
   'referrerPolicy',
-  'signal',
   'keepalive',
 ].forEach((k) => {
   Object.defineProperty(requestPrototype, k, {
