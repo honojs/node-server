@@ -466,26 +466,13 @@ const requestPrototype: Record<string | symbol, any> = {
     return false
   },
 }
+
 Object.defineProperty(requestPrototype, 'signal', {
   get() {
-    // Fast path: known-valid methods don't need full Request construction.
-    switch (this[methodKey] as string) {
-      case 'GET':
-      case 'HEAD':
-      case 'POST':
-      case 'PUT':
-      case 'DELETE':
-      case 'OPTIONS':
-      case 'PATCH':
-      case 'TRACE':
-        return this[getAbortController]().signal
-      default:
-        // Unknown/forbidden methods fall through to getRequestCache() which throws
-        // for methods like 'connect', 'track', non-uppercase 'trace', etc.
-        return this[getRequestCache]().signal
-    }
+    return this[getAbortController]().signal
   },
 })
+
 ;[
   'cache',
   'credentials',
