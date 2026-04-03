@@ -193,7 +193,9 @@ async function testServer(serverFile: string, serverName: string): Promise<boole
 async function main(): Promise<void> {
   const servers = [
     { file: 'src/server-npm.js', name: '@hono/node-server (npm)' },
-    { file: 'src/server-dev.js', name: '@hono/node-server (dev)' },
+    { file: 'src/server-dev-v2.js', name: '@hono/node-server (v2)' },
+    { file: 'src/server-hono.js', name: 'hono (v2)' },
+    { file: 'src/server-fastify.js', name: 'fastify' },
   ]
 
   console.log('\n' + '='.repeat(60))

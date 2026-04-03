@@ -3,10 +3,15 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "benchmark": "node --experimental-strip-types scripts/bench.ts"
+    "benchmark": "node --experimental-strip-types scripts/bench.ts",
+    "benchmark:ac": "node --experimental-strip-types scripts/bench-autocannon.ts",
+    "benchmark:all": "node --experimental-strip-types scripts/bench-all.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
-    "@hono/node-server-dev": "file:../.."
+    "@hono/node-server-dev": "file:../..",
+    "autocannon": "^8",
+    "fastify": "^5",
+    "hono": "^4"
   }
 }
