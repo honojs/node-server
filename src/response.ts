@@ -9,7 +9,7 @@ export const cacheKey = Symbol('cache')
 
 export type InternalCache = [
   number,
-  string | ReadableStream,
+  string | ReadableStream | null,
   Record<string, string> | [string, string][] | Headers | OutgoingHttpHeaders | undefined,
 ]
 interface LightResponse {
@@ -47,12 +47,14 @@ export class Response {
     }
 
     if (
+      body === null ||
+      body === undefined ||
       typeof body === 'string' ||
       typeof (body as ReadableStream)?.getReader !== 'undefined' ||
       body instanceof Blob ||
       body instanceof Uint8Array
     ) {
-      ;(this as any)[cacheKey] = [init?.status || 200, body, headers || init?.headers]
+      ;(this as any)[cacheKey] = [init?.status || 200, body ?? null, headers || init?.headers]
     }
   }
 
@@ -97,3 +99,38 @@ export class Response {
 })
 Object.setPrototypeOf(Response, GlobalResponse)
 Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
+
+// Override Response.json() to return a LightweightResponse so the listener
+// fast-path (cacheKey check) is hit instead of falling through to ReadableStream reading.
+Object.defineProperty(Response, 'redirect', {
+  value: function redirect(url: string | URL, status = 302): Response {
+    if (![301, 302, 303, 307, 308].includes(status)) {
+      throw new RangeError('Invalid status code')
+    }
+    return new Response(null, {
+      status,
+      headers: { location: typeof url === 'string' ? url : url.href },
+    })
+  },
+  writable: true,
+  configurable: true,
+})
+
+Object.defineProperty(Response, 'json', {
+  value: function json(data?: unknown, init?: ResponseInit): Response {
+    const body = JSON.stringify(data)
+    const initHeaders = init?.headers
+    let headers: Record<string, string> | Headers
+    if (initHeaders) {
+      headers = new Headers(initHeaders)
+      if (!(headers as Headers).has('content-type')) {
+        ;(headers as Headers).set('content-type', 'application/json')
+      }
+    } else {
+      headers = { 'content-type': 'application/json' }
+    }
+    return new Response(body, { status: init?.status ?? 200, statusText: init?.statusText, headers })
+  },
+  writable: true,
+  configurable: true,
+})

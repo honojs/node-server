@@ -302,6 +302,82 @@ describe('Abort request', () => {
   })
 })
 
+describe('Abort request - error path', () => {
+  it('should abort request signal when client disconnects while async error handler is running after sync throw', async () => {
+    let capturedReq: Request | undefined
+    let resolveAborted: () => void
+    const abortedPromise = new Promise<void>((r) => {
+      resolveAborted = r
+    })
+
+    const fetchCallback = (req: Request) => {
+      capturedReq = req
+      req.signal.addEventListener('abort', () => resolveAborted())
+      throw new Error('sync error')
+    }
+
+    let resolveErrorHandlerStarted: () => void
+    const errorHandlerStarted = new Promise<void>((r) => {
+      resolveErrorHandlerStarted = r
+    })
+
+    const errorHandler = async () => {
+      resolveErrorHandlerStarted()
+      await new Promise<void>(() => {}) // never resolves — client will disconnect first
+    }
+
+    const requestListener = getRequestListener(fetchCallback, { errorHandler })
+    const server = createServer(requestListener)
+
+    try {
+      const req = request(server).get('/').end(() => {})
+      await errorHandlerStarted
+      req.abort()
+      await abortedPromise
+      expect(capturedReq?.signal.aborted).toBe(true)
+    } finally {
+      server.close()
+    }
+  })
+
+  it('should abort request signal when client disconnects while async error handler is running after async throw', async () => {
+    let capturedReq: Request | undefined
+    let resolveAborted: () => void
+    const abortedPromise = new Promise<void>((r) => {
+      resolveAborted = r
+    })
+
+    const fetchCallback = async (req: Request) => {
+      capturedReq = req
+      req.signal.addEventListener('abort', () => resolveAborted())
+      throw new Error('async error')
+    }
+
+    let resolveErrorHandlerStarted: () => void
+    const errorHandlerStarted = new Promise<void>((r) => {
+      resolveErrorHandlerStarted = r
+    })
+
+    const errorHandler = async () => {
+      resolveErrorHandlerStarted()
+      await new Promise<void>(() => {}) // never resolves — client will disconnect first
+    }
+
+    const requestListener = getRequestListener(fetchCallback, { errorHandler })
+    const server = createServer(requestListener)
+
+    try {
+      const req = request(server).get('/').end(() => {})
+      await errorHandlerStarted
+      req.abort()
+      await abortedPromise
+      expect(capturedReq?.signal.aborted).toBe(true)
+    } finally {
+      server.close()
+    }
+  })
+})
+
 describe('overrideGlobalObjects', () => {
   const fetchCallback = vi.fn()
 
