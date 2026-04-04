@@ -49,8 +49,7 @@ export class Response {
     }
 
     if (
-      body === null ||
-      body === undefined ||
+      body == null ||
       typeof body === 'string' ||
       typeof (body as ReadableStream)?.getReader !== 'undefined' ||
       body instanceof Blob ||

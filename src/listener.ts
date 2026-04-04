@@ -157,8 +157,8 @@ const responseViaCache = async (
   // Fast path: no custom headers — create the final header object in one shot
   // (avoids shape transitions from mutating a single-key object).
   if (!header) {
-    if (body == null) {
-      outgoing.writeHead(status, {})
+    if (body === null) {
+      outgoing.writeHead(status)
       outgoing.end()
     } else if (typeof body === 'string') {
       outgoing.writeHead(status, {
