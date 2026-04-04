@@ -10,7 +10,7 @@ import {
   wrapBodyStream,
   toRequestError,
 } from './request'
-import { cacheKey, Response as LightweightResponse } from './response'
+import { defaultContentType, cacheKey, Response as LightweightResponse } from './response'
 import type { InternalCache } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import {
@@ -162,24 +162,24 @@ const responseViaCache = async (
       outgoing.end()
     } else if (typeof body === 'string') {
       outgoing.writeHead(status, {
-        'content-type': 'text/plain; charset=UTF-8',
+        'Content-Type': defaultContentType,
         'Content-Length': Buffer.byteLength(body),
       })
       outgoing.end(body)
     } else if (body instanceof Uint8Array) {
       outgoing.writeHead(status, {
-        'content-type': 'text/plain; charset=UTF-8',
+        'Content-Type': defaultContentType,
         'Content-Length': body.byteLength,
       })
       outgoing.end(body)
     } else if (body instanceof Blob) {
       outgoing.writeHead(status, {
-        'content-type': 'text/plain; charset=UTF-8',
+        'Content-Type': defaultContentType,
         'Content-Length': body.size,
       })
       outgoing.end(new Uint8Array(await body.arrayBuffer()))
     } else {
-      outgoing.writeHead(status, { 'content-type': 'text/plain; charset=UTF-8' })
+      outgoing.writeHead(status, { 'Content-Type': defaultContentType })
       flushHeaders(outgoing)
       await writeFromReadableStream(body, outgoing)?.catch(
         (e) => handleResponseError(e, outgoing) as undefined
@@ -192,11 +192,11 @@ const responseViaCache = async (
   let hasContentLength = false
   if (header instanceof Headers) {
     hasContentLength = header.has('content-length')
-    header = buildOutgoingHttpHeaders(header)
+    header = buildOutgoingHttpHeaders(header, body === null ? undefined : defaultContentType)
   } else if (Array.isArray(header)) {
     const headerObj = new Headers(header)
     hasContentLength = headerObj.has('content-length')
-    header = buildOutgoingHttpHeaders(headerObj)
+    header = buildOutgoingHttpHeaders(headerObj, body === null ? undefined : defaultContentType)
   } else {
     for (const key in header) {
       if (key.length === 14 && key.toLowerCase() === 'content-length') {
@@ -262,7 +262,10 @@ const responseViaResponseObject = async (
     return responseViaCache(res as Response, outgoing)
   }
 
-  const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(res.headers)
+  const resHeaderRecord: OutgoingHttpHeaders = buildOutgoingHttpHeaders(
+    res.headers,
+    res.body === null ? undefined : defaultContentType
+  )
 
   if (res.body) {
     const reader = res.body.getReader()

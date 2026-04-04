@@ -3,6 +3,8 @@
 
 import type { OutgoingHttpHeaders } from 'node:http'
 
+export const defaultContentType = 'text/plain; charset=UTF-8'
+
 const responseCache = Symbol('responseCache')
 const getResponseCache = Symbol('getResponseCache')
 export const cacheKey = Symbol('cache')
@@ -63,7 +65,10 @@ export class Response {
     if (cache) {
       if (!(cache[2] instanceof Headers)) {
         cache[2] = new Headers(
-          (cache[2] || { 'content-type': 'text/plain; charset=UTF-8' }) as HeadersInit
+          (cache[2] ||
+            (cache[1] === null
+              ? undefined
+              : { 'content-type': defaultContentType })) as HeadersInit
         )
       }
       return cache[2]
