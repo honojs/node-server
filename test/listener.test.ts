@@ -81,6 +81,20 @@ describe('Invalid request', () => {
   })
 })
 
+describe('Response headers', () => {
+  const requestListener = getRequestListener(() => new Response(null), {
+    hostname: 'example.com',
+  })
+  const server = createServer(requestListener)
+
+  it('Should not set content-type for a null body response', async () => {
+    const res = await request(server).get('/').send()
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBeUndefined()
+    expect(res.text).toBe('')
+  })
+})
+
 describe('Error handling - sync fetchCallback', () => {
   const fetchCallback = vi.fn(() => {
     throw new Error('thrown error')
