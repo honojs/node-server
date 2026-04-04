@@ -62,7 +62,8 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
 }
 
 export const buildOutgoingHttpHeaders = (
-  headers: Headers | HeadersInit | null | undefined
+  headers: Headers | HeadersInit | null | undefined,
+  defaultContentType: string | undefined
 ): OutgoingHttpHeaders => {
   const res: OutgoingHttpHeaders = {}
   if (!(headers instanceof Headers)) {
@@ -86,7 +87,10 @@ export const buildOutgoingHttpHeaders = (
       res[k] = v
     }
   }
-  res['content-type'] ??= 'text/plain; charset=UTF-8'
+  
+  if (defaultContentType) {
+    res['content-type'] ??= defaultContentType
+  }
 
   return res
 }
