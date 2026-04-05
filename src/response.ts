@@ -113,16 +113,63 @@ Object.defineProperty(Response.prototype, Symbol.for('nodejs.util.inspect.custom
 Object.setPrototypeOf(Response, GlobalResponse)
 Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
 
-// Override Response.json() to return a LightweightResponse so the listener
-// fast-path (cacheKey check) is hit instead of falling through to ReadableStream reading.
+// Allowed characters in a redirect URL (ASCII subset).
+// Covers unreserved + reserved chars per RFC 3986 plus `%` for percent-encoding.
+const allowedRedirectUrlChar = new Uint8Array(128)
+for (let c = 0x30; c <= 0x39; c++) {
+  allowedRedirectUrlChar[c] = 1 // 0-9
+}
+for (let c = 0x41; c <= 0x5a; c++) {
+  allowedRedirectUrlChar[c] = 1 // A-Z
+}
+for (let c = 0x61; c <= 0x7a; c++) {
+  allowedRedirectUrlChar[c] = 1 // a-z
+}
+{
+  // eslint-disable-next-line quotes
+  const chars = "-./:?#[]@!$&'()*+,;=%~_"
+  for (let i = 0; i < chars.length; i++) {
+    allowedRedirectUrlChar[chars.charCodeAt(i)] = 1
+  }
+}
+
+const parseRedirectUrl = (url: string | URL): string => {
+  if (url instanceof URL) {
+    return url.href
+  }
+  // Fast path: starts with http:// or https:// and all chars are in the allowed set
+  if (
+    url.length > 8 &&
+    url.charCodeAt(0) === 0x68 && // h
+    (url.charCodeAt(4) === 0x3a || url.charCodeAt(5) === 0x3a) // http: or https:
+  ) {
+    let safe = true
+    for (let i = 0, len = url.length; i < len; i++) {
+      const c = url.charCodeAt(i)
+      if (c > 0x7f || allowedRedirectUrlChar[c] === 0) {
+        safe = false
+        break
+      }
+    }
+    if (safe) {
+      return url
+    }
+  }
+  return new URL(url).href
+}
+
+const validRedirectStatuses = new Set([301, 302, 303, 307, 308])
+
+// Override Response.json() and Response.redirect() to return a LightweightResponse
+// so the listener fast-path (cacheKey check) is hit instead of falling through to ReadableStream reading.
 Object.defineProperty(Response, 'redirect', {
   value: function redirect(url: string | URL, status = 302): Response {
-    if (![301, 302, 303, 307, 308].includes(status)) {
+    if (!validRedirectStatuses.has(status)) {
       throw new RangeError('Invalid status code')
     }
     return new Response(null, {
       status,
-      headers: { location: typeof url === 'string' ? url : url.href },
+      headers: { location: parseRedirectUrl(url) },
     })
   },
   writable: true,
@@ -132,12 +179,15 @@ Object.defineProperty(Response, 'redirect', {
 Object.defineProperty(Response, 'json', {
   value: function json(data?: unknown, init?: ResponseInit): Response {
     const body = JSON.stringify(data)
+    if (body === undefined) {
+      throw new TypeError('The data is not JSON serializable')
+    }
     const initHeaders = init?.headers
     let headers: Record<string, string> | Headers
     if (initHeaders) {
       headers = new Headers(initHeaders)
-      if (!(headers as Headers).has('content-type')) {
-        ;(headers as Headers).set('content-type', 'application/json')
+      if (!headers.has('content-type')) {
+        headers.set('content-type', 'application/json')
       }
     } else {
       headers = { 'content-type': 'application/json' }
