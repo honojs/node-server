@@ -67,7 +67,7 @@ describe('Basic', () => {
 
   it('Should return 200 response - POST /partially-consumed', async () => {
     const buffer = Buffer.alloc(1024 * 10) // large buffer
-    const res = await new Promise<any>((resolve, reject) => {
+    const res = await new Promise<request.Response>((resolve, reject) => {
       const req = request(server)
         .post('/partially-consumed')
         .set('Content-Length', buffer.length.toString())
@@ -88,7 +88,7 @@ describe('Basic', () => {
 
   it('Should return 200 response - POST /partially-consumed-and-cancelled', async () => {
     const buffer = Buffer.alloc(1) // A large buffer will not make the test go far, so keep it small because it won't go far.
-    const res = await new Promise<any>((resolve, reject) => {
+    const res = await new Promise<request.Response>((resolve, reject) => {
       const req = request(server)
         .post('/partially-consumed-and-cancelled')
         .set('Content-Length', buffer.length.toString())
