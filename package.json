@@ -18,11 +18,6 @@
       "require": "./dist/serve-static.js",
       "import": "./dist/serve-static.mjs"
     },
-    "./vercel": {
-      "types": "./dist/vercel.d.ts",
-      "require": "./dist/vercel.js",
-      "import": "./dist/vercel.mjs"
-    },
     "./utils/*": {
       "types": "./dist/utils/*.d.ts",
       "require": "./dist/utils/*.js",
@@ -41,9 +36,6 @@
       ],
       "serve-static": [
         "./dist/serve-static.d.ts"
-      ],
-      "vercel": [
-        "./dist/vercel.d.ts"
       ],
       "utils/*": [
         "./dist/utils/*.d.ts"
