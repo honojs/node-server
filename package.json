@@ -1,6 +1,6 @@
 {
   "name": "@hono/node-server",
-  "version": "1.19.11",
+  "version": "2.0.0-rc.1",
   "description": "Node.js Adapter for Hono",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,11 +17,6 @@
       "types": "./dist/serve-static.d.ts",
       "require": "./dist/serve-static.js",
       "import": "./dist/serve-static.mjs"
-    },
-    "./vercel": {
-      "types": "./dist/vercel.d.ts",
-      "require": "./dist/vercel.js",
-      "import": "./dist/vercel.mjs"
     },
     "./utils/*": {
       "types": "./dist/utils/*.d.ts",
@@ -41,9 +36,6 @@
       ],
       "serve-static": [
         "./dist/serve-static.d.ts"
-      ],
-      "vercel": [
-        "./dist/vercel.d.ts"
       ],
       "utils/*": [
         "./dist/utils/*.d.ts"
