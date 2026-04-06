@@ -1,8 +1,7 @@
 # Node.js Adapter for Hono
 
 This adapter `@hono/node-server` allows you to run your Hono application on Node.js.
-Initially, Hono wasn't designed for Node.js, but with this adapter, you can now use Hono on Node.js.
-It utilizes web standard APIs implemented in Node.js version 18 or higher.
+Initially, Hono wasn't designed for Node.js, but with this adapter, you can now use Hono on Node.js. It utilizes web standard APIs implemented in Node.js.
 
 ## Benchmarks
 
