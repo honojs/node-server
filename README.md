@@ -6,7 +6,7 @@ It utilizes web standard APIs implemented in Node.js version 18 or higher.
 
 ## Benchmarks
 
-Hono is 3.5 times faster than Express.
+Hono is 4.1 times faster than Express.
 
 Express:
 
@@ -14,12 +14,12 @@ Express:
 $ bombardier -d 10s --fasthttp http://localhost:3000/
 
 Statistics        Avg      Stdev        Max
-  Reqs/sec     16438.94    1603.39   19155.47
-  Latency        7.60ms     7.51ms   559.89ms
+  Reqs/sec     20803.37    1713.06   24910.85
+  Latency        6.01ms     5.21ms   451.37ms
   HTTP codes:
-    1xx - 0, 2xx - 164494, 3xx - 0, 4xx - 0, 5xx - 0
+    1xx - 0, 2xx - 208131, 3xx - 0, 4xx - 0, 5xx - 0
     others - 0
-  Throughput:     4.55MB/s
+  Throughput:     5.75MB/s
 ```
 
 Hono + `@hono/node-server`:
@@ -28,12 +28,12 @@ Hono + `@hono/node-server`:
 $ bombardier -d 10s --fasthttp http://localhost:3000/
 
 Statistics        Avg      Stdev        Max
-  Reqs/sec     58296.56    5512.74   74403.56
-  Latency        2.14ms     1.46ms   190.92ms
+  Reqs/sec     85405.51    7250.65  102658.51
+  Latency        1.46ms     1.00ms   149.95ms
   HTTP codes:
-    1xx - 0, 2xx - 583059, 3xx - 0, 4xx - 0, 5xx - 0
+    1xx - 0, 2xx - 854120, 3xx - 0, 4xx - 0, 5xx - 0
     others - 0
-  Throughput:    12.56MB/s
+  Throughput:    18.49MB/s
 ```
 
 ## Requirements
