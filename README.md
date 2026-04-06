@@ -78,7 +78,7 @@ To enable this, install `ws` (and `@types/ws`) in your project, then create and 
 
 ```ts
 import { serve, upgradeWebSocket } from '@hono/node-server'
-import { WebsocketServer } from 'ws'
+import { WebSocketServer } from 'ws'
 import { Hono } from 'hono'
 
 const app = new Hono()
@@ -166,7 +166,7 @@ provide a websocket server to enable websocket support.
 
 ```ts
 import { serve, upgradeWebSocket } from '@hono/node-server'
-import { WebsocketServer } from 'ws'
+import { WebSocketServer } from 'ws'
 
 // ...
 const wss = new WebSocketServer({ noServer: true })
