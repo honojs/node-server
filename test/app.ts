@@ -52,6 +52,13 @@ app.post('/partially-consumed-and-cancelled', async (c) => {
   reader.cancel()
   return c.text('Partially consumed and cancelled')
 })
+app.post('/early-413', (c) => {
+  if (!c.req.raw.body) {
+    // force create new request object
+    throw new Error('No body consumed')
+  }
+  return c.text('Payload Too Large', 413)
+})
 app.delete('/posts/:id', (c) => {
   return c.text(`DELETE ${c.req.param('id')}`)
 })
