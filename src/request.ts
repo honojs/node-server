@@ -472,7 +472,6 @@ Object.defineProperty(requestPrototype, 'signal', {
     return this[getAbortController]().signal
   },
 })
-
 ;[
   'cache',
   'credentials',

@@ -41,7 +41,7 @@ for (let c = 0x61; c <= 0x7a; c++) {
   allowedRequestUrlChar[c] = 1
 }
 ;(() => {
-  // eslint-disable-next-line quotes
+   
   const chars = "-./:?#[]@!$&'()*+,;=~_"
   for (let i = 0; i < chars.length; i++) {
     allowedRequestUrlChar[chars.charCodeAt(i)] = 1
