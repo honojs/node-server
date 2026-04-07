@@ -431,7 +431,6 @@ describe('Serve Static Middleware with wrong path', () => {
     )
 
     expect(logSpy).toHaveBeenCalledWith(
-       
       "serveStatic: root path './public' is not found, are you sure it's correct?"
     )
   })
