@@ -118,4 +118,30 @@ describe('Response', () => {
       expect(cacheKey in res).toBe(false)
     })
   })
+
+  describe('util.inspect', () => {
+    it('should show a lightweight response summary before native Response creation', () => {
+      const { inspect } = require('node:util')
+      const res = new Response('Hello')
+
+      expect(() => inspect(res)).not.toThrow()
+      const result = inspect(res)
+      expect(result).toContain('Response (lightweight)')
+      expect(result).toContain('200')
+      expect(result).toContain('nativeResponse: undefined')
+      expect(res).toBeInstanceOf(GlobalResponse)
+    })
+
+    it('should include the native Response after cache creation', async () => {
+      const { inspect } = require('node:util')
+      const res = new Response('Hello', { statusText: 'OK' })
+
+      // Access statusText to trigger native Response creation
+      res.statusText
+
+      const result = inspect(res)
+      expect(result).toContain('Response (lightweight)')
+      expect(result).toContain('nativeResponse: Response {')
+    })
+  })
 })
