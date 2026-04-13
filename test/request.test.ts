@@ -617,11 +617,12 @@ describe('Request', () => {
       }
 
       for (const method of ['trace', 'TrAcE']) {
-        const reqBeforeSignal = createTraceLikeRequest(method)
-        await expect(reqBeforeSignal.text()).rejects.toBeInstanceOf(TypeError)
+        const req = createTraceLikeRequest(method)
+        await expect(req.text()).rejects.toBeInstanceOf(TypeError)
 
         const reqAfterSignal = createTraceLikeRequest(method)
-        expect(() => reqAfterSignal.signal).toThrow(/HTTP method is unsupported/)
+        expect(() => reqAfterSignal.signal).not.toThrow()
+        await expect(reqAfterSignal.text()).rejects.toBeInstanceOf(TypeError)
       }
     })
 

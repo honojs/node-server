@@ -1,3 +1,4 @@
+import type { WebSocketServer } from 'ws'
 import type {
   createServer,
   IncomingMessage,
@@ -73,6 +74,9 @@ export type Options = {
   autoCleanupIncoming?: boolean
   port?: number
   hostname?: string
+  websocket?: {
+    server: WebSocketServer
+  }
 } & ServerOptions
 
 export type CustomErrorHandler = (err: unknown) => void | Response | Promise<void | Response>

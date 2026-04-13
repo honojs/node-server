@@ -2,6 +2,7 @@ import { createServer as createServerHTTP } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { getRequestListener } from './listener'
 import type { Options, ServerType } from './types'
+import { setupWebSocket } from './websocket'
 
 export const createAdaptorServer = (options: Options): ServerType => {
   const fetchCallback = options.fetch
@@ -14,6 +15,11 @@ export const createAdaptorServer = (options: Options): ServerType => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createServer: any = options.createServer || createServerHTTP
   const server: ServerType = createServer(options.serverOptions || {}, requestListener)
+  if (options.websocket && options.websocket.server) {
+    if (options.websocket.server.options.noServer !== true)
+      throw new Error('WebSocket server must be created with { noServer: true } option')
+    setupWebSocket({ server, fetchCallback, wss: options.websocket.server })
+  }
   return server
 }
 
