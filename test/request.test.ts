@@ -908,6 +908,49 @@ describe('Request', () => {
   })
 })
 
+describe('util.inspect', () => {
+  it('should show a lightweight request summary without creating a native Request', () => {
+    const { inspect } = require('node:util')
+    const req = newRequest({
+      method: 'GET',
+      url: '/',
+      headers: {
+        host: 'localhost',
+      },
+      rawHeaders: ['host', 'localhost'],
+    } as IncomingMessage)
+
+    expect(() => inspect(req)).not.toThrow()
+    const result = inspect(req)
+    expect(result).toContain('Request (lightweight)')
+    expect(result).toContain('GET')
+    expect(result).toContain('http://localhost/')
+    expect(result).toContain('nativeRequest: undefined')
+    expect(req[abortControllerKey]).toBeUndefined()
+    expect(req).toBeInstanceOf(global.Request)
+  })
+
+  it('should include the native Request after cache creation', () => {
+    const { inspect } = require('node:util')
+    const req = newRequest({
+      method: 'GET',
+      url: '/',
+      headers: {
+        host: 'localhost',
+      },
+      rawHeaders: ['host', 'localhost'],
+    } as IncomingMessage)
+
+    // Access keepalive to trigger native Request creation via getRequestCache()
+    req.keepalive
+
+    const result = inspect(req)
+    expect(result).toContain('Request (lightweight)')
+    expect(result).toContain('nativeRequest: Request {')
+    expect(req[abortControllerKey]).toBeDefined()
+  })
+})
+
 describe('RequestError', () => {
   it('should have a static name property (class name)', () => {
     expect(RequestError.name).toBe('RequestError')
