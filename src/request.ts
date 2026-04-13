@@ -180,6 +180,20 @@ const requestPrototype: Record<string | symbol, any> = {
     },
   })
 })
+
+Object.defineProperty(requestPrototype, Symbol.for('nodejs.util.inspect.custom'), {
+  value: function (depth: number, options: object, inspectFn: Function) {
+    const props: Record<string, unknown> = {
+      method: this.method,
+      url: this.url,
+      headers: this.headers,
+      nativeRequest: this[requestCache],
+    }
+
+    return `Request (lightweight) ${inspectFn(props, { ...options, depth: depth == null ? null : depth - 1 })}`
+  },
+})
+
 Object.setPrototypeOf(requestPrototype, Request.prototype)
 
 export const newRequest = (

@@ -95,5 +95,18 @@ export class Response {
     },
   })
 })
+
+Object.defineProperty(Response.prototype, Symbol.for('nodejs.util.inspect.custom'), {
+  value: function (depth: number, options: object, inspectFn: Function) {
+    const props: Record<string, unknown> = {
+      status: this.status,
+      headers: this.headers,
+      ok: this.ok,
+      nativeResponse: (this as LightResponse)[responseCache],
+    }
+    return `Response (lightweight) ${inspectFn(props, { ...options, depth: depth == null ? null : depth - 1 })}`
+  },
+})
+
 Object.setPrototypeOf(Response, GlobalResponse)
 Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
