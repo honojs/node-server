@@ -502,6 +502,7 @@ Object.defineProperty(requestPrototype, 'signal', {
     },
   })
 })
+
 // Direct body reading for text/arrayBuffer/blob/json: bypass getRequestCache()
 // → new AbortController() → newHeadersFromIncoming() → new Request(url, init)
 // → Readable.toWeb() chain for common body parsing cases.
@@ -533,6 +534,20 @@ Object.defineProperty(requestPrototype, 'json', {
     return this.text().then(JSON.parse)
   },
 })
+
+Object.defineProperty(requestPrototype, Symbol.for('nodejs.util.inspect.custom'), {
+  value: function (depth: number, options: object, inspectFn: Function) {
+    const props: Record<string, unknown> = {
+      method: this.method,
+      url: this.url,
+      headers: this.headers,
+      nativeRequest: this[requestCache],
+    }
+
+    return `Request (lightweight) ${inspectFn(props, { ...options, depth: depth == null ? null : depth - 1 })}`
+  },
+})
+
 Object.setPrototypeOf(requestPrototype, Request.prototype)
 
 export const newRequest = (
