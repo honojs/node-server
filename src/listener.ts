@@ -85,6 +85,31 @@ const drainIncoming = (incoming: IncomingMessage | Http2ServerRequest): void => 
   incoming.resume()
 }
 
+const makeCloseHandler =
+  (
+    req: any,
+    incoming: IncomingMessage | Http2ServerRequest,
+    outgoing: ServerResponse | Http2ServerResponse,
+    needsBodyCleanup: boolean
+  ): (() => void) =>
+  () => {
+    if (incoming.errored) {
+      req[abortRequest](incoming.errored.toString())
+    } else if (!outgoing.writableFinished) {
+      req[abortRequest]('Client connection prematurely closed.')
+    }
+
+    if (needsBodyCleanup && !incoming.readableEnded) {
+      setTimeout(() => {
+        if (!incoming.readableEnded) {
+          setTimeout(() => {
+            drainIncoming(incoming)
+          })
+        }
+      })
+    }
+  }
+
 const handleRequestError = (): Response =>
   new Response(null, {
     status: 400,
@@ -129,10 +154,43 @@ const responseViaCache = async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let [status, body, header] = (res as any)[cacheKey] as InternalCache
 
-  let hasContentLength = false
+  // Fast path: no custom headers — create the final header object in one shot
+  // (avoids shape transitions from mutating a single-key object).
   if (!header) {
-    header = { 'content-type': 'text/plain; charset=UTF-8' }
-  } else if (header instanceof Headers) {
+    if (body == null) {
+      outgoing.writeHead(status, {})
+      outgoing.end()
+    } else if (typeof body === 'string') {
+      outgoing.writeHead(status, {
+        'content-type': 'text/plain; charset=UTF-8',
+        'Content-Length': Buffer.byteLength(body),
+      })
+      outgoing.end(body)
+    } else if (body instanceof Uint8Array) {
+      outgoing.writeHead(status, {
+        'content-type': 'text/plain; charset=UTF-8',
+        'Content-Length': body.byteLength,
+      })
+      outgoing.end(body)
+    } else if (body instanceof Blob) {
+      outgoing.writeHead(status, {
+        'content-type': 'text/plain; charset=UTF-8',
+        'Content-Length': body.size,
+      })
+      outgoing.end(new Uint8Array(await body.arrayBuffer()))
+    } else {
+      outgoing.writeHead(status, { 'content-type': 'text/plain; charset=UTF-8' })
+      flushHeaders(outgoing)
+      await writeFromReadableStream(body, outgoing)?.catch(
+        (e) => handleResponseError(e, outgoing) as undefined
+      )
+    }
+    ;(outgoing as OutgoingHasOutgoingEnded)[outgoingEnded]?.()
+    return
+  }
+
+  let hasContentLength = false
+  if (header instanceof Headers) {
     hasContentLength = header.has('content-length')
     header = buildOutgoingHttpHeaders(header)
   } else if (Array.isArray(header)) {
@@ -160,7 +218,9 @@ const responseViaCache = async (
   }
 
   outgoing.writeHead(status, header)
-  if (typeof body === 'string' || body instanceof Uint8Array) {
+  if (body == null) {
+    outgoing.end()
+  } else if (typeof body === 'string' || body instanceof Uint8Array) {
     outgoing.end(body)
   } else if (body instanceof Blob) {
     outgoing.end(new Uint8Array(await body.arrayBuffer()))
@@ -297,19 +357,18 @@ export const getRequestListener = (
   ) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let res, req: any
+    let needsBodyCleanup = false
 
     try {
       // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
       // so generate a pseudo Request object with only the minimum required information.
       req = newRequest(incoming, options.hostname)
 
-      let incomingEnded =
-        !autoCleanupIncoming || incoming.method === 'GET' || incoming.method === 'HEAD'
-      if (!incomingEnded) {
+      // For non-GET/HEAD requests, mark for body stream wrapping and H2 cleanup.
+      needsBodyCleanup =
+        autoCleanupIncoming && !(incoming.method === 'GET' || incoming.method === 'HEAD')
+      if (needsBodyCleanup) {
         ;(incoming as IncomingMessageWithWrapBodyStream)[wrapBodyStream] = true
-        incoming.on('end', () => {
-          incomingEnded = true
-        })
 
         if (incoming instanceof Http2ServerRequest) {
           // a Http2ServerResponse instance requires additional processing on exit
@@ -317,65 +376,52 @@ export const getRequestListener = (
           // when the state is incomplete
           ;(outgoing as OutgoingHasOutgoingEnded)[outgoingEnded] = () => {
             // incoming is not consumed to the end
-            if (!incomingEnded) {
+            if (!incoming.readableEnded) {
               setTimeout(() => {
                 // in the case of a simple POST request, the cleanup process may be done automatically
-                // and end is called at this point. At that point, nothing is done.
-                if (!incomingEnded) {
+                // and readableEnded is true at this point. At that point, nothing is done.
+                if (!incoming.readableEnded) {
                   setTimeout(() => {
-                    drainIncoming(incoming)
+                    incoming.destroy()
+                    // a Http2ServerResponse instance will not terminate without also calling outgoing.destroy()
+                    outgoing.destroy()
                   })
                 }
               })
             }
           }
         }
-
-        // Drain incoming as soon as the response is flushed to the OS,
-        // before the socket is closed, to prevent TCP RST racing the response.
-        outgoing.on('finish', () => {
-          if (!incomingEnded) {
-            drainIncoming(incoming)
-          }
-        })
       }
-
-      // Detect if request was aborted.
-      outgoing.on('close', () => {
-        let abortReason: string | undefined
-        if (incoming.errored) {
-          abortReason = incoming.errored.toString()
-        } else if (!outgoing.writableFinished) {
-          abortReason = 'Client connection prematurely closed.'
-        }
-        if (abortReason !== undefined) {
-          req[abortRequest](abortReason)
-        }
-
-        // incoming is not consumed to the end
-        if (!incomingEnded) {
-          setTimeout(() => {
-            // in the case of a simple POST request, the cleanup process may be done automatically
-            // and end is called at this point. At that point, nothing is done.
-            if (!incomingEnded) {
-              setTimeout(() => {
-                drainIncoming(incoming)
-              })
-            }
-          })
-        }
-      })
 
       res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as
         | Response
         | Promise<Response>
       if (cacheKey in res) {
-        // synchronous, cacheable response
+        // Synchronous cacheable response — no close listener needed.
+        // No I/O events can fire between fetchCallback returning and responseViaCache
+        // completing, so abort detection is not needed here.
+        if (needsBodyCleanup && !incoming.readableEnded) {
+          // Handler returned without consuming the body; drain after the
+          // response is flushed so the socket is freed gracefully (avoids
+          // TCP RST racing the response for HTTP/1, and RST_STREAM for HTTP/2).
+          outgoing.once('finish', () => {
+            if (!incoming.readableEnded) {
+              drainIncoming(incoming)
+            }
+          })
+        }
         return responseViaCache(res as Response, outgoing)
       }
+      // Async response — create and register close listener only now, avoiding
+      // closure allocation on the synchronous hot path.
+      outgoing.on('close', makeCloseHandler(req, incoming, outgoing, needsBodyCleanup))
     } catch (e: unknown) {
       if (!res) {
         if (options.errorHandler) {
+          // Async error handler — register close listener so client disconnect aborts the signal.
+          if (req) {
+            outgoing.on('close', makeCloseHandler(req, incoming, outgoing, needsBodyCleanup))
+          }
           res = await options.errorHandler(req ? e : toRequestError(e))
           if (!res) {
             return
