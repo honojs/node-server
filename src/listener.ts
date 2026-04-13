@@ -26,12 +26,13 @@ type OutgoingHasOutgoingEnded = Http2ServerResponse & {
   [outgoingEnded]?: () => void
 }
 
-const makeCloseHandler = (
-  req: any,
-  incoming: IncomingMessage | Http2ServerRequest,
-  outgoing: ServerResponse | Http2ServerResponse,
-  needsBodyCleanup: boolean
-): (() => void) =>
+const makeCloseHandler =
+  (
+    req: any,
+    incoming: IncomingMessage | Http2ServerRequest,
+    outgoing: ServerResponse | Http2ServerResponse,
+    needsBodyCleanup: boolean
+  ): (() => void) =>
   () => {
     if (incoming.errored) {
       req[abortRequest](incoming.errored.toString())
@@ -358,7 +359,7 @@ export const getRequestListener = (
       if (!res) {
         if (options.errorHandler) {
           // Async error handler — register close listener so client disconnect aborts the signal.
-          if (req) outgoing.on('close', makeCloseHandler(req, incoming, outgoing, needsBodyCleanup))
+          if (req) {outgoing.on('close', makeCloseHandler(req, incoming, outgoing, needsBodyCleanup))}
           res = await options.errorHandler(req ? e : toRequestError(e))
           if (!res) {
             return

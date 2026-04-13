@@ -129,7 +129,11 @@ Object.defineProperty(Response, 'json', {
     } else {
       headers = { 'content-type': 'application/json' }
     }
-    return new Response(body, { status: init?.status ?? 200, statusText: init?.statusText, headers })
+    return new Response(body, {
+      status: init?.status ?? 200,
+      statusText: init?.statusText,
+      headers,
+    })
   },
   writable: true,
   configurable: true,

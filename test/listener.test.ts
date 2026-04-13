@@ -330,7 +330,9 @@ describe('Abort request - error path', () => {
     const server = createServer(requestListener)
 
     try {
-      const req = request(server).get('/').end(() => {})
+      const req = request(server)
+        .get('/')
+        .end(() => {})
       await errorHandlerStarted
       req.abort()
       await abortedPromise
@@ -367,7 +369,9 @@ describe('Abort request - error path', () => {
     const server = createServer(requestListener)
 
     try {
-      const req = request(server).get('/').end(() => {})
+      const req = request(server)
+        .get('/')
+        .end(() => {})
       await errorHandlerStarted
       req.abort()
       await abortedPromise
