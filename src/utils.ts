@@ -87,7 +87,7 @@ export const buildOutgoingHttpHeaders = (
       res[k] = v
     }
   }
-  
+
   if (defaultContentType) {
     res['content-type'] ??= defaultContentType
   }

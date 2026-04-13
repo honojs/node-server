@@ -65,9 +65,7 @@ export class Response {
       if (!(cache[2] instanceof Headers)) {
         cache[2] = new Headers(
           (cache[2] ||
-            (cache[1] === null
-              ? undefined
-              : { 'content-type': defaultContentType })) as HeadersInit
+            (cache[1] === null ? undefined : { 'content-type': defaultContentType })) as HeadersInit
         )
       }
       return cache[2]
