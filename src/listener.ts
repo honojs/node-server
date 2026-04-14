@@ -110,6 +110,16 @@ const makeCloseHandler =
     }
   }
 
+const isImmediateCacheableResponse = (res: Response): boolean => {
+  if (!(cacheKey in res)) {
+    return false
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body = ((res as any)[cacheKey] as InternalCache)[1]
+  return body === null || typeof body === 'string' || body instanceof Uint8Array
+}
+
 const handleRequestError = (): Response =>
   new Response(null, {
     status: 400,
@@ -361,6 +371,16 @@ export const getRequestListener = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let res, req: any
     let needsBodyCleanup = false
+    let closeHandlerAttached = false
+
+    const ensureCloseHandler = () => {
+      if (!req || closeHandlerAttached) {
+        return
+      }
+
+      closeHandlerAttached = true
+      outgoing.on('close', makeCloseHandler(req, incoming, outgoing, needsBodyCleanup))
+    }
 
     try {
       // `fetchCallback()` requests a Request object, but global.Request is expensive to generate,
@@ -399,7 +419,7 @@ export const getRequestListener = (
       res = fetchCallback(req, { incoming, outgoing } as HttpBindings) as
         | Response
         | Promise<Response>
-      if (cacheKey in res) {
+      if (!isPromise(res) && isImmediateCacheableResponse(res)) {
         // Synchronous cacheable response — no close listener needed.
         // No I/O events can fire between fetchCallback returning and responseViaCache
         // completing, so abort detection is not needed here.
@@ -413,18 +433,14 @@ export const getRequestListener = (
             }
           })
         }
-        return responseViaCache(res as Response, outgoing)
+        return responseViaCache(res, outgoing)
       }
-      // Async response — create and register close listener only now, avoiding
-      // closure allocation on the synchronous hot path.
-      outgoing.on('close', makeCloseHandler(req, incoming, outgoing, needsBodyCleanup))
+      ensureCloseHandler()
     } catch (e: unknown) {
       if (!res) {
         if (options.errorHandler) {
           // Async error handler — register close listener so client disconnect aborts the signal.
-          if (req) {
-            outgoing.on('close', makeCloseHandler(req, incoming, outgoing, needsBodyCleanup))
-          }
+          ensureCloseHandler()
           res = await options.errorHandler(req ? e : toRequestError(e))
           if (!res) {
             return
