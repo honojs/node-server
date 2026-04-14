@@ -113,47 +113,16 @@ Object.defineProperty(Response.prototype, Symbol.for('nodejs.util.inspect.custom
 Object.setPrototypeOf(Response, GlobalResponse)
 Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
 
-// Allowed characters in a redirect URL (ASCII subset).
-// Covers unreserved + reserved chars per RFC 3986 plus `%` for percent-encoding.
-const allowedRedirectUrlChar = new Uint8Array(128)
-for (let c = 0x30; c <= 0x39; c++) {
-  allowedRedirectUrlChar[c] = 1 // 0-9
-}
-for (let c = 0x41; c <= 0x5a; c++) {
-  allowedRedirectUrlChar[c] = 1 // A-Z
-}
-for (let c = 0x61; c <= 0x7a; c++) {
-  allowedRedirectUrlChar[c] = 1 // a-z
-}
-{
-  // eslint-disable-next-line quotes
-  const chars = "-./:?#[]@!$&'()*+,;=%~_"
-  for (let i = 0; i < chars.length; i++) {
-    allowedRedirectUrlChar[chars.charCodeAt(i)] = 1
-  }
-}
-
+// Fast path regex: matches http:// or https:// followed by RFC 3986 allowed chars.
+// Character class covers unreserved + reserved chars plus `%` for percent-encoding.
+// !  #-;  =  ?-[  ]  _  a-z  ~  A-Z (A-Z is within ?-[ range but listed for clarity)
+const validRedirectUrl = /^https?:\/\/[!#-;=?-[\]_a-z~A-Z]+$/
 const parseRedirectUrl = (url: string | URL): string => {
   if (url instanceof URL) {
     return url.href
   }
-  // Fast path: starts with http:// or https:// and all chars are in the allowed set
-  if (
-    url.length > 8 &&
-    url.charCodeAt(0) === 0x68 && // h
-    (url.charCodeAt(4) === 0x3a || url.charCodeAt(5) === 0x3a) // http: or https:
-  ) {
-    let safe = true
-    for (let i = 0, len = url.length; i < len; i++) {
-      const c = url.charCodeAt(i)
-      if (c > 0x7f || allowedRedirectUrlChar[c] === 0) {
-        safe = false
-        break
-      }
-    }
-    if (safe) {
-      return url
-    }
+  if (validRedirectUrl.test(url)) {
+    return url
   }
   return new URL(url).href
 }
