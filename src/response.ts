@@ -115,16 +115,32 @@ Object.defineProperty(Response.prototype, Symbol.for('nodejs.util.inspect.custom
 Object.setPrototypeOf(Response, GlobalResponse)
 Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
 
-// Override Response.json() to return a LightweightResponse so the listener
-// fast-path (cacheKey check) is hit instead of falling through to ReadableStream reading.
+// Fast path regex: matches http:// or https:// followed by RFC 3986 allowed chars.
+// Character class covers unreserved + reserved chars plus `%` for percent-encoding.
+// !  #-;  =  ?-[  ]  _  a-z  ~  A-Z (A-Z is within ?-[ range but listed for clarity)
+const validRedirectUrl = /^https?:\/\/[!#-;=?-[\]_a-z~A-Z]+$/
+const parseRedirectUrl = (url: string | URL): string => {
+  if (url instanceof URL) {
+    return url.href
+  }
+  if (validRedirectUrl.test(url)) {
+    return url
+  }
+  return new URL(url).href
+}
+
+const validRedirectStatuses = new Set([301, 302, 303, 307, 308])
+
+// Override Response.json() and Response.redirect() to return a LightweightResponse
+// so the listener fast-path (cacheKey check) is hit instead of falling through to ReadableStream reading.
 Object.defineProperty(Response, 'redirect', {
   value: function redirect(url: string | URL, status = 302): Response {
-    if (![301, 302, 303, 307, 308].includes(status)) {
+    if (!validRedirectStatuses.has(status)) {
       throw new RangeError('Invalid status code')
     }
     return new Response(null, {
       status,
-      headers: { location: typeof url === 'string' ? url : url.href },
+      headers: { location: parseRedirectUrl(url) },
     })
   },
   writable: true,
@@ -134,12 +150,15 @@ Object.defineProperty(Response, 'redirect', {
 Object.defineProperty(Response, 'json', {
   value: function json(data?: unknown, init?: ResponseInit): Response {
     const body = JSON.stringify(data)
+    if (body === undefined) {
+      throw new TypeError('The data is not JSON serializable')
+    }
     const initHeaders = init?.headers
     let headers: Record<string, string> | Headers
     if (initHeaders) {
       headers = new Headers(initHeaders)
-      if (!(headers as Headers).has('content-type')) {
-        ;(headers as Headers).set('content-type', 'application/json')
+      if (!headers.has('content-type')) {
+        headers.set('content-type', 'application/json')
       }
     } else {
       headers = { 'content-type': 'application/json' }
