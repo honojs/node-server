@@ -62,25 +62,35 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
 }
 
 export const buildOutgoingHttpHeaders = (
-  headers: Headers | HeadersInit | null | undefined
+  headers: Headers | HeadersInit | null | undefined,
+  defaultContentType: string | undefined
 ): OutgoingHttpHeaders => {
   const res: OutgoingHttpHeaders = {}
   if (!(headers instanceof Headers)) {
     headers = new Headers(headers ?? undefined)
   }
 
-  const cookies = []
-  for (const [k, v] of headers) {
-    if (k === 'set-cookie') {
-      cookies.push(v)
-    } else {
+  if (headers.has('set-cookie')) {
+    const cookies = []
+    for (const [k, v] of headers) {
+      if (k === 'set-cookie') {
+        cookies.push(v)
+      } else {
+        res[k] = v
+      }
+    }
+    if (cookies.length > 0) {
+      res['set-cookie'] = cookies
+    }
+  } else {
+    for (const [k, v] of headers) {
       res[k] = v
     }
   }
-  if (cookies.length > 0) {
-    res['set-cookie'] = cookies
+
+  if (defaultContentType) {
+    res['content-type'] ??= defaultContentType
   }
-  res['content-type'] ??= 'text/plain; charset=UTF-8'
 
   return res
 }

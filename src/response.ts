@@ -3,13 +3,15 @@
 
 import type { OutgoingHttpHeaders } from 'node:http'
 
+export const defaultContentType = 'text/plain; charset=UTF-8'
+
 const responseCache = Symbol('responseCache')
 const getResponseCache = Symbol('getResponseCache')
 export const cacheKey = Symbol('cache')
 
 export type InternalCache = [
   number,
-  string | ReadableStream,
+  string | ReadableStream | null,
   Record<string, string> | [string, string][] | Headers | OutgoingHttpHeaders | undefined,
 ]
 interface LightResponse {
@@ -47,12 +49,13 @@ export class Response {
     }
 
     if (
+      body == null ||
       typeof body === 'string' ||
       typeof (body as ReadableStream)?.getReader !== 'undefined' ||
       body instanceof Blob ||
       body instanceof Uint8Array
     ) {
-      ;(this as any)[cacheKey] = [init?.status || 200, body, headers || init?.headers]
+      ;(this as any)[cacheKey] = [init?.status || 200, body ?? null, headers || init?.headers]
     }
   }
 
@@ -61,7 +64,8 @@ export class Response {
     if (cache) {
       if (!(cache[2] instanceof Headers)) {
         cache[2] = new Headers(
-          (cache[2] || { 'content-type': 'text/plain; charset=UTF-8' }) as HeadersInit
+          (cache[2] ||
+            (cache[1] === null ? undefined : { 'content-type': defaultContentType })) as HeadersInit
         )
       }
       return cache[2]
@@ -110,3 +114,61 @@ Object.defineProperty(Response.prototype, Symbol.for('nodejs.util.inspect.custom
 
 Object.setPrototypeOf(Response, GlobalResponse)
 Object.setPrototypeOf(Response.prototype, GlobalResponse.prototype)
+
+// Fast path regex: matches http:// or https:// followed by RFC 3986 allowed chars.
+// Character class covers unreserved + reserved chars plus `%` for percent-encoding.
+// !  #-;  =  ?-[  ]  _  a-z  ~  A-Z (A-Z is within ?-[ range but listed for clarity)
+const validRedirectUrl = /^https?:\/\/[!#-;=?-[\]_a-z~A-Z]+$/
+const parseRedirectUrl = (url: string | URL): string => {
+  if (url instanceof URL) {
+    return url.href
+  }
+  if (validRedirectUrl.test(url)) {
+    return url
+  }
+  return new URL(url).href
+}
+
+const validRedirectStatuses = new Set([301, 302, 303, 307, 308])
+
+// Override Response.json() and Response.redirect() to return a LightweightResponse
+// so the listener fast-path (cacheKey check) is hit instead of falling through to ReadableStream reading.
+Object.defineProperty(Response, 'redirect', {
+  value: function redirect(url: string | URL, status = 302): Response {
+    if (!validRedirectStatuses.has(status)) {
+      throw new RangeError('Invalid status code')
+    }
+    return new Response(null, {
+      status,
+      headers: { location: parseRedirectUrl(url) },
+    })
+  },
+  writable: true,
+  configurable: true,
+})
+
+Object.defineProperty(Response, 'json', {
+  value: function json(data?: unknown, init?: ResponseInit): Response {
+    const body = JSON.stringify(data)
+    if (body === undefined) {
+      throw new TypeError('The data is not JSON serializable')
+    }
+    const initHeaders = init?.headers
+    let headers: Record<string, string> | Headers
+    if (initHeaders) {
+      headers = new Headers(initHeaders)
+      if (!headers.has('content-type')) {
+        headers.set('content-type', 'application/json')
+      }
+    } else {
+      headers = { 'content-type': 'application/json' }
+    }
+    return new Response(body, {
+      status: init?.status ?? 200,
+      statusText: init?.statusText,
+      headers,
+    })
+  },
+  writable: true,
+  configurable: true,
+})

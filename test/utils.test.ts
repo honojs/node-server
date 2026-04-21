@@ -11,41 +11,41 @@ describe('buildOutgoingHttpHeaders', () => {
       a: 'b',
       'content-type': 'text/html; charset=UTF-8',
     })
-    const result = buildOutgoingHttpHeaders(headers)
+    const result = buildOutgoingHttpHeaders(headers, 'text/plain; charset=UTF-8')
     expect(result).toEqual({
       a: 'b',
       'content-type': 'text/html; charset=UTF-8',
     })
   })
 
-  it('multiple set-cookie', () => {
+  it('multiple set-cookie with default content-type', () => {
     const headers = new Headers()
     headers.append('set-cookie', 'a')
     headers.append('set-cookie', 'b')
-    const result = buildOutgoingHttpHeaders(headers)
+    const result = buildOutgoingHttpHeaders(headers, 'text/plain; charset=UTF-8')
     expect(result).toEqual({
       'set-cookie': ['a', 'b'],
       'content-type': 'text/plain; charset=UTF-8',
     })
   })
 
-  it('Headers', () => {
+  it('Headers with default content-type', () => {
     const headers = new Headers({
       a: 'b',
     })
-    const result = buildOutgoingHttpHeaders(headers)
+    const result = buildOutgoingHttpHeaders(headers, 'text/plain; charset=UTF-8')
     expect(result).toEqual({
       a: 'b',
       'content-type': 'text/plain; charset=UTF-8',
     })
   })
 
-  it('Record<string, string>', () => {
+  it('Record<string, string> with default content-type', () => {
     const headers = {
       a: 'b',
       'Set-Cookie': 'c', // case-insensitive
     }
-    const result = buildOutgoingHttpHeaders(headers)
+    const result = buildOutgoingHttpHeaders(headers, 'text/plain; charset=UTF-8')
     expect(result).toEqual({
       a: 'b',
       'set-cookie': ['c'],
@@ -53,26 +53,41 @@ describe('buildOutgoingHttpHeaders', () => {
     })
   })
 
-  it('Record<string, string>[]', () => {
+  it('Record<string, string>[] with default content-type', () => {
     const headers: HeadersInit = [['a', 'b']]
-    const result = buildOutgoingHttpHeaders(headers)
+    const result = buildOutgoingHttpHeaders(headers, 'text/plain; charset=UTF-8')
     expect(result).toEqual({
       a: 'b',
       'content-type': 'text/plain; charset=UTF-8',
     })
   })
 
-  it('null', () => {
-    const result = buildOutgoingHttpHeaders(null)
+  it('null without default content-type', () => {
+    const result = buildOutgoingHttpHeaders(null, undefined)
+    expect(result).toEqual({})
+  })
+
+  it('undefined without default content-type', () => {
+    const result = buildOutgoingHttpHeaders(undefined, undefined)
+    expect(result).toEqual({})
+  })
+
+  it('null with default content-type', () => {
+    const result = buildOutgoingHttpHeaders(null, 'text/plain; charset=UTF-8')
     expect(result).toEqual({
       'content-type': 'text/plain; charset=UTF-8',
     })
   })
 
-  it('undefined', () => {
-    const result = buildOutgoingHttpHeaders(undefined)
+  it('does not override existing content-type when default is provided', () => {
+    const result = buildOutgoingHttpHeaders(
+      {
+        'content-type': 'application/json',
+      },
+      'text/plain; charset=UTF-8'
+    )
     expect(result).toEqual({
-      'content-type': 'text/plain; charset=UTF-8',
+      'content-type': 'application/json',
     })
   })
 })
@@ -177,7 +192,22 @@ describe('readWithoutBlocking', () => {
     expect(result3).toEqual({ done: true, value: undefined })
   })
 
-  it('should return undefined if stream is closed', async () => {
+  it('should return undefined value if stream is closed in start', async () => {
+    const body = new ReadableStream({
+      async start(controller) {
+        controller.close()
+      },
+    })
+
+    const response = new Response(body)
+    const reader = response.body!.getReader()
+    const readPromise = reader.read()
+
+    const result = await readWithoutBlocking(readPromise)
+    expect(result).toEqual({ done: true, value: undefined })
+  })
+
+  it('should return undefined if stream is errored in start', async () => {
     const body = new ReadableStream({
       async start() {
         throw new Error('test')
@@ -187,8 +217,7 @@ describe('readWithoutBlocking', () => {
     const reader = response.body!.getReader()
     const readPromise = reader.read()
 
-    const result = await readWithoutBlocking(readPromise)
-    expect(result).toBeUndefined()
+    await expect(readWithoutBlocking(readPromise)).rejects.toThrow('test')
   })
 
   it('should return undefined if stream is errored', async () => {
@@ -201,7 +230,6 @@ describe('readWithoutBlocking', () => {
     const reader = response.body!.getReader()
     const readPromise = reader.read()
 
-    const result = await readWithoutBlocking(readPromise).catch(() => undefined)
-    expect(result).toBeUndefined()
+    await expect(readWithoutBlocking(readPromise)).rejects.toThrow('test')
   })
 })

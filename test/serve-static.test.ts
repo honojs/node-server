@@ -418,7 +418,7 @@ describe('Serve Static Middleware', () => {
 
 describe('Serve Static Middleware with wrong path', () => {
   it('Should show an error when the path is wrong', async () => {
-    const logSpy = jest.spyOn(console, 'error')
+    const logSpy = vi.spyOn(console, 'error')
 
     const app = new Hono<{
       Variables: {
@@ -434,7 +434,6 @@ describe('Serve Static Middleware with wrong path', () => {
     )
 
     expect(logSpy).toHaveBeenCalledWith(
-      // eslint-disable-next-line quotes
       "serveStatic: root path './public' is not found, are you sure it's correct?"
     )
   })

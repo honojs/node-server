@@ -413,20 +413,22 @@ describe('autoCleanupIncoming: true (default)', () => {
 
     // Reconnect HTTP2 client before each test to avoid session-level
     // flow control window exhaustion from previous tests
-    beforeEach((done) => {
-      if (!client.closed && !client.destroyed) {
-        client.close(() => {
+    beforeEach(() => {
+      return new Promise<void>((resolve) => {
+        if (!client.closed && !client.destroyed) {
+          client.close(() => {
+            client = connectHTTP2(`https://${address.address}:${address.port}`, {
+              rejectUnauthorized: false,
+            })
+            client.once('connect', () => resolve())
+          })
+        } else {
           client = connectHTTP2(`https://${address.address}:${address.port}`, {
             rejectUnauthorized: false,
           })
-          client.once('connect', () => done())
-        })
-      } else {
-        client = connectHTTP2(`https://${address.address}:${address.port}`, {
-          rejectUnauthorized: false,
-        })
-        client.once('connect', () => done())
-      }
+          client.once('connect', () => resolve())
+        }
+      })
     })
 
     runner(

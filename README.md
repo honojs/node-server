@@ -1,12 +1,11 @@
 # Node.js Adapter for Hono
 
 This adapter `@hono/node-server` allows you to run your Hono application on Node.js.
-Initially, Hono wasn't designed for Node.js, but with this adapter, you can now use Hono on Node.js.
-It utilizes web standard APIs implemented in Node.js version 18 or higher.
+Initially, Hono wasn't designed for Node.js, but with this adapter, you can now use Hono on Node.js. It utilizes web standard APIs implemented in Node.js.
 
 ## Benchmarks
 
-Hono is 3.5 times faster than Express.
+Hono is 4.1 times faster than Express.
 
 Express:
 
@@ -14,12 +13,12 @@ Express:
 $ bombardier -d 10s --fasthttp http://localhost:3000/
 
 Statistics        Avg      Stdev        Max
-  Reqs/sec     16438.94    1603.39   19155.47
-  Latency        7.60ms     7.51ms   559.89ms
+  Reqs/sec     20803.37    1713.06   24910.85
+  Latency        6.01ms     5.21ms   451.37ms
   HTTP codes:
-    1xx - 0, 2xx - 164494, 3xx - 0, 4xx - 0, 5xx - 0
+    1xx - 0, 2xx - 208131, 3xx - 0, 4xx - 0, 5xx - 0
     others - 0
-  Throughput:     4.55MB/s
+  Throughput:     5.75MB/s
 ```
 
 Hono + `@hono/node-server`:
@@ -28,23 +27,17 @@ Hono + `@hono/node-server`:
 $ bombardier -d 10s --fasthttp http://localhost:3000/
 
 Statistics        Avg      Stdev        Max
-  Reqs/sec     58296.56    5512.74   74403.56
-  Latency        2.14ms     1.46ms   190.92ms
+  Reqs/sec     85405.51    7250.65  102658.51
+  Latency        1.46ms     1.00ms   149.95ms
   HTTP codes:
-    1xx - 0, 2xx - 583059, 3xx - 0, 4xx - 0, 5xx - 0
+    1xx - 0, 2xx - 854120, 3xx - 0, 4xx - 0, 5xx - 0
     others - 0
-  Throughput:    12.56MB/s
+  Throughput:    18.49MB/s
 ```
 
 ## Requirements
 
-It works on Node.js versions greater than 18.x. The specific required Node.js versions are as follows:
-
-- 18.x => 18.14.1+
-- 19.x => 19.7.0+
-- 20.x => 20.0.0+
-
-Essentially, you can simply use the latest version of each major release.
+It works on Node.js versions greater than 20.x.
 
 ## Installation
 
@@ -74,6 +67,34 @@ app.get('/', (c) => c.text('Hono meets Node.js'))
 
 serve(app, (info) => {
   console.log(`Listening on http://localhost:${info.port}`) // Listening on http://localhost:3000
+})
+```
+
+## WebSocket
+
+You can upgrade WebSocket connections with `upgradeWebSocket` from `@hono/node-server`.
+To enable this, install `ws` (and `@types/ws`) in your project, then create and provide a `WebSocketServer` as shown in the example below.
+
+```ts
+import { serve, upgradeWebSocket } from '@hono/node-server'
+import { WebSocketServer } from 'ws'
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+app.get(
+  '/ws',
+  upgradeWebSocket(() => ({
+    onMessage(event, ws) {
+      ws.send(event.data)
+    },
+  }))
+)
+
+const wss = new WebSocketServer({ noServer: true }) // important to create with `noServer: true`
+serve({
+  fetch: app.fetch,
+  websocket: { server: wss },
 })
 ```
 
@@ -135,6 +156,23 @@ If the application accepts connections from arbitrary clients, this cleanup must
 serve({
   fetch: app.fetch,
   autoCleanupIncoming: false,
+})
+```
+
+### `websocket`
+
+provide a websocket server to enable websocket support.
+
+```ts
+import { serve, upgradeWebSocket } from '@hono/node-server'
+import { WebSocketServer } from 'ws'
+
+// ...
+const wss = new WebSocketServer({ noServer: true })
+
+serve({
+  fetch: app.fetch,
+  websocket: { server: wss },
 })
 ```
 

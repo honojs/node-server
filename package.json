@@ -1,64 +1,77 @@
 {
   "name": "@hono/node-server",
-  "version": "1.19.14",
+  "version": "2.0.0-rc.2",
   "description": "Node.js Adapter for Hono",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/index.mjs",
+  "type": "module",
+  "types": "dist/index.d.mts",
   "files": [
     "dist"
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.mjs"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./serve-static": {
-      "types": "./dist/serve-static.d.ts",
-      "require": "./dist/serve-static.js",
-      "import": "./dist/serve-static.mjs"
-    },
-    "./vercel": {
-      "types": "./dist/vercel.d.ts",
-      "require": "./dist/vercel.js",
-      "import": "./dist/vercel.mjs"
+      "import": {
+        "types": "./dist/serve-static.d.mts",
+        "default": "./dist/serve-static.mjs"
+      },
+      "require": {
+        "types": "./dist/serve-static.d.cts",
+        "default": "./dist/serve-static.cjs"
+      }
     },
     "./utils/*": {
-      "types": "./dist/utils/*.d.ts",
-      "require": "./dist/utils/*.js",
-      "import": "./dist/utils/*.mjs"
+      "import": {
+        "types": "./dist/utils/*.d.mts",
+        "default": "./dist/utils/*.mjs"
+      },
+      "require": {
+        "types": "./dist/utils/*.d.cts",
+        "default": "./dist/utils/*.cjs"
+      }
     },
     "./conninfo": {
-      "types": "./dist/conninfo.d.ts",
-      "require": "./dist/conninfo.js",
-      "import": "./dist/conninfo.mjs"
+      "import": {
+        "types": "./dist/conninfo.d.mts",
+        "default": "./dist/conninfo.mjs"
+      },
+      "require": {
+        "types": "./dist/conninfo.d.cts",
+        "default": "./dist/conninfo.cjs"
+      }
     }
   },
   "typesVersions": {
     "*": {
       ".": [
-        "./dist/index.d.ts"
+        "./dist/index.d.mts"
       ],
       "serve-static": [
-        "./dist/serve-static.d.ts"
-      ],
-      "vercel": [
-        "./dist/vercel.d.ts"
+        "./dist/serve-static.d.mts"
       ],
       "utils/*": [
-        "./dist/utils/*.d.ts"
+        "./dist/utils/*.d.mts"
       ],
       "conninfo": [
-        "./dist/conninfo.d.ts"
+        "./dist/conninfo.d.mts"
       ]
     }
   },
   "scripts": {
-    "test": "node --expose-gc node_modules/jest/bin/jest.js",
-    "build": "tsup --external hono",
-    "watch": "tsup --watch",
+    "test": "vitest",
+    "build": "tsdown --external hono",
+    "watch": "tsdown --watch",
     "postbuild": "publint",
-    "prerelease": "bun run build && bun run test",
+    "prerelease": "bun run build && bun run test --run",
     "release": "np",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
@@ -68,7 +81,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/honojs/node-server.git"
+    "url": "git+https://github.com/honojs/node-server.git"
   },
   "homepage": "https://github.com/honojs/node-server",
   "author": "Yusuke Wada <yusuke@kamawada.com> (https://github.com/yusukebe)",
@@ -77,24 +90,24 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=18.14.1"
+    "node": ">=20"
   },
   "devDependencies": {
     "@hono/eslint-config": "^1.0.1",
-    "@types/jest": "^29.5.3",
     "@types/node": "^20.10.0",
     "@types/supertest": "^2.0.12",
+    "@types/ws": "^8.18.1",
     "@whatwg-node/fetch": "^0.9.14",
     "eslint": "^9.10.0",
-    "hono": "^4.4.10",
-    "jest": "^29.6.1",
+    "hono": "^4.12.8",
     "np": "^7.7.0",
     "prettier": "^3.2.4",
-    "publint": "^0.1.16",
+    "publint": "^0.3.18",
     "supertest": "^6.3.3",
-    "ts-jest": "^29.1.1",
-    "tsup": "^7.2.0",
-    "typescript": "^5.3.2"
+    "tsdown": "^0.20.3",
+    "typescript": "^5.3.2",
+    "vitest": "^4.0.18",
+    "ws": "^8.19.0"
   },
   "peerDependencies": {
     "hono": "^4"
