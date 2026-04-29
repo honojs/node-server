@@ -57,11 +57,45 @@ type UpgradeWebSocketOptions = {
   onError: (err: unknown) => void
 }
 
-const rejectUpgradeRequest = (socket: Duplex, status: number) => {
+// Hop-by-hop headers per RFC 9110 Section 7.6.1
+// (https://www.rfc-editor.org/rfc/rfc9110.html#name-connection) plus
+// `keep-alive` (commonly treated as hop-by-hop by HTTP implementations) and
+// WebSocket handshake headers managed by `ws` itself. These must not be
+// forwarded onto the upgrade response or the handshake will be corrupted.
+const responseHeadersToSkip = new Set([
+  'connection',
+  'content-length',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'sec-websocket-accept',
+  'sec-websocket-extensions',
+  'sec-websocket-protocol',
+])
+
+const appendResponseHeaders = (headers: string[], responseHeaders?: Headers) => {
+  if (!responseHeaders) {
+    return
+  }
+  responseHeaders.forEach((value, key) => {
+    if (responseHeadersToSkip.has(key.toLowerCase())) {
+      return
+    }
+    headers.push(`${key}: ${value}`)
+  })
+}
+
+const rejectUpgradeRequest = (socket: Duplex, status: number, responseHeaders?: Headers) => {
+  const responseLines = ['Connection: close', 'Content-Length: 0']
+  appendResponseHeaders(responseLines, responseHeaders)
+
   socket.end(
     `HTTP/1.1 ${status.toString()} ${STATUS_CODES[status] ?? ''}\r\n` +
-      'Connection: close\r\n' +
-      'Content-Length: 0\r\n' +
+      `${responseLines.join('\r\n')}\r\n` +
       '\r\n'
   )
 }
@@ -121,6 +155,7 @@ export const setupWebSocket = (options: {
     }
 
     let status = 400
+    let responseHeaders: Headers | undefined
     try {
       const response = (await fetchCallback(
         createUpgradeRequest(request),
@@ -128,6 +163,7 @@ export const setupWebSocket = (options: {
       )) as Response
       if (response instanceof Response) {
         status = response.status
+        responseHeaders = response.headers
       }
     } catch {
       if (server.listenerCount('upgrade') === 1) {
@@ -141,14 +177,25 @@ export const setupWebSocket = (options: {
     if (!waiter || waiter.connectionSymbol !== env[CONNECTION_SYMBOL_KEY]) {
       waiterMap.delete(request)
       if (server.listenerCount('upgrade') === 1) {
-        rejectUpgradeRequest(socket, status)
+        rejectUpgradeRequest(socket, status, responseHeaders)
       }
       return
     }
 
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request)
-    })
+    const addResponseHeaders = (headers: string[]) => {
+      appendResponseHeaders(headers, responseHeaders)
+    }
+
+    // `headers` is emitted synchronously inside `handleUpgrade`, so this
+    // listener cannot leak across concurrent upgrades on the shared `wss`.
+    wss.on('headers', addResponseHeaders)
+    try {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request)
+      })
+    } finally {
+      wss.off('headers', addResponseHeaders)
+    }
   })
 
   server.on('close', () => {
