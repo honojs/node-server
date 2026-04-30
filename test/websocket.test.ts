@@ -69,6 +69,73 @@ describe('WebSocket', () => {
     }
   })
 
+  it('should forward response headers set by middleware on a successful upgrade', async () => {
+    const app = new Hono()
+
+    app.use(async (c, next) => {
+      await next()
+      c.header('x-auth-result', c.req.header('authorization') ? 'authorized' : 'missing')
+    })
+    app.get(
+      '/ws',
+      upgradeWebSocket(() => ({}))
+    )
+
+    const { server, address } = await startServer(app)
+
+    try {
+      const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`, {
+        headers: {
+          authorization: 'Bearer token',
+        },
+      })
+      const responseHeaders = await new Promise<Record<string, string | string[] | undefined>>(
+        (resolve, reject) => {
+          ws.once('upgrade', (response) => {
+            resolve(response.headers)
+          })
+          ws.once('error', reject)
+        }
+      )
+      expect(responseHeaders['x-auth-result']).toBe('authorized')
+      ws.close()
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('should forward response headers when the upgrade is rejected', async () => {
+    const app = new Hono()
+
+    app.get(
+      '/ws',
+      () =>
+        new Response(null, {
+          status: 401,
+          headers: {
+            'x-auth-result': 'missing',
+          },
+        })
+    )
+
+    const { server, address } = await startServer(app)
+
+    try {
+      const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+      const responseHeaders = await new Promise<Record<string, string | string[] | undefined>>(
+        (resolve, reject) => {
+          ws.once('unexpected-response', (_, response) => {
+            resolve(response.headers)
+          })
+          ws.once('open', () => reject(new Error('WebSocket must not be upgraded')))
+        }
+      )
+      expect(responseHeaders['x-auth-result']).toBe('missing')
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
   it('should not block other upgrade listeners', async () => {
     const app = new Hono()
     const { server, address } = await startServer(app)
