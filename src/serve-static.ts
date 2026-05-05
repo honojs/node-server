@@ -167,6 +167,7 @@ export const serveStatic = <E extends Env = any>(
     let result
     const size = stats.size
     const range = c.req.header('range') || ''
+    c.header('Last-Modified', stats.mtime.toUTCString())
 
     if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
       c.header('Content-Length', size.toString())

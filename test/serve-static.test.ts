@@ -103,8 +103,10 @@ describe('Serve Static Middleware', () => {
 
   it('Should return correct headers and data for text', async () => {
     const res = await request(server).get('/static/plain.txt')
+    const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
+    expect(res.headers['last-modified']).toBe(stats.mtime.toUTCString())
     expect(res.text).toBe('This is plain.txt')
   })
 
@@ -136,18 +138,24 @@ describe('Serve Static Middleware', () => {
 
   it('Should return 200 response to HEAD request', async () => {
     const res = await request(server).head('/static/plain.txt')
+    const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
     expect(res.headers['content-length']).toBe('17')
+    expect(res.headers['last-modified']).toBe(stats.mtime.toUTCString())
     expect(res.text).toBe(undefined)
   })
 
   it('Should return correct headers and data with range headers', async () => {
     let res = await request(server).get('/static/plain.txt').set('range', '0-9')
+    const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
     expect(res.status).toBe(206)
     expect(res.headers['content-type']).toBe('text/plain; charset=utf-8')
     expect(res.headers['content-length']).toBe('10')
     expect(res.headers['content-range']).toBe('bytes 0-9/17')
+    expect(res.headers['last-modified']).toBe(stats.mtime.toUTCString())
+    expect(res.headers['date']).not.toBe(stats.mtime.toUTCString())
+    expect(res.headers['date']).not.toBe(stats.birthtime.toUTCString())
     expect(res.text.length).toBe(10)
     expect(res.text).toBe('This is pl')
 
@@ -230,16 +238,20 @@ describe('Serve Static Middleware', () => {
   it('Should return a pre-compressed zstd response - /static-with-precompressed/hello.txt', async () => {
     // Check if it returns a normal response
     let res = await request(server).get('/static-with-precompressed/hello.txt')
+    let stats = statSync(path.join(__dirname, 'assets', 'static-with-precompressed', 'hello.txt'))
     expect(res.status).toBe(200)
     expect(res.headers['content-length']).toBe('20')
+    expect(res.headers['last-modified']).toBe(stats.mtime.toUTCString())
     expect(res.text).toBe('Hello Not Compressed')
 
     res = await request(server)
       .get('/static-with-precompressed/hello.txt')
       .set('Accept-Encoding', 'zstd')
+    stats = statSync(path.join(__dirname, 'assets', 'static-with-precompressed', 'hello.txt.zst'))
     expect(res.status).toBe(200)
     expect(res.headers['content-length']).toBe('21')
     expect(res.headers['content-encoding']).toBe('zstd')
+    expect(res.headers['last-modified']).toBe(stats.mtime.toUTCString())
     expect(res.headers['vary']).toBe('Accept-Encoding')
     expect(res.text).toBe('Hello zstd Compressed')
   })
