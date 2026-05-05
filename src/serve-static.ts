@@ -177,7 +177,6 @@ export const serveStatic = <E extends Env = any>(
       result = c.body(createStreamBody(createReadStream(path)), 200)
     } else {
       c.header('Accept-Ranges', 'bytes')
-      c.header('Date', stats.birthtime.toUTCString())
 
       const parts = range.replace(/bytes=/, '').split('-', 2)
       const start = parseInt(parts[0], 10) || 0
