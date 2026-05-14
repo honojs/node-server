@@ -110,7 +110,13 @@
     "ws": "^8.19.0"
   },
   "peerDependencies": {
-    "hono": "^4"
+    "hono": "^4",
+    "ws": "^8"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
   },
   "packageManager": "bun@1.2.20"
 }

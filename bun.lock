@@ -23,7 +23,11 @@
       },
       "peerDependencies": {
         "hono": "^4",
+        "ws": "^8",
       },
+      "optionalPeers": [
+        "ws",
+      ],
     },
   },
   "packages": {
