@@ -7,7 +7,7 @@ import { createStreamBody } from './utils/stream'
 
 export type ServeStaticOptions<E extends Env = Env> = {
   /**
-   * Root path, relative to current working directory from which the app was started. Absolute paths are not supported.
+   * Root path. Relative path is based on current working directory from which the app was started.
    */
   root?: string
   path?: string
