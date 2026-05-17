@@ -89,6 +89,34 @@ describe('Response', () => {
     expect(childResponse.headers.get('content-type')).toEqual('application/json')
   })
 
+  it('Should preserve headers mutated after construction when cloned via new Response(body, init)', () => {
+    // Regression test for https://github.com/honojs/node-server/issues/304.
+    // Headers appended (or set/deleted) after construction must be visible on
+    // a clone built with `new Response(body, parent)` — which is the pattern
+    // used by middleware such as `cors` and `compress`.
+    const parentResponse = new Response('hello', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+    parentResponse.headers.append('set-cookie', 'session=abc; Path=/; HttpOnly')
+
+    // Pattern 1: clone before any `getResponseCache`-triggering access.
+    const childResponse = new Response('hello', parentResponse)
+    expect(childResponse.headers.get('set-cookie')).toEqual('session=abc; Path=/; HttpOnly')
+    expect(childResponse.headers.get('content-type')).toEqual('application/json')
+
+    // Pattern 2: clone after `.body` has materialized the GlobalResponse —
+    // this is what middleware does when streaming a raw Response body.
+    const parentForBody = new Response('hello', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+    parentForBody.headers.append('set-cookie', 'session=xyz; Path=/; HttpOnly')
+    const streamedChild = new Response(parentForBody.body, parentForBody)
+    expect(streamedChild.headers.get('set-cookie')).toEqual('session=xyz; Path=/; HttpOnly')
+    expect(streamedChild.headers.get('content-type')).toEqual('application/json')
+  })
+
   it('Nested constructors should not cause an error even if ReadableStream is specified', async () => {
     const stream = new Response('hono').body
     const parentResponse = new Response(stream)
