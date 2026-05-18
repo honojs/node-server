@@ -1012,6 +1012,35 @@ describe('set child response to c.res', () => {
   })
 })
 
+describe('Headers appended to a raw Response after construction (issue #304)', () => {
+  // Regression test: a handler returning `new Response(body, init)` and
+  // appending headers (e.g. `Set-Cookie`) afterwards must not lose those
+  // headers when middleware later clones the response via `new Response(...)`.
+  const app = new Hono()
+  app.use('*', async (c, next) => {
+    await next()
+    // Mimics what middleware such as `cors`/`compress` does internally.
+    c.res = new Response(c.res.body, c.res)
+  })
+  app.post('/test', () => {
+    const res = new Response('hello', {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+    res.headers.append('Set-Cookie', 'session=abc; Path=/; HttpOnly')
+    return res
+  })
+
+  it('Should preserve the appended Set-Cookie header', async () => {
+    const server = createAdaptorServer(app)
+    const res = await request(server).post('/test')
+    expect(res.status).toBe(200)
+    expect(res.text).toBe('hello')
+    expect(res.headers['content-type']).toMatch('text/plain')
+    expect(res.headers['set-cookie']).toEqual(['session=abc; Path=/; HttpOnly'])
+  })
+})
+
 describe('forwarding IncomingMessage and ServerResponse in env', () => {
   const app = new Hono<{ Bindings: HttpBindings }>()
   app.get('/', (c) =>

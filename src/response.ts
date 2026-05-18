@@ -25,8 +25,16 @@ export class Response {
   #init?: ResponseInit;
 
   [getResponseCache](): globalThis.Response {
+    // If `cacheKey` has been populated with a live `Headers` instance, the
+    // user (or middleware) may have mutated it after construction. Use those
+    // headers so the GlobalResponse reflects the current state.
+    const cache = (this as LightResponse)[cacheKey]
+    const liveHeaders = cache && cache[2] instanceof Headers ? cache[2] : undefined
     delete (this as LightResponse)[cacheKey]
-    return ((this as LightResponse)[responseCache] ||= new GlobalResponse(this.#body, this.#init))
+    return ((this as LightResponse)[responseCache] ||= new GlobalResponse(
+      this.#body,
+      liveHeaders ? { ...this.#init, headers: liveHeaders } : this.#init
+    ))
   }
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
@@ -41,8 +49,11 @@ export class Response {
         return
       } else {
         this.#init = init.#init
-        // clone headers to avoid sharing the same object between parent and child
-        headers = new Headers((init.#init as ResponseInit).headers)
+        // Read headers via the live getter so mutations made on `init` after
+        // construction (e.g. `init.headers.append('Set-Cookie', ...)`) are
+        // preserved on the clone. `new Headers(...)` still produces an
+        // independent copy so parent and child do not share the same object.
+        headers = new Headers(init.headers)
       }
     } else {
       this.#init = init
