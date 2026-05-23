@@ -87,6 +87,7 @@ const drainIncoming = (incoming: IncomingMessage | Http2ServerRequest): void => 
 
 const makeCloseHandler =
   (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     req: any,
     incoming: IncomingMessage | Http2ServerRequest,
     outgoing: ServerResponse | Http2ServerResponse,

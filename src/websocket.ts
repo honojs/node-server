@@ -1,10 +1,10 @@
 import type { UpgradeWebSocket, WSContext } from 'hono/ws'
 import { defineWebSocketHelper } from 'hono/ws'
-import type { RawData, WebSocket, WebSocketServer } from 'ws'
 import type { IncomingMessage } from 'node:http'
 import { STATUS_CODES } from 'node:http'
 import type { Duplex } from 'node:stream'
 import type { FetchCallback, ServerType } from './types'
+import type { WebSocketData, WebSocketLike, WebSocketServerLike } from './websocket-types'
 
 interface CloseEventInit extends EventInit {
   code?: number
@@ -40,7 +40,10 @@ export const CloseEvent: typeof globalThis.CloseEvent =
 
 const generateConnectionSymbol = () => Symbol('connection')
 
-type WaitForWebSocket = (request: IncomingMessage, connectionSymbol: symbol) => Promise<WebSocket>
+type WaitForWebSocket = (
+  request: IncomingMessage,
+  connectionSymbol: symbol
+) => Promise<WebSocketLike>
 
 const CONNECTION_SYMBOL_KEY: unique symbol = Symbol('CONNECTION_SYMBOL_KEY')
 const WAIT_FOR_WEBSOCKET_SYMBOL: unique symbol = Symbol('WAIT_FOR_WEBSOCKET_SYMBOL')
@@ -48,7 +51,7 @@ const WAIT_FOR_WEBSOCKET_SYMBOL: unique symbol = Symbol('WAIT_FOR_WEBSOCKET_SYMB
 export type UpgradeBindings = {
   incoming: IncomingMessage
   outgoing: undefined
-  wss: WebSocketServer
+  wss: WebSocketServerLike
   [CONNECTION_SYMBOL_KEY]?: symbol
   [WAIT_FOR_WEBSOCKET_SYMBOL]?: WaitForWebSocket
 }
@@ -119,13 +122,13 @@ const createUpgradeRequest = (request: IncomingMessage): Request => {
 export const setupWebSocket = (options: {
   server: ServerType
   fetchCallback: FetchCallback
-  wss: WebSocketServer
+  wss: WebSocketServerLike
 }): void => {
   const { server, fetchCallback, wss } = options
 
   const waiterMap = new Map<
     IncomingMessage,
-    { resolve: (ws: WebSocket) => void; connectionSymbol: symbol }
+    { resolve: (ws: WebSocketLike) => void; connectionSymbol: symbol }
   >()
 
   wss.on('connection', (ws, request) => {
@@ -137,7 +140,7 @@ export const setupWebSocket = (options: {
   })
 
   const waitForWebSocket: WaitForWebSocket = (request, connectionSymbol) => {
-    return new Promise<WebSocket>((resolve) => {
+    return new Promise<WebSocketLike>((resolve) => {
       waiterMap.set(request, { resolve, connectionSymbol })
     })
   }
@@ -203,7 +206,7 @@ export const setupWebSocket = (options: {
   })
 }
 
-export const upgradeWebSocket: UpgradeWebSocket<WebSocket, UpgradeWebSocketOptions> =
+export const upgradeWebSocket: UpgradeWebSocket<WebSocketLike, UpgradeWebSocketOptions> =
   defineWebSocketHelper(async (c, events, options) => {
     if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {
       return
@@ -221,13 +224,13 @@ export const upgradeWebSocket: UpgradeWebSocket<WebSocket, UpgradeWebSocketOptio
     ;(async () => {
       const ws = await waitForWebSocket(env.incoming, connectionSymbol)
 
-      const messagesReceivedInStarting: [data: RawData, isBinary: boolean][] = []
-      const bufferMessage = (data: RawData, isBinary: boolean) => {
+      const messagesReceivedInStarting: [data: WebSocketData, isBinary: boolean][] = []
+      const bufferMessage = (data: WebSocketData, isBinary: boolean) => {
         messagesReceivedInStarting.push([data, isBinary])
       }
       ws.on('message', bufferMessage)
 
-      const ctx: WSContext<WebSocket> = {
+      const ctx: WSContext<WebSocketLike> = {
         binaryType: 'arraybuffer',
         close(code, reason) {
           ws.close(code, reason)
@@ -251,7 +254,7 @@ export const upgradeWebSocket: UpgradeWebSocket<WebSocket, UpgradeWebSocketOptio
         ;(options?.onError ?? console.error)(e)
       }
 
-      const handleMessage = (data: RawData, isBinary: boolean) => {
+      const handleMessage = (data: WebSocketData, isBinary: boolean) => {
         const datas = Array.isArray(data) ? data : [data]
         for (const data of datas) {
           try {
@@ -261,7 +264,9 @@ export const upgradeWebSocket: UpgradeWebSocket<WebSocket, UpgradeWebSocketOptio
                   ? data instanceof ArrayBuffer
                     ? data
                     : data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
-                  : data.toString('utf-8'),
+                  : typeof data === 'string'
+                    ? data
+                    : Buffer.from(data).toString('utf-8'),
               }),
               ctx
             )
