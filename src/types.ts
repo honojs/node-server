@@ -1,4 +1,3 @@
-import type { WebSocketServer } from 'ws'
 import type {
   createServer,
   IncomingMessage,
@@ -20,6 +19,7 @@ import type {
   createServer as createHttpsServer,
   ServerOptions as HttpsServerOptions,
 } from 'node:https'
+import type { WebSocketServerLike } from './websocket-types'
 
 export type HttpBindings = {
   incoming: IncomingMessage
@@ -75,7 +75,7 @@ export type Options = {
   port?: number
   hostname?: string
   websocket?: {
-    server: WebSocketServer
+    server: WebSocketServerLike
   }
 } & ServerOptions
 
