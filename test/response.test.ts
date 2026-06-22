@@ -89,32 +89,54 @@ describe('Response', () => {
     expect(childResponse.headers.get('content-type')).toEqual('application/json')
   })
 
-  it('Should preserve headers mutated after construction when cloned via new Response(body, init)', () => {
-    // Regression test for https://github.com/honojs/node-server/issues/304.
-    // Headers appended (or set/deleted) after construction must be visible on
-    // a clone built with `new Response(body, parent)` — which is the pattern
-    // used by middleware such as `cors` and `compress`.
+  it('Should preserve mutated headers when cloned before body access', () => {
     const parentResponse = new Response('hello', {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })
     parentResponse.headers.append('set-cookie', 'session=abc; Path=/; HttpOnly')
 
-    // Pattern 1: clone before any `getResponseCache`-triggering access.
     const childResponse = new Response('hello', parentResponse)
     expect(childResponse.headers.get('set-cookie')).toEqual('session=abc; Path=/; HttpOnly')
     expect(childResponse.headers.get('content-type')).toEqual('application/json')
+  })
 
-    // Pattern 2: clone after `.body` has materialized the GlobalResponse —
-    // this is what middleware does when streaming a raw Response body.
-    const parentForBody = new Response('hello', {
+  it('Should preserve mutated headers when cloned after body access', () => {
+    const parentResponse = new Response('hello', {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })
-    parentForBody.headers.append('set-cookie', 'session=xyz; Path=/; HttpOnly')
-    const streamedChild = new Response(parentForBody.body, parentForBody)
-    expect(streamedChild.headers.get('set-cookie')).toEqual('session=xyz; Path=/; HttpOnly')
-    expect(streamedChild.headers.get('content-type')).toEqual('application/json')
+    parentResponse.headers.append('set-cookie', 'session=xyz; Path=/; HttpOnly')
+
+    const childResponse = new Response(parentResponse.body, parentResponse)
+    expect(childResponse.headers.get('set-cookie')).toEqual('session=xyz; Path=/; HttpOnly')
+    expect(childResponse.headers.get('content-type')).toEqual('application/json')
+  })
+
+  it('Should preserve status and statusText when headers are mutated', () => {
+    const res = new Response('hello', {
+      status: 201,
+      statusText: 'Created',
+      headers: { 'content-type': 'application/json' },
+    })
+    res.headers.append('set-cookie', 'session=abc; Path=/; HttpOnly')
+
+    expect(res.status).toEqual(201)
+    expect(res.statusText).toEqual('Created')
+    expect(res.headers.get('set-cookie')).toEqual('session=abc; Path=/; HttpOnly')
+  })
+
+  it('Should preserve status from a native Response after materialization', () => {
+    const nativeRedirect = new GlobalResponse(null, {
+      status: 302,
+      headers: { location: 'https://example.com/' },
+    })
+    const res = new Response(nativeRedirect.body, nativeRedirect)
+
+    expect(res.status).toEqual(302)
+    void res.body
+    expect(res.status).toEqual(302)
+    expect(res.headers.get('location')).toEqual('https://example.com/')
   })
 
   it('Nested constructors should not cause an error even if ReadableStream is specified', async () => {

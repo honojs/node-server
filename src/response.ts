@@ -33,7 +33,13 @@ export class Response {
     delete (this as LightResponse)[cacheKey]
     return ((this as LightResponse)[responseCache] ||= new GlobalResponse(
       this.#body,
-      liveHeaders ? { ...this.#init, headers: liveHeaders } : this.#init
+      liveHeaders
+        ? {
+            status: this.#init?.status,
+            statusText: this.#init?.statusText,
+            headers: liveHeaders,
+          }
+        : this.#init
     ))
   }
 
