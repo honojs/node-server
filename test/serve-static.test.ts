@@ -277,6 +277,18 @@ describe('Serve Static Middleware', () => {
     expect(res.text).toBe('Hello Not Compressed')
   })
 
+  it('Should return a pre-compressed response for an octet-stream file - /static-with-precompressed/hello.bin', async () => {
+    const res = await request(server)
+      .get('/static-with-precompressed/hello.bin')
+      .set('Accept-Encoding', 'gzip, br, zstd')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toBe('application/octet-stream')
+    expect(res.headers['content-length']).toBe('19')
+    expect(res.headers['content-encoding']).toBe('br')
+    expect(res.headers['vary']).toBe('Accept-Encoding')
+    expect(res.body.toString()).toBe('Hello br Compressed')
+  })
+
   describe('Absolute path', () => {
     const rootPaths = [
       path.join(__dirname, 'assets'),

@@ -108,7 +108,12 @@ export const serveStatic = <E extends Env = any>(
     const mimeType = getMimeType(path)
     c.header('Content-Type', mimeType || 'application/octet-stream')
 
-    if (options.precompressed && (!mimeType || COMPRESSIBLE_CONTENT_TYPE_REGEX.test(mimeType))) {
+    if (
+      options.precompressed &&
+      (!mimeType ||
+        mimeType === 'application/octet-stream' ||
+        COMPRESSIBLE_CONTENT_TYPE_REGEX.test(mimeType))
+    ) {
       const acceptEncodingSet = new Set(
         c.req
           .header('Accept-Encoding')
