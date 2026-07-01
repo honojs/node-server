@@ -71,7 +71,7 @@
     "build": "tsdown --external hono",
     "watch": "tsdown --watch",
     "postbuild": "publint",
-    "prerelease": "bun run build && bun run test --run",
+    "prerelease": "pnpm run build && pnpm run test --run",
     "release": "np --no-publish",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
@@ -87,7 +87,8 @@
   "author": "Yusuke Wada <yusuke@kamawada.com> (https://github.com/yusukebe)",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "engines": {
     "node": ">=20"
@@ -112,5 +113,5 @@
   "peerDependencies": {
     "hono": "^4"
   },
-  "packageManager": "bun@1.2.20"
+  "packageManager": "pnpm@11.9.0"
 }

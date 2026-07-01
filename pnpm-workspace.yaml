@@ -1,0 +1,6 @@
+packages:
+  - '.'
+  - 'benchmarks/fetch'
+
+allowBuilds:
+  unrs-resolver: false

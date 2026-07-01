@@ -23,9 +23,10 @@ jobs:
         with:
           node-version: 24.x
           registry-url: 'https://registry.npmjs.org'
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-      - run: npm install -g npm@11.17.0
-      - run: bun install --frozen-lockfile
-      - run: bun run build
+      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+        with:
+          cache: true
+          run_install: true
+      - run: pnpm run build
       - name: Publish to npm
-        run: npm stage publish --provenance --access public
+        run: pnpm stage publish

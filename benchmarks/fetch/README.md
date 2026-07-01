@@ -12,8 +12,9 @@ This benchmark uses a basic Fetch API-based application without the Hono framewo
 ## Usage
 
 ```bash
-npm install
-npm run benchmark
+pnpm install
+pnpm run -w build
+pnpm run benchmark
 ```
 
 ## What's Being Tested
