@@ -41,16 +41,11 @@ It works on Node.js versions greater than 20.x.
 
 ## Installation
 
-You can install it from the npm registry with `npm` command:
+You can install it from the npm registry:
 
 ```sh
 npm install @hono/node-server
-```
-
-Or use `yarn`:
-
-```sh
-yarn add @hono/node-server
+pnpm add @hono/node-server
 ```
 
 ## Usage
