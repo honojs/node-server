@@ -29,4 +29,4 @@ jobs:
           run_install: true
       - run: pnpm run build
       - name: Publish to npm
-        run: pnpm stage publish
+        run: pnpm stage publish --no-git-checks
