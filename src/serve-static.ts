@@ -35,6 +35,48 @@ const getStats = (path: string) => {
   return stats
 }
 
+// Parses a `Range` header value against a resource of the given `size`.
+// Returns 416 when the range is syntactically valid but unsatisfiable (e.g. the
+// start is beyond the end of the file). A malformed header (e.g. not matching
+// `<start>-<end>` or `-<suffix-length>` at all) is treated as "no range" and the
+// whole file is served, matching the existing behavior for invalid ranges.
+const parseRange = (range: string, size: number): { start: number; end: number } | 416 => {
+  const parts = range.replace(/^bytes=/, '').split('-', 2)
+
+  let start: number
+  let end: number
+  let malformed = false
+
+  if (parts[0] === '') {
+    // suffix-range: `bytes=-N` requests the last N bytes.
+    const suffixLength = parseInt(parts[1], 10)
+    if (Number.isNaN(suffixLength)) {
+      malformed = true
+      start = 0
+      end = size - 1
+    } else {
+      start = Math.max(size - suffixLength, 0)
+      end = size - 1
+    }
+  } else {
+    start = parseInt(parts[0], 10)
+    if (Number.isNaN(start)) {
+      malformed = true
+      start = 0
+    }
+    end = parts[1] === undefined || parts[1] === '' ? size - 1 : parseInt(parts[1], 10)
+    if (Number.isNaN(end)) {
+      end = size - 1
+    }
+  }
+
+  if (!malformed && (start >= size || start > end)) {
+    return 416
+  }
+
+  return { start, end: Math.min(end, size - 1) }
+}
+
 type Decoder = (str: string) => string
 
 const tryDecode = (str: string, decoder: Decoder): string => {
@@ -151,20 +193,20 @@ export const serveStatic = <E extends Env = any>(
     } else {
       c.header('Accept-Ranges', 'bytes')
 
-      const parts = range.replace(/bytes=/, '').split('-', 2)
-      const start = parseInt(parts[0], 10) || 0
-      let end = parseInt(parts[1], 10) || size - 1
-      if (size < end - start + 1) {
-        end = size - 1
+      const parsedRange = parseRange(range, size)
+      if (parsedRange === 416) {
+        c.header('Content-Range', `bytes */${size}`)
+        result = c.body(null, 416)
+      } else {
+        const { start, end } = parsedRange
+        const chunksize = end - start + 1
+        const stream = createReadStream(path, { start, end })
+
+        c.header('Content-Length', chunksize.toString())
+        c.header('Content-Range', `bytes ${start}-${end}/${size}`)
+
+        result = c.body(createStreamBody(stream), 206)
       }
-
-      const chunksize = end - start + 1
-      const stream = createReadStream(path, { start, end })
-
-      c.header('Content-Length', chunksize.toString())
-      c.header('Content-Range', `bytes ${start}-${end}/${stats.size}`)
-
-      result = c.body(createStreamBody(stream), 206)
     }
 
     await options.onFound?.(path, c)
