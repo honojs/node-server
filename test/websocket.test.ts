@@ -162,4 +162,44 @@ describe('WebSocket', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
   })
+
+  it('should call onError with the underlying error when the raw socket errors', async () => {
+    const app = new Hono()
+    const receivedError = new Error('boom')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let rawWs: any
+    const onErrorCalled = new Promise<Event>((resolve) => {
+      app.get(
+        '/ws',
+        upgradeWebSocket(() => ({
+          onOpen(_evt, ws) {
+            rawWs = ws.raw
+          },
+          onError(evt) {
+            resolve(evt)
+          },
+        }))
+      )
+    })
+
+    const { server, address } = await startServer(app)
+
+    try {
+      const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+      await new Promise<void>((resolve, reject) => {
+        ws.once('open', resolve)
+        ws.once('error', reject)
+      })
+
+      rawWs.emit('error', receivedError)
+
+      const evt = await onErrorCalled
+      expect(evt).toBeInstanceOf(Event)
+      expect((evt as ErrorEvent).error).toBe(receivedError)
+
+      ws.close()
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
 })

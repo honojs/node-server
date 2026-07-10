@@ -38,6 +38,49 @@ export const CloseEvent: typeof globalThis.CloseEvent =
     }
   }
 
+interface ErrorEventInit extends EventInit {
+  message?: string
+  filename?: string
+  lineno?: number
+  colno?: number
+  error?: unknown
+}
+
+/**
+ * Node.js has no global `ErrorEvent`, unlike `Event`/`MessageEvent`/`CloseEvent`.
+ * @link https://developer.mozilla.org/en-US/docs/Web/API/ErrorEvent
+ */
+export const ErrorEvent: typeof globalThis.ErrorEvent =
+  globalThis.ErrorEvent ??
+  class extends Event {
+    #eventInitDict
+
+    constructor(type: string, eventInitDict: ErrorEventInit = {}) {
+      super(type, eventInitDict)
+      this.#eventInitDict = eventInitDict
+    }
+
+    get message(): string {
+      return this.#eventInitDict.message ?? ''
+    }
+
+    get filename(): string {
+      return this.#eventInitDict.filename ?? ''
+    }
+
+    get lineno(): number {
+      return this.#eventInitDict.lineno ?? 0
+    }
+
+    get colno(): number {
+      return this.#eventInitDict.colno ?? 0
+    }
+
+    get error(): unknown {
+      return this.#eventInitDict.error ?? null
+    }
+  }
+
 const generateConnectionSymbol = () => Symbol('connection')
 
 type WaitForWebSocket = (
