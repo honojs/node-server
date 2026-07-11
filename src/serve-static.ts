@@ -35,42 +35,41 @@ const getStats = (path: string) => {
   return stats
 }
 
+// first-pos / last-pos / suffix-length are all `1*DIGIT` per RFC 9110 §14.1.2 -
+// reject anything with non-digit characters instead of letting `parseInt` silently
+// truncate trailing garbage (e.g. `1x` must not be accepted as `1`).
+const isDigits = (str: string): boolean => /^\d+$/.test(str)
+
 // Parses a `Range` header value against a resource of the given `size`.
 // Returns 416 when the range is syntactically valid but unsatisfiable (e.g. the
-// start is beyond the end of the file). A malformed header (e.g. not matching
-// `<start>-<end>` or `-<suffix-length>` at all) is treated as "no range" and the
-// whole file is served, matching the existing behavior for invalid ranges.
+// start is beyond the end of the file, or the file is empty). A malformed header
+// (e.g. not matching `<start>-<end>` or `-<suffix-length>` at all) is treated as
+// "no range" and the whole file is served, matching the existing behavior for
+// invalid ranges.
 const parseRange = (range: string, size: number): { start: number; end: number } | 416 => {
   const parts = range.replace(/^bytes=/, '').split('-', 2)
 
   let start: number
   let end: number
-  let malformed = false
 
-  if (parts[0] === '') {
+  if (parts[0] === '' && isDigits(parts[1] ?? '')) {
     // suffix-range: `bytes=-N` requests the last N bytes.
-    const suffixLength = parseInt(parts[1], 10)
-    if (Number.isNaN(suffixLength)) {
-      malformed = true
-      start = 0
-      end = size - 1
-    } else {
-      start = Math.max(size - suffixLength, 0)
-      end = size - 1
-    }
-  } else {
+    start = Math.max(size - parseInt(parts[1], 10), 0)
+    end = size - 1
+  } else if (
+    isDigits(parts[0]) &&
+    (parts[1] === undefined || parts[1] === '' || isDigits(parts[1]))
+  ) {
     start = parseInt(parts[0], 10)
-    if (Number.isNaN(start)) {
-      malformed = true
-      start = 0
-    }
     end = parts[1] === undefined || parts[1] === '' ? size - 1 : parseInt(parts[1], 10)
-    if (Number.isNaN(end)) {
-      end = size - 1
-    }
+  } else {
+    // Malformed range: ignore it and serve the whole representation.
+    start = 0
+    end = size - 1
   }
 
-  if (!malformed && (start >= size || start > end)) {
+  // Also covers empty files: `size - 1` is -1, which is always < start (0).
+  if (start >= size || start > end) {
     return 416
   }
 

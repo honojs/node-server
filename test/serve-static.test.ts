@@ -232,6 +232,32 @@ describe('Serve Static Middleware', () => {
     expect(res.headers['content-range']).toBe('bytes */17')
   })
 
+  it('Should treat a range with trailing garbage as malformed and serve the whole file', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=0-1x')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-range']).toBe('bytes 0-16/17')
+    expect(res.text).toBe('This is plain.txt')
+  })
+
+  it('Should treat a range with a non-numeric start as malformed and serve the whole file', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=x-1')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-range']).toBe('bytes 0-16/17')
+    expect(res.text).toBe('This is plain.txt')
+  })
+
+  it('Should return 416 instead of crashing for a range request on an empty file', async () => {
+    const res = await request(server).get('/static/foo..bar.txt').set('range', 'bytes=0-0')
+    expect(res.status).toBe(416)
+    expect(res.headers['content-range']).toBe('bytes */0')
+  })
+
+  it('Should return 416 instead of crashing for a malformed range on an empty file', async () => {
+    const res = await request(server).get('/static/foo..bar.txt').set('range', 'hello')
+    expect(res.status).toBe(416)
+    expect(res.headers['content-range']).toBe('bytes */0')
+  })
+
   it('Should handle the `onNotFound` option', async () => {
     const res = await request(server).get('/on-not-found/foo.txt')
     expect(res.status).toBe(404)
