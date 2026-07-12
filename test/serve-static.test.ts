@@ -185,6 +185,75 @@ describe('Serve Static Middleware', () => {
     expect(res.headers['content-range']).toBe('bytes 0-16/17')
   })
 
+  it('Should return the last N bytes for a suffix range', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=-5')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-length']).toBe('5')
+    expect(res.headers['content-range']).toBe('bytes 12-16/17')
+    expect(res.text).toBe('n.txt')
+  })
+
+  it('Should return the whole file for a suffix range exceeding the file size', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=-100')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-range']).toBe('bytes 0-16/17')
+    expect(res.text).toBe('This is plain.txt')
+  })
+
+  it('Should return exactly 1 byte for range bytes=0-0', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=0-0')
+    expect(res.status).toBe(206)
+    expect(res.headers['content-length']).toBe('1')
+    expect(res.headers['content-range']).toBe('bytes 0-0/17')
+    expect(res.text).toBe('T')
+  })
+
+  it('Should return 416 when the range start is beyond the end of the file', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=100-200')
+    expect(res.status).toBe(416)
+    expect(res.headers['content-range']).toBe('bytes */17')
+  })
+
+  it('Should return 416 when the range start is beyond the file size, even if the window is small', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=20-25')
+    expect(res.status).toBe(416)
+    expect(res.headers['content-range']).toBe('bytes */17')
+  })
+
+  it('Should return 416 when the range start is after the range end', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=10-5')
+    expect(res.status).toBe(416)
+    expect(res.headers['content-range']).toBe('bytes */17')
+  })
+
+  it('Should return 416 for a zero-length suffix range', async () => {
+    const res = await request(server).get('/static/plain.txt').set('range', 'bytes=-0')
+    expect(res.status).toBe(416)
+    expect(res.headers['content-range']).toBe('bytes */17')
+  })
+
+  it.each(['bytes=0-1x', 'bytes=x-1', 'bytes=0-1-2', 'bytes=-5-extra'])(
+    'Should treat a malformed range as the whole file: %s',
+    async (range) => {
+      const res = await request(server).get('/static/plain.txt').set('range', range)
+      expect(res.status).toBe(206)
+      expect(res.headers['content-range']).toBe('bytes 0-16/17')
+      expect(res.text).toBe('This is plain.txt')
+    }
+  )
+
+  it('Should return 416 instead of crashing for a range request on an empty file', async () => {
+    const res = await request(server).get('/static/foo..bar.txt').set('range', 'bytes=0-0')
+    expect(res.status).toBe(416)
+    expect(res.headers['content-range']).toBe('bytes */0')
+  })
+
+  it('Should return 416 instead of crashing for a malformed range on an empty file', async () => {
+    const res = await request(server).get('/static/foo..bar.txt').set('range', 'hello')
+    expect(res.status).toBe(416)
+    expect(res.headers['content-range']).toBe('bytes */0')
+  })
+
   it('Should handle the `onNotFound` option', async () => {
     const res = await request(server).get('/on-not-found/foo.txt')
     expect(res.status).toBe(404)

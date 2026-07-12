@@ -35,6 +35,55 @@ const getStats = (path: string) => {
   return stats
 }
 
+type ByteRangeSpec =
+  | { type: 'bounded'; start: number; end: number }
+  | { type: 'open-ended'; start: number }
+  | { type: 'suffix'; length: number }
+
+type ByteRange = { start: number; end: number }
+
+const BYTE_RANGE_PATTERN = /^(?:bytes=)?(?!-$)(\d*)-(\d*)$/
+
+const parseByteRange = (range: string): ByteRangeSpec | undefined => {
+  const match = range.match(BYTE_RANGE_PATTERN)
+  if (!match) {
+    return undefined
+  }
+
+  const [, start, end] = match
+
+  if (start === '') {
+    return { type: 'suffix', length: Number(end) }
+  }
+
+  if (end === '') {
+    return { type: 'open-ended', start: Number(start) }
+  }
+
+  return { type: 'bounded', start: Number(start), end: Number(end) }
+}
+
+const resolveByteRange = (spec: ByteRangeSpec, size: number): ByteRange | undefined => {
+  if (size === 0) {
+    return undefined
+  }
+
+  if (spec.type === 'suffix') {
+    if (spec.length === 0) {
+      return undefined
+    }
+
+    return { start: Math.max(size - spec.length, 0), end: size - 1 }
+  }
+
+  const end = spec.type === 'bounded' ? Math.min(spec.end, size - 1) : size - 1
+  if (spec.start >= size || spec.start > end) {
+    return undefined
+  }
+
+  return { start: spec.start, end }
+}
+
 type Decoder = (str: string) => string
 
 const tryDecode = (str: string, decoder: Decoder): string => {
@@ -151,20 +200,27 @@ export const serveStatic = <E extends Env = any>(
     } else {
       c.header('Accept-Ranges', 'bytes')
 
-      const parts = range.replace(/bytes=/, '').split('-', 2)
-      const start = parseInt(parts[0], 10) || 0
-      let end = parseInt(parts[1], 10) || size - 1
-      if (size < end - start + 1) {
-        end = size - 1
+      // Preserve the existing behavior of serving the whole representation for
+      // a malformed range.
+      const rangeSpec: ByteRangeSpec = parseByteRange(range) ?? {
+        type: 'open-ended',
+        start: 0,
       }
+      const resolvedRange = resolveByteRange(rangeSpec, size)
 
-      const chunksize = end - start + 1
-      const stream = createReadStream(path, { start, end })
+      if (!resolvedRange) {
+        c.header('Content-Range', `bytes */${size}`)
+        result = c.body(null, 416)
+      } else {
+        const { start, end } = resolvedRange
+        const chunkSize = end - start + 1
+        const stream = createReadStream(path, { start, end })
 
-      c.header('Content-Length', chunksize.toString())
-      c.header('Content-Range', `bytes ${start}-${end}/${stats.size}`)
+        c.header('Content-Length', chunkSize.toString())
+        c.header('Content-Range', `bytes ${start}-${end}/${size}`)
 
-      result = c.body(createStreamBody(stream), 206)
+        result = c.body(createStreamBody(stream), 206)
+      }
     }
 
     await options.onFound?.(path, c)
