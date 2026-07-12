@@ -35,45 +35,53 @@ const getStats = (path: string) => {
   return stats
 }
 
-// first-pos / last-pos / suffix-length are all `1*DIGIT` per RFC 9110 §14.1.2 -
-// reject anything with non-digit characters instead of letting `parseInt` silently
-// truncate trailing garbage (e.g. `1x` must not be accepted as `1`).
-const isDigits = (str: string): boolean => /^\d+$/.test(str)
+type ByteRangeSpec =
+  | { type: 'bounded'; start: number; end: number }
+  | { type: 'open-ended'; start: number }
+  | { type: 'suffix'; length: number }
 
-// Parses a `Range` header value against a resource of the given `size`.
-// Returns 416 when the range is syntactically valid but unsatisfiable (e.g. the
-// start is beyond the end of the file, or the file is empty). A malformed header
-// (e.g. not matching `<start>-<end>` or `-<suffix-length>` at all) is treated as
-// "no range" and the whole file is served, matching the existing behavior for
-// invalid ranges.
-const parseRange = (range: string, size: number): { start: number; end: number } | 416 => {
-  const parts = range.replace(/^bytes=/, '').split('-', 2)
+type ByteRange = { start: number; end: number }
 
-  let start: number
-  let end: number
+const BYTE_RANGE_PATTERN = /^(?:bytes=)?(?!-$)(\d*)-(\d*)$/
 
-  if (parts[0] === '' && isDigits(parts[1] ?? '')) {
-    // suffix-range: `bytes=-N` requests the last N bytes.
-    start = Math.max(size - parseInt(parts[1], 10), 0)
-    end = size - 1
-  } else if (
-    isDigits(parts[0]) &&
-    (parts[1] === undefined || parts[1] === '' || isDigits(parts[1]))
-  ) {
-    start = parseInt(parts[0], 10)
-    end = parts[1] === undefined || parts[1] === '' ? size - 1 : parseInt(parts[1], 10)
-  } else {
-    // Malformed range: ignore it and serve the whole representation.
-    start = 0
-    end = size - 1
+const parseByteRange = (range: string): ByteRangeSpec | undefined => {
+  const match = range.match(BYTE_RANGE_PATTERN)
+  if (!match) {
+    return undefined
   }
 
-  // Also covers empty files: `size - 1` is -1, which is always < start (0).
-  if (start >= size || start > end) {
-    return 416
+  const [, start, end] = match
+
+  if (start === '') {
+    return { type: 'suffix', length: Number(end) }
   }
 
-  return { start, end: Math.min(end, size - 1) }
+  if (end === '') {
+    return { type: 'open-ended', start: Number(start) }
+  }
+
+  return { type: 'bounded', start: Number(start), end: Number(end) }
+}
+
+const resolveByteRange = (spec: ByteRangeSpec, size: number): ByteRange | undefined => {
+  if (size === 0) {
+    return undefined
+  }
+
+  if (spec.type === 'suffix') {
+    if (spec.length === 0) {
+      return undefined
+    }
+
+    return { start: Math.max(size - spec.length, 0), end: size - 1 }
+  }
+
+  const end = spec.type === 'bounded' ? Math.min(spec.end, size - 1) : size - 1
+  if (spec.start >= size || spec.start > end) {
+    return undefined
+  }
+
+  return { start: spec.start, end }
 }
 
 type Decoder = (str: string) => string
@@ -192,16 +200,23 @@ export const serveStatic = <E extends Env = any>(
     } else {
       c.header('Accept-Ranges', 'bytes')
 
-      const parsedRange = parseRange(range, size)
-      if (parsedRange === 416) {
+      // Preserve the existing behavior of serving the whole representation for
+      // a malformed range.
+      const rangeSpec: ByteRangeSpec = parseByteRange(range) ?? {
+        type: 'open-ended',
+        start: 0,
+      }
+      const resolvedRange = resolveByteRange(rangeSpec, size)
+
+      if (!resolvedRange) {
         c.header('Content-Range', `bytes */${size}`)
         result = c.body(null, 416)
       } else {
-        const { start, end } = parsedRange
-        const chunksize = end - start + 1
+        const { start, end } = resolvedRange
+        const chunkSize = end - start + 1
         const stream = createReadStream(path, { start, end })
 
-        c.header('Content-Length', chunksize.toString())
+        c.header('Content-Length', chunkSize.toString())
         c.header('Content-Range', `bytes ${start}-${end}/${size}`)
 
         result = c.body(createStreamBody(stream), 206)
