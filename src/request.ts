@@ -57,6 +57,12 @@ const newHeadersFromIncoming = (incoming: IncomingMessage | Http2ServerRequest) 
 
 export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
 export const wrapBodyStream = Symbol('wrapBodyStream')
+
+// When setEncoding() was called on the stream, chunks arrive as strings in
+// that encoding — decode with it so the original bytes are reconstructed.
+const toBufferChunk = (chunk: Buffer | string, encoding: BufferEncoding | null): Buffer =>
+  Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding ?? 'utf8')
+
 const newRequestFromIncoming = (
   method: string,
   url: string,
@@ -300,7 +306,7 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
     }
 
     const onData = (chunk: Buffer | string) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      chunks.push(toBufferChunk(chunk, incoming.readableEncoding))
     }
     const onEnd = () => {
       finish(() => {

@@ -177,6 +177,23 @@ describe('Request', () => {
       await expect(textPromise).rejects.toBeInstanceOf(Error)
     })
 
+    it('should reconstruct the original bytes when setEncoding() was used on a streamed body', async () => {
+      const socket = new Socket()
+      const incomingMessage = new IncomingMessage(socket)
+      incomingMessage.method = 'POST'
+      incomingMessage.headers = { host: 'localhost' }
+      incomingMessage.rawHeaders = ['host', 'localhost']
+      incomingMessage.url = '/foo.txt'
+      incomingMessage.setEncoding('latin1')
+
+      const req = newRequest(incomingMessage)
+      const textPromise = req.text()
+      incomingMessage.push(Buffer.from('café', 'utf8'))
+      incomingMessage.push(null)
+
+      await expect(textPromise).resolves.toBe('café')
+    })
+
     it('should reject direct body read for unsupported methods like native Request', async () => {
       for (const method of ['CONNECT', 'TRACK']) {
         const req = newRequest({
