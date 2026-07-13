@@ -407,6 +407,23 @@ const readRawBodyIfAvailable = (request: Record<string | symbol, any>): Buffer |
   return undefined
 }
 
+// The error a body read fails with after an abort: the stream's own error if
+// it has one, otherwise the abort reason recorded on the request, otherwise a
+// generic disconnect error.
+const normalizeAbortError = (
+  request: Record<string | symbol, any>,
+  incoming: IncomingMessage | Http2ServerRequest
+): Error => {
+  if (incoming.errored) {
+    return incoming.errored
+  }
+  const reason = request[abortReasonKey]
+  if (reason !== undefined) {
+    return reason instanceof Error ? reason : new Error(String(reason))
+  }
+  return new Error('Client connection prematurely closed.')
+}
+
 // Read body directly from the IncomingMessage stream, bypassing Request object creation.
 // Precondition: the caller (listener.ts) must ensure that the IncomingMessage stream is
 // properly cleaned up (e.g. via incoming.resume()) when the response ends or the connection
@@ -468,7 +485,7 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
         if (recovered instanceof Error) {
           reject(recovered)
         } else if (recovered === undefined) {
-          reject(error ?? new Error('Client connection prematurely closed.'))
+          reject(error ?? normalizeAbortError(request, incoming))
         } else {
           request[bodyBufferKey] = recovered
           resolve(recovered)
@@ -504,16 +521,7 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
         return
       }
       finish(() => {
-        if (incoming.errored) {
-          reject(incoming.errored)
-          return
-        }
-        const reason = request[abortReasonKey]
-        if (reason !== undefined) {
-          reject(reason instanceof Error ? reason : new Error(String(reason)))
-          return
-        }
-        reject(new Error('Client connection prematurely closed.'))
+        reject(normalizeAbortError(request, incoming))
       })
     }
     const cleanup = () => {
