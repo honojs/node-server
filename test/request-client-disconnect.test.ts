@@ -126,6 +126,26 @@ describe('body reads after client disconnect', () => {
     expect(result).toEqual({ body })
   })
 
+  it('rejects a body read after the raw stream consumed the disconnected body', async () => {
+    let rawBody: string | undefined
+    const result = await readBodyAfterDisconnect(
+      body,
+      {},
+      (request, value) => {
+        request.write(value)
+        request.end()
+      },
+      (c) => {
+        rawBody = c.env.incoming.read()?.toString()
+        return c.req.text()
+      }
+    )
+
+    expect(rawBody).toBe(body)
+    expect(result).toEqual({ error: expect.any(TypeError) })
+    expect((result as { error: Error }).error.message).toBe('Body is unusable')
+  })
+
   it('reads a complete body via formData()', async () => {
     const form = 'hello=world&foo=bar'
     const result = await readBodyAfterDisconnect(

@@ -143,7 +143,7 @@ describe('Request', () => {
       expect(req.signal.aborted).toBe(true)
     })
 
-    it('should reject direct body read when incoming stream is destroyed mid-read', async () => {
+    it('should preserve an application error when a complete stream is destroyed mid-read', async () => {
       const socket = new Socket()
       const incomingMessage = new IncomingMessage(socket)
       incomingMessage.method = 'POST'
@@ -155,10 +155,43 @@ describe('Request', () => {
       const req = newRequest(incomingMessage)
 
       const textPromise = req.json()
-      incomingMessage.destroy(new Error('Client connection prematurely closed.'))
+      const error = new Error('Payload too large')
+      incomingMessage.complete = true
+      incomingMessage.destroy(error)
 
-      await expect(textPromise).rejects.toBeInstanceOf(Error)
+      await expect(textPromise).rejects.toBe(error)
     })
+
+    it.each([
+      ['without a stream error', undefined],
+      [
+        'with a client disconnect error',
+        Object.assign(new Error('aborted'), { code: 'ECONNRESET' }),
+      ],
+    ])(
+      'should preserve a complete body when the stream closes mid-read %s',
+      async (_label, destroyError) => {
+        const socket = new Socket()
+        const incomingMessage = new IncomingMessage(socket)
+        incomingMessage.method = 'POST'
+        incomingMessage.headers = {
+          host: 'localhost',
+          'content-length': '6',
+        }
+        incomingMessage.rawHeaders = ['host', 'localhost', 'content-length', '6']
+        incomingMessage.url = '/foo.txt'
+        const req = newRequest(incomingMessage)
+
+        const textPromise = req.text()
+        incomingMessage.push('foo')
+        incomingMessage.pause()
+        incomingMessage.push('bar')
+        incomingMessage.complete = true
+        incomingMessage.destroy(destroyError)
+
+        await expect(textPromise).resolves.toBe('foobar')
+      }
+    )
 
     it('should reject direct body read when incoming stream is destroyed without error', async () => {
       const socket = new Socket()
@@ -259,6 +292,30 @@ describe('Request', () => {
       const req = newRequest(incomingMessage)
 
       await expect(new Response(req.body).text()).resolves.toBe('foo')
+    })
+
+    it('should not recover only the remaining chunked body after a partial read', async () => {
+      const socket = new Socket()
+      const incomingMessage = new IncomingMessage(socket)
+      incomingMessage.method = 'POST'
+      incomingMessage.headers = { host: 'localhost', 'transfer-encoding': 'chunked' }
+      incomingMessage.rawHeaders = ['host', 'localhost', 'transfer-encoding', 'chunked']
+      incomingMessage.url = '/foo.txt'
+      incomingMessage.push('first')
+      expect(incomingMessage.read()).toEqual(Buffer.from('first'))
+      expect(incomingMessage.readableDidRead).toBe(true)
+      incomingMessage.push('second')
+      incomingMessage.complete = true
+      incomingMessage.on('error', () => {})
+
+      const closed = new Promise<void>((resolve) => {
+        incomingMessage.once('close', resolve)
+      })
+      incomingMessage.destroy()
+      await closed
+
+      const req = newRequest(incomingMessage)
+      expect(() => req.body).toThrow(TypeError)
     })
 
     it('should reject with the underlying error when a complete stream was destroyed with an application error', async () => {

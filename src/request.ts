@@ -68,11 +68,41 @@ const isByteExactEncoding = (encoding: BufferEncoding | null): boolean =>
   encoding === null || byteExactEncodings.has(encoding)
 
 const bodyBufferedBeforeDisconnectKey = Symbol('bodyBufferedBeforeDisconnect')
+const bodyBufferedLengthBeforeDisconnectKey = Symbol('bodyBufferedLengthBeforeDisconnect')
+
+type IncomingWithBodyRecovery = IncomingMessage & {
+  [bodyBufferedBeforeDisconnectKey]?: Buffer | Error
+  [bodyBufferedLengthBeforeDisconnectKey]?: number
+}
 
 // When setEncoding() was called on the stream, chunks arrive as strings in
 // that encoding — decode with it so the original bytes are reconstructed.
 const toBufferChunk = (chunk: Buffer | string, encoding: BufferEncoding | null): Buffer =>
   Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding ?? 'utf8')
+
+const isRecoverableDisconnectedIncoming = (
+  incoming: IncomingMessage | Http2ServerRequest
+): incoming is IncomingMessage =>
+  !(incoming instanceof Http2ServerRequest) &&
+  !!incoming.complete &&
+  !!incoming.readableAborted &&
+  typeof incoming.read === 'function' &&
+  isByteExactEncoding(incoming.readableEncoding)
+
+// Remember how much complete HTTP/1 body data remained buffered when the
+// disconnect was observed. A later raw read can drain a destroyed stream
+// without updating readableDidRead, so the length snapshot is needed to keep
+// the Fetch-style body from silently resolving with only the remainder.
+export const recordBodyBufferedBeforeDisconnect = (
+  incoming: IncomingMessage | Http2ServerRequest
+): void => {
+  if (incoming.readableDidRead || !isRecoverableDisconnectedIncoming(incoming)) {
+    return
+  }
+
+  const incomingWithRecovery = incoming as IncomingWithBodyRecovery
+  incomingWithRecovery[bodyBufferedLengthBeforeDisconnectKey] ??= incoming.readableLength
+}
 
 // A client may close the connection after Node has parsed the complete HTTP/1
 // request but before the application starts reading it. In that state the
@@ -88,23 +118,16 @@ const toBufferChunk = (chunk: Buffer | string, encoding: BufferEncoding | null):
 // when the stream is not in the recoverable state. The result is cached on the
 // incoming object so every read path observes the same outcome.
 const readBodyBufferedBeforeDisconnect = (
-  incoming: IncomingMessage | Http2ServerRequest
+  incoming: IncomingMessage | Http2ServerRequest,
+  chunks?: Buffer[]
 ): Buffer | Error | undefined => {
-  if (
-    incoming instanceof Http2ServerRequest ||
-    !incoming.complete ||
-    !incoming.readableAborted ||
-    typeof incoming.read !== 'function' ||
-    !isByteExactEncoding(incoming.readableEncoding)
-  ) {
+  if ((incoming.readableDidRead && !chunks) || !isRecoverableDisconnectedIncoming(incoming)) {
     return undefined
   }
 
-  const incomingWithCache = incoming as IncomingMessage & {
-    [bodyBufferedBeforeDisconnectKey]?: Buffer | Error
-  }
-  if (incomingWithCache[bodyBufferedBeforeDisconnectKey] !== undefined) {
-    return incomingWithCache[bodyBufferedBeforeDisconnectKey]
+  const incomingWithRecovery = incoming as IncomingWithBodyRecovery
+  if (incomingWithRecovery[bodyBufferedBeforeDisconnectKey] !== undefined) {
+    return incomingWithRecovery[bodyBufferedBeforeDisconnectKey]
   }
 
   let result: Buffer | Error
@@ -115,10 +138,18 @@ const readBodyBufferedBeforeDisconnect = (
     // disconnected client uses ECONNRESET errors, which must still recover the
     // body — anything else is surfaced to the reader instead of swallowed.
     result = errored
+  } else if (
+    incomingWithRecovery[bodyBufferedLengthBeforeDisconnectKey] !== undefined &&
+    incoming.readableLength !== incomingWithRecovery[bodyBufferedLengthBeforeDisconnectKey]
+  ) {
+    result = newBodyUnusableError()
   } else {
+    const bodyChunks = chunks ?? []
     const chunk = incoming.read() as Buffer | string | null
-    const buffer =
-      chunk === null ? Buffer.alloc(0) : toBufferChunk(chunk, incoming.readableEncoding)
+    if (chunk !== null) {
+      bodyChunks.push(toBufferChunk(chunk, incoming.readableEncoding))
+    }
+    const buffer = bodyChunks.length === 1 ? bodyChunks[0] : Buffer.concat(bodyChunks)
     result = buffer
     // Validate only canonical digit values: the HTTP parser guarantees this
     // form on real connections, and lenient coercion of synthetic inputs
@@ -131,7 +162,7 @@ const readBodyBufferedBeforeDisconnect = (
       }
     }
   }
-  incomingWithCache[bodyBufferedBeforeDisconnectKey] = result
+  incomingWithRecovery[bodyBufferedBeforeDisconnectKey] = result
   return result
 }
 
@@ -415,6 +446,37 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
       callback()
     }
 
+    // readBodyDirect started while the stream was untouched, so it owns every
+    // chunk emitted from that point onward. If HTTP/1 parsing completed before
+    // the connection closed, combine those chunks with anything still buffered
+    // and treat the body as complete. Transport-level ECONNRESET is recoverable;
+    // application-provided stream errors are not.
+    const recoverCompleteBodyAfterDisconnect = (error?: unknown): boolean => {
+      const streamError = incoming.errored ?? error
+      if (
+        incoming instanceof Http2ServerRequest ||
+        !incoming.complete ||
+        !incoming.readableAborted ||
+        typeof incoming.read !== 'function' ||
+        (streamError && (streamError as NodeJS.ErrnoException).code !== 'ECONNRESET')
+      ) {
+        return false
+      }
+
+      finish(() => {
+        const recovered = readBodyBufferedBeforeDisconnect(incoming, chunks)
+        if (recovered instanceof Error) {
+          reject(recovered)
+        } else if (recovered === undefined) {
+          reject(error ?? new Error('Client connection prematurely closed.'))
+        } else {
+          request[bodyBufferKey] = recovered
+          resolve(recovered)
+        }
+      })
+      return true
+    }
+
     const onData = (chunk: Buffer | string) => {
       chunks.push(toBufferChunk(chunk, incoming.readableEncoding))
     }
@@ -426,6 +488,9 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
       })
     }
     const onError = (error: unknown) => {
+      if (recoverCompleteBodyAfterDisconnect(error)) {
+        return
+      }
       finish(() => {
         reject(error)
       })
@@ -433,6 +498,9 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
     const onClose = () => {
       if (incoming.readableEnded) {
         onEnd()
+        return
+      }
+      if (recoverCompleteBodyAfterDisconnect()) {
         return
       }
       finish(() => {

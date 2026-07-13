@@ -6,6 +6,7 @@ import type { IncomingMessageWithWrapBodyStream } from './request'
 import {
   abortRequest,
   newRequest,
+  recordBodyBufferedBeforeDisconnect,
   Request as LightweightRequest,
   wrapBodyStream,
   toRequestError,
@@ -95,8 +96,10 @@ const makeCloseHandler =
   ): (() => void) =>
   () => {
     if (incoming.errored) {
+      recordBodyBufferedBeforeDisconnect(incoming)
       req[abortRequest](incoming.errored.toString())
     } else if (!outgoing.writableFinished) {
+      recordBodyBufferedBeforeDisconnect(incoming)
       req[abortRequest]('Client connection prematurely closed.')
     }
 
