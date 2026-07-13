@@ -261,6 +261,40 @@ const readBodyWithFastPath = <T>(
   })
 }
 
+const normalizeAbortError = (
+  request: Record<string | symbol, any>,
+  incoming: IncomingMessage | Http2ServerRequest
+): Error => {
+  if (incoming.errored) {
+    return incoming.errored
+  }
+  const reason = request[abortReasonKey]
+  if (typeof reason !== 'undefined') {
+    return reason instanceof Error ? reason : new Error(String(reason))
+  }
+  return new Error('Client connection prematurely closed.')
+}
+
+// A client abort destroys the IncomingMessage, but does not clear its internal
+// buffer. For HTTP/1, `complete === true` guarantees the parser received the
+// entire message, so the unread body can still be drained synchronously.
+// (Not valid for HTTP/2, where `complete` is also true for aborted requests. see https://nodejs.org/api/http2.html#requestcomplete)
+const canBeRecoveredAfterAbort = (
+  incoming: IncomingMessage | Http2ServerRequest
+): incoming is IncomingMessage => {
+  return incoming.complete && incoming.httpVersionMajor === 1
+}
+
+const readIncomingMessageInternalBuffer = (incoming: IncomingMessage) => {
+  const chunks: Buffer[] = []
+  let chunk: Buffer | string | null
+  while ((chunk = incoming.read()) !== null) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  const buffer = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks)
+  return buffer
+}
+
 const readRawBodyIfAvailable = (request: Record<string | symbol, any>): Buffer | undefined => {
   const incoming = request[incomingKey] as IncomingMessage | Http2ServerRequest
   if ('rawBody' in incoming && (incoming as any).rawBody instanceof Buffer) {
@@ -283,7 +317,16 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
 
   const incoming = request[incomingKey] as IncomingMessage | Http2ServerRequest
   if (Readable.isDisturbed(incoming)) {
-    return rejectBodyUnusable()
+    if (incoming.readableDidRead) {
+      return rejectBodyUnusable()
+    }
+    // Aborted (e.g. client disconnect) before anything read the stream.
+    if (canBeRecoveredAfterAbort(incoming)) {
+      const buffer = readIncomingMessageInternalBuffer(incoming)
+      request[bodyBufferKey] = buffer
+      return Promise.resolve(buffer)
+    }
+    return Promise.reject(normalizeAbortError(request, incoming))
   }
 
   const promise = new Promise<Buffer>((resolve, reject) => {
@@ -319,17 +362,14 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
         onEnd()
         return
       }
+      if (canBeRecoveredAfterAbort(incoming)) {
+        // Drain what the abort left in the internal buffer.
+        readIncomingMessageInternalBuffer(incoming)
+        onEnd()
+        return
+      }
       finish(() => {
-        if (incoming.errored) {
-          reject(incoming.errored)
-          return
-        }
-        const reason = request[abortReasonKey]
-        if (reason !== undefined) {
-          reject(reason instanceof Error ? reason : new Error(String(reason)))
-          return
-        }
-        reject(new Error('Client connection prematurely closed.'))
+        reject(normalizeAbortError(request, incoming))
       })
     }
     const cleanup = () => {

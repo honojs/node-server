@@ -1,5 +1,7 @@
 import request from 'supertest'
-import { createServer } from 'node:http'
+import type { IncomingMessage } from 'node:http'
+import { createServer, request as httpRequest } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
@@ -420,6 +422,72 @@ describe('Abort request - error path', () => {
       await runAbortDuringErrorHandlerCase(mode)
     }
   )
+})
+
+describe('Abort request - direct body read', () => {
+  // See https://github.com/honojs/node-server/issues/370
+  const runClientDisconnectCase = async (clientBody: {
+    contentLength: number
+    write: string
+  }): Promise<{ body: Promise<string> }> => {
+    // Wrapped in an object so `await` does not flatten the inner promise
+    let resolveBodyRead!: (result: { body: Promise<string> }) => void
+    const bodyRead = new Promise<{ body: Promise<string> }>((r) => {
+      resolveBodyRead = r
+    })
+
+    const requestListener = getRequestListener(async (req: Request, env) => {
+      const incoming = (env as { incoming: IncomingMessage }).incoming
+      // Read only after the client disconnect has destroyed the stream
+      if (!incoming.destroyed) {
+        await new Promise((resolve) => incoming.once('close', resolve))
+      }
+      const body = req.text()
+      body.catch(() => {}) // inspected via expect(); avoid unhandled rejection
+      resolveBodyRead({ body })
+      return new Response('ok')
+    })
+    const server = createServer(requestListener)
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+    const port = (server.address() as AddressInfo).port
+
+    try {
+      const clientReq = httpRequest({
+        port,
+        method: 'POST',
+        path: '/',
+        headers: {
+          'content-type': 'text/plain',
+          'content-length': clientBody.contentLength,
+        },
+      })
+      clientReq.on('error', () => {})
+      clientReq.write(clientBody.write)
+      // Give the bytes time to reach the server's parser, then disconnect
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      clientReq.destroy()
+      return await withTimeout(bodyRead, 'handler did not read the body')
+    } finally {
+      server.close()
+    }
+  }
+
+  it('should return the full body when the client disconnects after sending it', async () => {
+    const { body } = await runClientDisconnectCase({
+      contentLength: Buffer.byteLength('hello world'),
+      write: 'hello world',
+    })
+    await expect(body).resolves.toBe('hello world')
+  })
+
+  it('should reject with an abort error, not "Body is unusable", for a truncated body', async () => {
+    const { body } = await runClientDisconnectCase({
+      contentLength: 100,
+      write: 'partial',
+    })
+    await expect(body).rejects.toThrow(/aborted|prematurely closed/)
+    await expect(body).rejects.not.toThrow('Body is unusable')
+  })
 })
 
 describe('Abort request - cacheable response path', () => {
