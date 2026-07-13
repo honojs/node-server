@@ -58,11 +58,96 @@ const newHeadersFromIncoming = (incoming: IncomingMessage | Http2ServerRequest) 
 export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
 export const wrapBodyStream = Symbol('wrapBodyStream')
 
+// Encodings whose decode → re-encode round-trip is byte-exact for any input.
+// utf8/utf16le replace invalid sequences with U+FFFD and ascii masks the high
+// bit of every byte, so a body decoded through them cannot be reconstructed
+// reliably — recovery is refused for those instead of returning corrupt bytes.
+const byteExactEncodings = new Set(['latin1', 'binary', 'hex', 'base64', 'base64url'])
+
+const isByteExactEncoding = (encoding: BufferEncoding | null): boolean =>
+  encoding === null || byteExactEncodings.has(encoding)
+
+const bodyBufferedBeforeDisconnectKey = Symbol('bodyBufferedBeforeDisconnect')
+
 // When setEncoding() was called on the stream, chunks arrive as strings in
 // that encoding — decode with it so the original bytes are reconstructed.
 const toBufferChunk = (chunk: Buffer | string, encoding: BufferEncoding | null): Buffer =>
   Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding ?? 'utf8')
 
+// A client may close the connection after Node has parsed the complete HTTP/1
+// request but before the application starts reading it. In that state the
+// IncomingMessage is disturbed/aborted, while the untouched body is still in
+// its internal readable buffer — recover it instead of failing the read.
+//
+// HTTP/2 is excluded deliberately: an RST_STREAM discards the buffered request
+// data at the protocol layer, and Http2ServerRequest#complete is also true for
+// aborted/destroyed streams, so it cannot be trusted as a "fully received"
+// signal.
+//
+// Returns the buffered body, an Error the read must fail with, or undefined
+// when the stream is not in the recoverable state. The result is cached on the
+// incoming object so every read path observes the same outcome.
+const readBodyBufferedBeforeDisconnect = (
+  incoming: IncomingMessage | Http2ServerRequest
+): Buffer | Error | undefined => {
+  if (
+    incoming instanceof Http2ServerRequest ||
+    !incoming.complete ||
+    !incoming.readableAborted ||
+    typeof incoming.read !== 'function' ||
+    !isByteExactEncoding(incoming.readableEncoding)
+  ) {
+    return undefined
+  }
+
+  const incomingWithCache = incoming as IncomingMessage & {
+    [bodyBufferedBeforeDisconnectKey]?: Buffer | Error
+  }
+  if (incomingWithCache[bodyBufferedBeforeDisconnectKey] !== undefined) {
+    return incomingWithCache[bodyBufferedBeforeDisconnectKey]
+  }
+
+  let result: Buffer | Error
+  const errored = incoming.errored
+  if (errored && (errored as NodeJS.ErrnoException).code !== 'ECONNRESET') {
+    // The stream was destroyed with an application-provided error (e.g. a
+    // body-size guard calling incoming.destroy(err)). Node's own teardown of a
+    // disconnected client uses ECONNRESET errors, which must still recover the
+    // body — anything else is surfaced to the reader instead of swallowed.
+    result = errored
+  } else {
+    const chunk = incoming.read() as Buffer | string | null
+    const buffer =
+      chunk === null ? Buffer.alloc(0) : toBufferChunk(chunk, incoming.readableEncoding)
+    result = buffer
+    // Validate only canonical digit values: the HTTP parser guarantees this
+    // form on real connections, and lenient coercion of synthetic inputs
+    // (e.g. '0x10') would validate against a length the header never meant.
+    const contentLength = incoming.headers['content-length']
+    if (typeof contentLength === 'string' && /^\d+$/.test(contentLength)) {
+      const expectedLength = Number(contentLength)
+      if (Number.isSafeInteger(expectedLength) && buffer.length !== expectedLength) {
+        result = newBodyUnusableError()
+      }
+    }
+  }
+  incomingWithCache[bodyBufferedBeforeDisconnectKey] = result
+  return result
+}
+
+const enqueueBufferedBody = (
+  controller: ReadableStreamDefaultController,
+  buffered: Buffer | Error
+): void => {
+  if (buffered instanceof Error) {
+    controller.error(buffered)
+    return
+  }
+  if (buffered.length > 0) {
+    controller.enqueue(buffered)
+  }
+  controller.close()
+}
 const newRequestFromIncoming = (
   method: string,
   url: string,
@@ -102,6 +187,13 @@ const newRequestFromIncoming = (
       init.body = new ReadableStream({
         async pull(controller) {
           try {
+            if (!reader) {
+              const buffered = readBodyBufferedBeforeDisconnect(incoming)
+              if (buffered !== undefined) {
+                enqueueBufferedBody(controller, buffered)
+                return
+              }
+            }
             reader ||= Readable.toWeb(incoming).getReader()
             const { done, value } = await reader.read()
             if (done) {
@@ -115,8 +207,17 @@ const newRequestFromIncoming = (
         },
       })
     } else {
-      // lazy-consume request body
-      init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+      const buffered = readBodyBufferedBeforeDisconnect(incoming)
+      if (buffered !== undefined) {
+        init.body = new ReadableStream({
+          start(controller) {
+            enqueueBufferedBody(controller, buffered)
+          },
+        })
+      } else {
+        // lazy-consume request body
+        init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+      }
     }
   }
 
@@ -288,8 +389,17 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
   }
 
   const incoming = request[incomingKey] as IncomingMessage | Http2ServerRequest
-  if (Readable.isDisturbed(incoming)) {
+  if (incoming.readableDidRead) {
     return rejectBodyUnusable()
+  }
+
+  const buffered = readBodyBufferedBeforeDisconnect(incoming)
+  if (buffered !== undefined) {
+    if (buffered instanceof Error) {
+      return Promise.reject(buffered)
+    }
+    request[bodyBufferKey] = buffered
+    return Promise.resolve(buffered)
   }
 
   const promise = new Promise<Buffer>((resolve, reject) => {
