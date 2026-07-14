@@ -471,10 +471,7 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
     const recoverCompleteBodyAfterDisconnect = (error?: unknown): boolean => {
       const streamError = incoming.errored ?? error
       if (
-        incoming instanceof Http2ServerRequest ||
-        !incoming.complete ||
-        !incoming.readableAborted ||
-        typeof incoming.read !== 'function' ||
+        !isRecoverableDisconnectedIncoming(incoming) ||
         (streamError && (streamError as NodeJS.ErrnoException).code !== 'ECONNRESET')
       ) {
         return false
