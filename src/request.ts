@@ -57,6 +57,128 @@ const newHeadersFromIncoming = (incoming: IncomingMessage | Http2ServerRequest) 
 
 export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
 export const wrapBodyStream = Symbol('wrapBodyStream')
+
+// Encodings whose decode → re-encode round-trip is byte-exact for any input.
+// utf8/utf16le replace invalid sequences with U+FFFD and ascii masks the high
+// bit of every byte, so a body decoded through them cannot be reconstructed
+// reliably — recovery is refused for those instead of returning corrupt bytes.
+const byteExactEncodings = new Set(['latin1', 'binary', 'hex', 'base64', 'base64url'])
+
+const isByteExactEncoding = (encoding: BufferEncoding | null): boolean =>
+  encoding === null || byteExactEncodings.has(encoding)
+
+const bodyBufferedBeforeDisconnectKey = Symbol('bodyBufferedBeforeDisconnect')
+const bodyBufferedLengthBeforeDisconnectKey = Symbol('bodyBufferedLengthBeforeDisconnect')
+
+type IncomingWithBodyRecovery = IncomingMessage & {
+  [bodyBufferedBeforeDisconnectKey]?: Buffer | Error
+  [bodyBufferedLengthBeforeDisconnectKey]?: number
+}
+
+// When setEncoding() was called on the stream, chunks arrive as strings in
+// that encoding — decode with it so the original bytes are reconstructed.
+const toBufferChunk = (chunk: Buffer | string, encoding: BufferEncoding | null): Buffer =>
+  Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding ?? 'utf8')
+
+const isRecoverableDisconnectedIncoming = (
+  incoming: IncomingMessage | Http2ServerRequest
+): incoming is IncomingMessage =>
+  !(incoming instanceof Http2ServerRequest) &&
+  !!incoming.complete &&
+  !!incoming.readableAborted &&
+  typeof incoming.read === 'function' &&
+  isByteExactEncoding(incoming.readableEncoding)
+
+// Remember how much complete HTTP/1 body data remained buffered when the
+// disconnect was observed. A later raw read can drain a destroyed stream
+// without updating readableDidRead, so the length snapshot is needed to keep
+// the Fetch-style body from silently resolving with only the remainder.
+export const recordBodyBufferedBeforeDisconnect = (
+  incoming: IncomingMessage | Http2ServerRequest
+): void => {
+  if (incoming.readableDidRead || !isRecoverableDisconnectedIncoming(incoming)) {
+    return
+  }
+
+  const incomingWithRecovery = incoming as IncomingWithBodyRecovery
+  incomingWithRecovery[bodyBufferedLengthBeforeDisconnectKey] ??= incoming.readableLength
+}
+
+// A client may close the connection after Node has parsed the complete HTTP/1
+// request but before the application starts reading it. In that state the
+// IncomingMessage is disturbed/aborted, while the untouched body is still in
+// its internal readable buffer — recover it instead of failing the read.
+//
+// HTTP/2 is excluded deliberately: an RST_STREAM discards the buffered request
+// data at the protocol layer, and Http2ServerRequest#complete is also true for
+// aborted/destroyed streams, so it cannot be trusted as a "fully received"
+// signal.
+//
+// Returns the buffered body, an Error the read must fail with, or undefined
+// when the stream is not in the recoverable state. The result is cached on the
+// incoming object so every read path observes the same outcome.
+const readBodyBufferedBeforeDisconnect = (
+  incoming: IncomingMessage | Http2ServerRequest,
+  chunks?: Buffer[]
+): Buffer | Error | undefined => {
+  if ((incoming.readableDidRead && !chunks) || !isRecoverableDisconnectedIncoming(incoming)) {
+    return undefined
+  }
+
+  const incomingWithRecovery = incoming as IncomingWithBodyRecovery
+  if (incomingWithRecovery[bodyBufferedBeforeDisconnectKey] !== undefined) {
+    return incomingWithRecovery[bodyBufferedBeforeDisconnectKey]
+  }
+
+  let result: Buffer | Error
+  const errored = incoming.errored
+  if (errored && (errored as NodeJS.ErrnoException).code !== 'ECONNRESET') {
+    // The stream was destroyed with an application-provided error (e.g. a
+    // body-size guard calling incoming.destroy(err)). Node's own teardown of a
+    // disconnected client uses ECONNRESET errors, which must still recover the
+    // body — anything else is surfaced to the reader instead of swallowed.
+    result = errored
+  } else if (
+    incomingWithRecovery[bodyBufferedLengthBeforeDisconnectKey] !== undefined &&
+    incoming.readableLength !== incomingWithRecovery[bodyBufferedLengthBeforeDisconnectKey]
+  ) {
+    result = newBodyUnusableError()
+  } else {
+    const bodyChunks = chunks ?? []
+    const chunk = incoming.read() as Buffer | string | null
+    if (chunk !== null) {
+      bodyChunks.push(toBufferChunk(chunk, incoming.readableEncoding))
+    }
+    const buffer = bodyChunks.length === 1 ? bodyChunks[0] : Buffer.concat(bodyChunks)
+    result = buffer
+    // Validate only canonical digit values: the HTTP parser guarantees this
+    // form on real connections, and lenient coercion of synthetic inputs
+    // (e.g. '0x10') would validate against a length the header never meant.
+    const contentLength = incoming.headers['content-length']
+    if (typeof contentLength === 'string' && /^\d+$/.test(contentLength)) {
+      const expectedLength = Number(contentLength)
+      if (Number.isSafeInteger(expectedLength) && buffer.length !== expectedLength) {
+        result = newBodyUnusableError()
+      }
+    }
+  }
+  incomingWithRecovery[bodyBufferedBeforeDisconnectKey] = result
+  return result
+}
+
+const enqueueBufferedBody = (
+  controller: ReadableStreamDefaultController,
+  buffered: Buffer | Error
+): void => {
+  if (buffered instanceof Error) {
+    controller.error(buffered)
+    return
+  }
+  if (buffered.length > 0) {
+    controller.enqueue(buffered)
+  }
+  controller.close()
+}
 const newRequestFromIncoming = (
   method: string,
   url: string,
@@ -96,6 +218,13 @@ const newRequestFromIncoming = (
       init.body = new ReadableStream({
         async pull(controller) {
           try {
+            if (!reader) {
+              const buffered = readBodyBufferedBeforeDisconnect(incoming)
+              if (buffered !== undefined) {
+                enqueueBufferedBody(controller, buffered)
+                return
+              }
+            }
             reader ||= Readable.toWeb(incoming).getReader()
             const { done, value } = await reader.read()
             if (done) {
@@ -109,8 +238,17 @@ const newRequestFromIncoming = (
         },
       })
     } else {
-      // lazy-consume request body
-      init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+      const buffered = readBodyBufferedBeforeDisconnect(incoming)
+      if (buffered !== undefined) {
+        init.body = new ReadableStream({
+          start(controller) {
+            enqueueBufferedBody(controller, buffered)
+          },
+        })
+      } else {
+        // lazy-consume request body
+        init.body = Readable.toWeb(incoming) as ReadableStream<Uint8Array>
+      }
     }
   }
 
@@ -269,6 +407,23 @@ const readRawBodyIfAvailable = (request: Record<string | symbol, any>): Buffer |
   return undefined
 }
 
+// The error a body read fails with after an abort: the stream's own error if
+// it has one, otherwise the abort reason recorded on the request, otherwise a
+// generic disconnect error.
+const normalizeAbortError = (
+  request: Record<string | symbol, any>,
+  incoming: IncomingMessage | Http2ServerRequest
+): Error => {
+  if (incoming.errored) {
+    return incoming.errored
+  }
+  const reason = request[abortReasonKey]
+  if (reason !== undefined) {
+    return reason instanceof Error ? reason : new Error(String(reason))
+  }
+  return new Error('Client connection prematurely closed.')
+}
+
 // Read body directly from the IncomingMessage stream, bypassing Request object creation.
 // Precondition: the caller (listener.ts) must ensure that the IncomingMessage stream is
 // properly cleaned up (e.g. via incoming.resume()) when the response ends or the connection
@@ -282,8 +437,17 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
   }
 
   const incoming = request[incomingKey] as IncomingMessage | Http2ServerRequest
-  if (Readable.isDisturbed(incoming)) {
+  if (incoming.readableDidRead) {
     return rejectBodyUnusable()
+  }
+
+  const buffered = readBodyBufferedBeforeDisconnect(incoming)
+  if (buffered !== undefined) {
+    if (buffered instanceof Error) {
+      return Promise.reject(buffered)
+    }
+    request[bodyBufferKey] = buffered
+    return Promise.resolve(buffered)
   }
 
   const promise = new Promise<Buffer>((resolve, reject) => {
@@ -299,8 +463,36 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
       callback()
     }
 
+    // readBodyDirect started while the stream was untouched, so it owns every
+    // chunk emitted from that point onward. If HTTP/1 parsing completed before
+    // the connection closed, combine those chunks with anything still buffered
+    // and treat the body as complete. Transport-level ECONNRESET is recoverable;
+    // application-provided stream errors are not.
+    const recoverCompleteBodyAfterDisconnect = (error?: unknown): boolean => {
+      const streamError = incoming.errored ?? error
+      if (
+        !isRecoverableDisconnectedIncoming(incoming) ||
+        (streamError && (streamError as NodeJS.ErrnoException).code !== 'ECONNRESET')
+      ) {
+        return false
+      }
+
+      finish(() => {
+        const recovered = readBodyBufferedBeforeDisconnect(incoming, chunks)
+        if (recovered instanceof Error) {
+          reject(recovered)
+        } else if (recovered === undefined) {
+          reject(error ?? normalizeAbortError(request, incoming))
+        } else {
+          request[bodyBufferKey] = recovered
+          resolve(recovered)
+        }
+      })
+      return true
+    }
+
     const onData = (chunk: Buffer | string) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      chunks.push(toBufferChunk(chunk, incoming.readableEncoding))
     }
     const onEnd = () => {
       finish(() => {
@@ -310,6 +502,9 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
       })
     }
     const onError = (error: unknown) => {
+      if (recoverCompleteBodyAfterDisconnect(error)) {
+        return
+      }
       finish(() => {
         reject(error)
       })
@@ -319,17 +514,11 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
         onEnd()
         return
       }
+      if (recoverCompleteBodyAfterDisconnect()) {
+        return
+      }
       finish(() => {
-        if (incoming.errored) {
-          reject(incoming.errored)
-          return
-        }
-        const reason = request[abortReasonKey]
-        if (reason !== undefined) {
-          reject(reason instanceof Error ? reason : new Error(String(reason)))
-          return
-        }
-        reject(new Error('Client connection prematurely closed.'))
+        reject(normalizeAbortError(request, incoming))
       })
     }
     const cleanup = () => {
