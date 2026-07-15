@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { WebSocket, WebSocketServer } from 'ws'
+import { connect } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { createAdaptorServer, upgradeWebSocket } from '../src'
 
@@ -198,6 +199,60 @@ describe('WebSocket', () => {
       expect((evt as ErrorEvent).error).toBe(receivedError)
 
       ws.close()
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  it('should not leak the request when a handshake is aborted by an invalid Sec-WebSocket-Key', async () => {
+    let liveCount = 0
+    const registry = new FinalizationRegistry(() => {
+      liveCount--
+    })
+
+    const app = new Hono()
+    app.use('/ws', async (c, next) => {
+      liveCount++
+      registry.register((c.env as { incoming: object }).incoming, 'incoming')
+      await next()
+    })
+    app.get(
+      '/ws',
+      upgradeWebSocket(() => ({
+        onOpen() {
+          throw new Error('onOpen must not be called for an aborted handshake')
+        },
+      }))
+    )
+
+    const { server, address } = await startServer(app)
+
+    try {
+      const statusLine = await new Promise<string>((resolve, reject) => {
+        const socket = connect(address.port, '127.0.0.1', () => {
+          socket.write(
+            'GET /ws HTTP/1.1\r\n' +
+              `Host: 127.0.0.1:${address.port}\r\n` +
+              'Upgrade: websocket\r\n' +
+              'Connection: Upgrade\r\n' +
+              'Sec-WebSocket-Version: 13\r\n' +
+              'Sec-WebSocket-Key: not-a-valid-key\r\n' +
+              '\r\n'
+          )
+        })
+        socket.once('data', (chunk) => {
+          socket.destroy()
+          resolve(chunk.toString('utf-8').split('\r\n')[0])
+        })
+        socket.once('error', reject)
+      })
+      expect(statusLine).toContain('400')
+
+      for (let i = 0; i < 20 && liveCount > 0; i++) {
+        global.gc?.()
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+      expect(liveCount).toBe(0)
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }

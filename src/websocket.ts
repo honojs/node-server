@@ -171,7 +171,11 @@ export const setupWebSocket = (options: {
 
   const waiterMap = new Map<
     IncomingMessage,
-    { resolve: (ws: WebSocketLike) => void; connectionSymbol: symbol }
+    {
+      resolve: (ws: WebSocketLike) => void
+      reject: (reason: Error) => void
+      connectionSymbol: symbol
+    }
   >()
 
   wss.on('connection', (ws, request) => {
@@ -182,9 +186,17 @@ export const setupWebSocket = (options: {
     }
   })
 
+  const rejectWaiter = (request: IncomingMessage) => {
+    const waiter = waiterMap.get(request)
+    if (waiter) {
+      waiterMap.delete(request)
+      waiter.reject(new Error('WebSocket handshake aborted'))
+    }
+  }
+
   const waitForWebSocket: WaitForWebSocket = (request, connectionSymbol) => {
-    return new Promise<WebSocketLike>((resolve) => {
-      waiterMap.set(request, { resolve, connectionSymbol })
+    return new Promise<WebSocketLike>((resolve, reject) => {
+      waiterMap.set(request, { resolve, reject, connectionSymbol })
     })
   }
 
@@ -221,7 +233,7 @@ export const setupWebSocket = (options: {
     const waiter = waiterMap.get(request)
 
     if (!waiter || waiter.connectionSymbol !== env[CONNECTION_SYMBOL_KEY]) {
-      waiterMap.delete(request)
+      rejectWaiter(request)
       if (server.listenerCount('upgrade') === 1) {
         rejectUpgradeRequest(socket, status, responseHeaders)
       }
@@ -232,11 +244,13 @@ export const setupWebSocket = (options: {
       appendResponseHeaders(headers, responseHeaders)
     }
 
-    // `headers` is emitted synchronously inside `handleUpgrade`, so this
-    // listener cannot leak across concurrent upgrades on the shared `wss`.
+    const reclaimWaiterOnClose = () => rejectWaiter(request)
+    socket.once('close', reclaimWaiterOnClose)
+
     wss.on('headers', addResponseHeaders)
     try {
       wss.handleUpgrade(request, socket, head, (ws) => {
+        socket.off('close', reclaimWaiterOnClose)
         wss.emit('connection', ws, request)
       })
     } finally {
@@ -265,7 +279,12 @@ export const upgradeWebSocket: UpgradeWebSocket<WebSocketLike, UpgradeWebSocketO
     const connectionSymbol = generateConnectionSymbol()
     env[CONNECTION_SYMBOL_KEY] = connectionSymbol
     ;(async () => {
-      const ws = await waitForWebSocket(env.incoming, connectionSymbol)
+      let ws: WebSocketLike
+      try {
+        ws = await waitForWebSocket(env.incoming, connectionSymbol)
+      } catch {
+        return
+      }
 
       const messagesReceivedInStarting: [data: WebSocketData, isBinary: boolean][] = []
       const bufferMessage = (data: WebSocketData, isBinary: boolean) => {
