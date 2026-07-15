@@ -317,10 +317,14 @@ const normalizeIncomingMethod = (method: unknown): string => {
     case 'OPTIONS':
     case 'POST':
     case 'PUT':
+    case 'QUERY':
       return method
   }
 
   const upper = method.toUpperCase()
+  // Fetch only normalizes these methods for backwards compatibility.
+  // HTTP methods are otherwise case-sensitive, so methods not in this list
+  // (including `query`) must retain their original casing.
   switch (upper) {
     case 'DELETE':
     case 'GET':
