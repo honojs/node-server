@@ -4,6 +4,7 @@ import { chmodSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import path from 'node:path'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
+import { requestServer } from './helpers/request'
 
 describe('Serve Static Middleware', () => {
   const app = new Hono<{
@@ -66,6 +67,21 @@ describe('Serve Static Middleware', () => {
   )
 
   const server = createAdaptorServer(app)
+
+  beforeAll(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(0, '127.0.0.1', resolve)
+      })
+  )
+
+  afterAll(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+  )
 
   it('Should return index.html', async () => {
     const res = await request(server).get('/static/')
@@ -271,7 +287,7 @@ describe('Serve Static Middleware', () => {
   })
 
   it('Should handle double dots in URL', async () => {
-    const res = await request(server).get('/static/../secret.txt')
+    const res = await requestServer(server, { method: 'GET', path: '/static/../secret.txt' })
     expect(res.status).toBe(404)
   })
 
@@ -428,18 +444,39 @@ describe('Serve Static Middleware', () => {
     const server = createAdaptorServer(app)
     app.use('/static/*', serveStatic({ root: './test/assets' }))
 
+    beforeAll(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          server.once('error', reject)
+          server.listen(0, '127.0.0.1', resolve)
+        })
+    )
+
+    afterAll(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()))
+        })
+    )
+
     it('Should prevent path traversal attacks with double dots', async () => {
-      const res = await request(server).get('/static/../secret.txt')
+      const res = await requestServer(server, { method: 'GET', path: '/static/../secret.txt' })
       expect(res.status).toBe(404)
     })
 
     it('Should prevent path traversal attacks with multiple levels', async () => {
-      const res = await request(server).get('/static/../../package.json')
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/../../package.json',
+      })
       expect(res.status).toBe(404)
     })
 
     it('Should prevent path traversal attacks with mixed separators', async () => {
-      const res = await request(server).get('/static/..\\..\\package.json')
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/..\\..\\package.json',
+      })
       expect(res.status).toBe(404)
     })
 
