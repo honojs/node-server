@@ -332,6 +332,62 @@ type Http2Bindings = {
 }
 ```
 
+## Early Hints Helper & Middleware
+
+You can send HTTP 103 Early Hints to instruct browsers to preload or preconnect resources before the final response is prepared. Both the helper function and the middleware sugar are supported under Node.js bindings (HTTP/1.1 and HTTP/2).
+
+### Using the Helper
+
+Import `writeEarlyHints` and call it inside your handler:
+
+```ts
+import { serve } from '@hono/node-server'
+import { writeEarlyHints } from '@hono/node-server/early-hints'
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+app.get('/', (c) => {
+  // Preload hints sent immediately
+  writeEarlyHints(c, {
+    link: [
+      '</styles.css>; rel=preload; as=style',
+      '</script.js>; rel=preload; as=script'
+    ]
+  })
+
+  // Long-running or async operation to generate the main page response
+  return c.html('<!DOCTYPE html><html><body><h1>Hello Hono!</h1></body></html>')
+})
+
+serve(app)
+```
+
+### Using the Middleware
+
+You can also use the `earlyHints` middleware to automatically send Early Hints:
+
+```ts
+import { serve } from '@hono/node-server'
+import { earlyHints } from '@hono/node-server/early-hints'
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+app.use(
+  '/',
+  earlyHints({
+    link: '</styles.css>; rel=preload; as=style'
+  })
+)
+
+app.get('/', (c) => {
+  return c.html('<!DOCTYPE html><html><body><h1>Hello Hono!</h1></body></html>')
+})
+
+serve(app)
+```
+
 ## Direct response from Node.js API
 
 You can directly respond to the client from the Node.js API.
