@@ -43,7 +43,7 @@ export class Request extends GlobalRequest {
   }
 }
 
-const newHeadersFromIncoming = (incoming: IncomingMessage | Http2ServerRequest) => {
+export const newHeadersFromIncoming = (incoming: IncomingMessage | Http2ServerRequest) => {
   const headerRecord: [string, string][] = []
   const rawHeaders = incoming.rawHeaders
   for (let i = 0, len = rawHeaders.length; i < len; i += 2) {
