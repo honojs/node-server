@@ -96,7 +96,6 @@
   "devDependencies": {
     "@hono/eslint-config": "^1.0.1",
     "@types/node": "^20.10.0",
-    "@types/supertest": "^2.0.12",
     "@types/ws": "^8.18.1",
     "@whatwg-node/fetch": "^0.9.14",
     "eslint": "^9.10.0",
@@ -104,7 +103,6 @@
     "np": "^11.2.1",
     "prettier": "^3.2.4",
     "publint": "^0.3.18",
-    "supertest": "^7.2.2",
     "tsdown": "^0.20.3",
     "typescript": "^5.3.2",
     "vitest": "^4.0.18",
