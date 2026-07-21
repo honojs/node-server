@@ -315,6 +315,7 @@ const normalizeIncomingMethod = (method: unknown): string => {
     case 'GET':
     case 'HEAD':
     case 'OPTIONS':
+    case 'PATCH':
     case 'POST':
     case 'PUT':
     case 'QUERY':
