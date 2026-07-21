@@ -43,7 +43,9 @@ export class Request extends GlobalRequest {
   }
 }
 
-export const newHeadersFromIncoming = (incoming: Pick<IncomingMessage | Http2ServerRequest, 'rawHeaders'>) => {
+export const newHeadersFromIncoming = (
+  incoming: Pick<IncomingMessage | Http2ServerRequest, 'rawHeaders'>
+) => {
   const headerRecord: [string, string][] = []
   const rawHeaders = incoming.rawHeaders
   for (let i = 0, len = rawHeaders.length; i < len; i += 2) {
