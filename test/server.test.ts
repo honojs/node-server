@@ -4,131 +4,130 @@ import { compress } from 'hono/compress'
 import { etag } from 'hono/etag'
 import { poweredBy } from 'hono/powered-by'
 import { stream } from 'hono/streaming'
-import request from 'supertest'
 import fs from 'node:fs'
 import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
+import { gunzipSync, inflateSync } from 'node:zlib'
 import { GlobalRequest, Request as LightweightRequest, getAbortController } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 import { createAdaptorServer, serve } from '../src/server'
 import type { HttpBindings, ServerType } from '../src/types'
 import { app } from './app'
+import { requestServer, requestServerChunked, requestServerHttp2 } from './helpers/request'
 
 describe('Basic', () => {
   const server = createAdaptorServer(app)
 
   it('Should return 200 response - GET /', async () => {
-    const res = await request(server).get('/')
+    const res = await requestServer(server, { method: 'GET', path: '/' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.text).toBe('Hello! Node!')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(await res.text()).toBe('Hello! Node!')
   })
 
   it('Should return 200 response - GET /url', async () => {
-    const res = await request(server).get('/url').trustLocalhost()
+    const res = await requestServer(server, { method: 'GET', path: '/url' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    const url = new URL(res.text)
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    const url = new URL(await res.text())
     expect(url.pathname).toBe('/url')
     expect(url.hostname).toBe('127.0.0.1')
     expect(url.protocol).toBe('http:')
   })
 
   it('Should return 200 response - GET /posts?page=2', async () => {
-    const res = await request(server).get('/posts?page=2')
+    const res = await requestServer(server, { method: 'GET', path: '/posts?page=2' })
     expect(res.status).toBe(200)
-    expect(res.text).toBe('Page 2')
+    expect(await res.text()).toBe('Page 2')
   })
 
   it('Should return 200 response - GET /user-agent', async () => {
-    const res = await request(server).get('/user-agent').set('user-agent', 'Hono')
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/user-agent',
+      headers: { 'user-agent': 'Hono' },
+    })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.text).toBe('Hono')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(await res.text()).toBe('Hono')
   })
 
   it('Should return 302 response - POST /posts', async () => {
-    const res = await request(server).post('/posts')
+    const res = await requestServer(server, { method: 'POST', path: '/posts' })
     expect(res.status).toBe(302)
-    expect(res.headers['location']).toBe('/posts')
+    expect(res.headers.get('location')).toBe('/posts')
   })
 
   it('Should return 200 response - POST /no-body-consumed', async () => {
-    const res = await request(server).post('/no-body-consumed').send('')
+    const res = await requestServer(server, {
+      method: 'POST',
+      path: '/no-body-consumed',
+      headers: { 'content-length': '0' },
+      body: '',
+    })
     expect(res.status).toBe(200)
-    expect(res.text).toBe('No body consumed')
+    expect(await res.text()).toBe('No body consumed')
   })
 
   it('Should return 200 response - POST /body-cancelled', async () => {
-    const res = await request(server).post('/body-cancelled').send('')
+    const res = await requestServer(server, {
+      method: 'POST',
+      path: '/body-cancelled',
+      headers: { 'content-length': '0' },
+      body: '',
+    })
     expect(res.status).toBe(200)
-    expect(res.text).toBe('Body cancelled')
+    expect(await res.text()).toBe('Body cancelled')
   })
 
   it('Should return 200 response - POST /partially-consumed', async () => {
     const buffer = Buffer.alloc(1024 * 10) // large buffer
-    const res = await new Promise<request.Response>((resolve, reject) => {
-      const req = request(server)
-        .post('/partially-consumed')
-        .set('Content-Length', buffer.length.toString())
-
-      req.write(buffer)
-      req.end((err, res) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(res)
-        }
-      })
+    const res = await requestServer(server, {
+      method: 'POST',
+      path: '/partially-consumed',
+      headers: { 'content-length': buffer.length.toString() },
+      body: buffer,
     })
 
     expect(res.status).toBe(200)
-    expect(res.text).toBe('Partially consumed')
+    expect(await res.text()).toBe('Partially consumed')
   })
 
   it('Should return 200 response - POST /partially-consumed-and-cancelled', async () => {
     const buffer = Buffer.alloc(1) // A large buffer will not make the test go far, so keep it small because it won't go far.
-    const res = await new Promise<request.Response>((resolve, reject) => {
-      const req = request(server)
-        .post('/partially-consumed-and-cancelled')
-        .set('Content-Length', buffer.length.toString())
-
-      req.write(buffer)
-      req.end((err, res) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(res)
-        }
-      })
+    const res = await requestServer(server, {
+      method: 'POST',
+      path: '/partially-consumed-and-cancelled',
+      headers: { 'content-length': buffer.length.toString() },
+      body: buffer,
     })
 
     expect(res.status).toBe(200)
-    expect(res.text).toBe('Partially consumed and cancelled')
+    expect(await res.text()).toBe('Partially consumed and cancelled')
   })
 
   it('Should return 201 response - DELETE /posts/123', async () => {
-    const res = await request(server).delete('/posts/123')
+    const res = await requestServer(server, { method: 'DELETE', path: '/posts/123' })
     expect(res.status).toBe(200)
-    expect(res.text).toBe('DELETE 123')
+    expect(await res.text()).toBe('DELETE 123')
   })
 
   it('Should return 500 response - GET /invalid', async () => {
-    const res = await request(server).get('/invalid')
+    const res = await requestServer(server, { method: 'GET', path: '/invalid' })
     expect(res.status).toBe(500)
-    expect(res.headers['content-type']).toEqual('text/plain')
+    expect(res.headers.get('content-type')).toEqual('text/plain')
   })
 
   it('Should return 200 response - GET /ponyfill', async () => {
-    const res = await request(server).get('/ponyfill')
+    const res = await requestServer(server, { method: 'GET', path: '/ponyfill' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.text).toBe('Pony')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(await res.text()).toBe('Pony')
   })
 
   it('Should not raise error for TRACE method', async () => {
-    const res = await request(server).trace('/')
-    expect(res.text).toBe('headers: {}')
+    const res = await requestServer(server, { method: 'TRACE', path: '/' })
+    expect(await res.text()).toBe('headers: {}')
   })
 })
 
@@ -286,162 +285,168 @@ describe('various response body types', () => {
     })
 
     it('Should return 200 response - GET /', async () => {
-      const res = await request(server).get('/')
+      const res = await requestServer(server, { method: 'GET', path: '/' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain')
-      expect(res.headers['content-length']).toMatch('12')
-      expect(res.text).toBe('Hello! Node!')
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(res.headers.get('content-length')).toMatch('12')
+      expect(await res.text()).toBe('Hello! Node!')
     })
 
     it('Should return 200 response - GET /large', async () => {
-      const res = await request(server).get('/large')
+      const res = await requestServer(server, { method: 'GET', path: '/large' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain')
-      expect(res.headers['content-length']).toMatch(largeText.length.toString())
-      expect(res.text).toBe(largeText)
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(res.headers.get('content-length')).toMatch(largeText.length.toString())
+      expect(await res.text()).toBe(largeText)
     })
 
     it('Should return 200 response - GET /uint8array', async () => {
-      const res = await request(server).get('/uint8array')
+      const res = await requestServer(server, { method: 'GET', path: '/uint8array' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('application/octet-stream')
-      expect(res.headers['content-length']).toMatch('3')
-      expect(res.body).toEqual(Buffer.from([1, 2, 3]))
+      expect(res.headers.get('content-type')).toMatch('application/octet-stream')
+      expect(res.headers.get('content-length')).toMatch('3')
+      expect(Buffer.from(await res.arrayBuffer())).toEqual(Buffer.from([1, 2, 3]))
     })
 
     it('Should return 200 response - GET /blob', async () => {
-      const res = await request(server).get('/blob')
+      const res = await requestServer(server, { method: 'GET', path: '/blob' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('application/octet-stream')
-      expect(res.headers['content-length']).toMatch('3')
-      expect(res.body).toEqual(Buffer.from([1, 2, 3]))
+      expect(res.headers.get('content-type')).toMatch('application/octet-stream')
+      expect(res.headers.get('content-length')).toMatch('3')
+      expect(Buffer.from(await res.arrayBuffer())).toEqual(Buffer.from([1, 2, 3]))
     })
 
     it('Should return 200 response - GET /readable-stream', async () => {
-      const expectedChunks = ['Hello!', ' Node!']
-      const resPromise = request(server)
-        .get('/readable-stream')
-        .parse((res, fn) => {
-          // response header should be sent before sending data.
-          expect(res.headers['transfer-encoding']).toBe('chunked')
-          resolveReadableStreamPromise()
-
-          res.on('data', (chunk) => {
-            const str = chunk.toString()
-            expect(str).toBe(expectedChunks.shift())
-          })
-          res.on('end', () => fn(null, ''))
-        })
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      const res = await resPromise
+      const { chunks, response: res } = await requestServerChunked(
+        server,
+        { method: 'GET', path: '/readable-stream' },
+        {
+          onHeaders: (headers) => {
+            // response header should be sent before sending data.
+            expect(headers.get('transfer-encoding')).toBe('chunked')
+            resolveReadableStreamPromise()
+          },
+        }
+      )
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain; charset=UTF-8')
-      expect(res.headers['content-length']).toBeUndefined()
-      expect(expectedChunks.length).toBe(0) // all chunks are received
+      expect(res.headers.get('content-type')).toMatch('text/plain; charset=UTF-8')
+      expect(res.headers.get('content-length')).toBeNull()
+      expect(chunks.map((chunk) => chunk.toString())).toEqual(['Hello!', ' Node!'])
     })
 
     it('Should return 200 response - GET /readable-stream-with-transfer-encoding', async () => {
-      const res = await request(server).get('/readable-stream-with-transfer-encoding')
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/readable-stream-with-transfer-encoding',
+      })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain; charset=UTF-8')
-      expect(res.headers['transfer-encoding']).toBe('chunked')
-      expect(res.headers['content-length']).toBeUndefined()
+      expect(res.headers.get('content-type')).toMatch('text/plain; charset=UTF-8')
+      expect(res.headers.get('transfer-encoding')).toBe('chunked')
+      expect(res.headers.get('content-length')).toBeNull()
     })
 
     it('Should return 200 response - GET /event-stream', async () => {
-      const expectedChunks = ['data: First!\n\n', 'data: Second!\n\n']
-      const resPromise = request(server)
-        .get('/event-stream')
-        .parse((res, fn) => {
-          // response header should be sent before sending data.
-          expect(res.headers['transfer-encoding']).toBe('chunked')
-          resolveEventStreamPromise()
-
-          res.on('data', (chunk) => {
-            const str = chunk.toString()
-            expect(str).toBe(expectedChunks.shift())
-          })
-          res.on('end', () => fn(null, ''))
-        })
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      const res = await resPromise
+      const { chunks, response: res } = await requestServerChunked(
+        server,
+        { method: 'GET', path: '/event-stream' },
+        {
+          onHeaders: (headers) => {
+            // response header should be sent before sending data.
+            expect(headers.get('transfer-encoding')).toBe('chunked')
+            resolveEventStreamPromise()
+          },
+        }
+      )
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/event-stream')
-      expect(res.headers['content-length']).toBeUndefined()
-      expect(expectedChunks.length).toBe(0) // all chunks are received
+      expect(res.headers.get('content-type')).toMatch('text/event-stream')
+      expect(res.headers.get('content-length')).toBeNull()
+      expect(chunks.map((chunk) => chunk.toString())).toEqual([
+        'data: First!\n\n',
+        'data: Second!\n\n',
+      ])
     })
 
     it('Should return 200 response - GET /event-stream-without-transfer-encoding', async () => {
-      const expectedChunks = ['data: First!\n\n', 'data: Second!\n\n']
-      const resPromise = request(server)
-        .get('/event-stream-without-transfer-encoding')
-        .parse((res, fn) => {
-          res.on('data', (chunk) => {
-            const str = chunk.toString()
-            expect(str).toBe(expectedChunks.shift())
-
-            if (expectedChunks.length === 1) {
+      const { chunks, response: res } = await requestServerChunked(
+        server,
+        { method: 'GET', path: '/event-stream-without-transfer-encoding' },
+        {
+          onChunk: (_chunk, index) => {
+            if (index === 0) {
               // receive first chunk
               resolveEventStreamWithoutTransferEncodingPromise()
             }
-          })
-          res.on('end', () => fn(null, ''))
-        })
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      const res = await resPromise
+          },
+        }
+      )
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/event-stream')
-      expect(res.headers['content-length']).toBeUndefined()
-      expect(expectedChunks.length).toBe(0) // all chunks are received
+      expect(res.headers.get('content-type')).toMatch('text/event-stream')
+      expect(res.headers.get('content-length')).toBeNull()
+      expect(chunks.map((chunk) => chunk.toString())).toEqual([
+        'data: First!\n\n',
+        'data: Second!\n\n',
+      ])
     })
 
     it('Should return 200 response - GET /buffer', async () => {
-      const res = await request(server).get('/buffer')
+      const res = await requestServer(server, { method: 'GET', path: '/buffer' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain')
-      expect(res.headers['content-length']).toMatch('11')
-      expect(res.text).toBe('Hello Hono!')
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(res.headers.get('content-length')).toMatch('11')
+      expect(await res.text()).toBe('Hello Hono!')
     })
 
     it('Should return 200 response - GET /text-with-content-length-object', async () => {
-      const res = await request(server).get('/text-with-content-length-object')
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/text-with-content-length-object',
+      })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain')
-      expect(res.headers['content-length']).toBe('00011')
-      expect(res.text).toBe('Hello Hono!')
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(res.headers.get('content-length')).toBe('00011')
+      expect(await res.text()).toBe('Hello Hono!')
     })
 
     it('Should return 200 response - GET /text-with-content-length-headers', async () => {
-      const res = await request(server).get('/text-with-content-length-headers')
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/text-with-content-length-headers',
+      })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain')
-      expect(res.headers['content-length']).toBe('00011')
-      expect(res.text).toBe('Hello Hono!')
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(res.headers.get('content-length')).toBe('00011')
+      expect(await res.text()).toBe('Hello Hono!')
     })
 
     it('Should return 200 response - GET /text-with-content-length-array', async () => {
-      const res = await request(server).get('/text-with-content-length-array')
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/text-with-content-length-array',
+      })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain')
-      expect(res.headers['content-length']).toBe('00011')
-      expect(res.text).toBe('Hello Hono!')
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(res.headers.get('content-length')).toBe('00011')
+      expect(await res.text()).toBe('Hello Hono!')
     })
 
     it('Should return 200 response - GET /text-with-set-cookie-array', async () => {
-      const res = await request(server).get('/text-with-set-cookie-array')
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/text-with-set-cookie-array',
+      })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain')
-      expect(res.headers['set-cookie']).toEqual(['a=1', 'b=2'])
-      expect(res.text).toBe('Hello Hono!')
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(res.headers.getSetCookie()).toEqual(['a=1', 'b=2'])
+      expect(await res.text()).toBe('Hello Hono!')
     })
 
     it('Should return 200 response - GET /etag/buffer', async () => {
-      const res = await request(server).get('/etag/buffer')
+      const res = await requestServer(server, { method: 'GET', path: '/etag/buffer' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/plain')
-      expect(res.headers['etag']).toMatch('"7e03b9b8ed6156932691d111c81c34c3c02912f9"')
-      expect(res.headers['content-length']).toMatch('11')
-      expect(res.text).toBe('Hello Hono!')
+      expect(res.headers.get('content-type')).toMatch('text/plain')
+      expect(res.headers.get('etag')).toMatch('"7e03b9b8ed6156932691d111c81c34c3c02912f9"')
+      expect(res.headers.get('content-length')).toMatch('11')
+      expect(await res.text()).toBe('Hello Hono!')
     })
   }
 
@@ -469,17 +474,17 @@ describe('Routing', () => {
     const server = createAdaptorServer(app)
 
     it('Should return responses from `/book/*`', async () => {
-      let res = await request(server).get('/book')
+      let res = await requestServer(server, { method: 'GET', path: '/book' })
       expect(res.status).toBe(200)
-      expect(res.text).toBe('get /book')
+      expect(await res.text()).toBe('get /book')
 
-      res = await request(server).get('/book/123')
+      res = await requestServer(server, { method: 'GET', path: '/book/123' })
       expect(res.status).toBe(200)
-      expect(res.text).toBe('get /book/123')
+      expect(await res.text()).toBe('get /book/123')
 
-      res = await request(server).post('/book')
+      res = await requestServer(server, { method: 'POST', path: '/book' })
       expect(res.status).toBe(200)
-      expect(res.text).toBe('post /book')
+      expect(await res.text()).toBe('post /book')
     })
   })
 
@@ -498,15 +503,15 @@ describe('Routing', () => {
     const server = createAdaptorServer(app)
 
     it('Should return responses from `/chained/*`', async () => {
-      let res = await request(server).get('/chained/abc')
+      let res = await requestServer(server, { method: 'GET', path: '/chained/abc' })
       expect(res.status).toBe(200)
-      expect(res.text).toBe('GET for abc')
+      expect(await res.text()).toBe('GET for abc')
 
-      res = await request(server).post('/chained/abc')
+      res = await requestServer(server, { method: 'POST', path: '/chained/abc' })
       expect(res.status).toBe(200)
-      expect(res.text).toBe('POST for abc')
+      expect(await res.text()).toBe('POST for abc')
 
-      res = await request(server).put('/chained/abc')
+      res = await requestServer(server, { method: 'PUT', path: '/chained/abc' })
       expect(res.status).toBe(404)
     })
   })
@@ -525,19 +530,25 @@ describe('Request body', () => {
   const server = createAdaptorServer(app)
 
   it('Should handle JSON body', async () => {
-    const res = await request(server)
-      .post('/json')
-      .set('Content-Type', 'application/json')
-      .send({ foo: 'bar' })
+    const res = await requestServer(server, {
+      method: 'POST',
+      path: '/json',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ foo: 'bar' }),
+    })
     expect(res.status).toBe(200)
-    expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+    expect(await res.json()).toEqual({ foo: 'bar' })
   })
 
   it('Should handle form body', async () => {
-    // to be `application/x-www-form-urlencoded`
-    const res = await request(server).post('/form').type('form').send({ foo: 'bar' })
+    const res = await requestServer(server, {
+      method: 'POST',
+      path: '/form',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'foo=bar',
+    })
     expect(res.status).toBe(200)
-    expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+    expect(await res.json()).toEqual({ foo: 'bar' })
   })
 })
 
@@ -559,31 +570,31 @@ describe('Response body', () => {
     const server = createAdaptorServer(app)
 
     it('Should return JSON body', async () => {
-      const res = await request(server).get('/json')
+      const res = await requestServer(server, { method: 'GET', path: '/json' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('application/json')
-      expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+      expect(res.headers.get('content-type')).toMatch('application/json')
+      expect(await res.json()).toEqual({ foo: 'bar' })
     })
 
     it('Should return JSON body from /json-async', async () => {
-      const res = await request(server).get('/json-async')
+      const res = await requestServer(server, { method: 'GET', path: '/json-async' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('application/json')
-      expect(JSON.parse(res.text)).toEqual({ foo: 'async' })
+      expect(res.headers.get('content-type')).toMatch('application/json')
+      expect(await res.json()).toEqual({ foo: 'async' })
     })
 
     it('Should return HTML', async () => {
-      const res = await request(server).get('/html')
+      const res = await requestServer(server, { method: 'GET', path: '/html' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/html')
-      expect(res.text).toBe('<h1>Hello!</h1>')
+      expect(res.headers.get('content-type')).toMatch('text/html')
+      expect(await res.text()).toBe('<h1>Hello!</h1>')
     })
 
     it('Should return HTML from /html-async', async () => {
-      const res = await request(server).get('/html-async')
+      const res = await requestServer(server, { method: 'GET', path: '/html-async' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('text/html')
-      expect(res.text).toBe('<h1>Hello!</h1>')
+      expect(res.headers.get('content-type')).toMatch('text/html')
+      expect(await res.text()).toBe('<h1>Hello!</h1>')
     })
   })
 
@@ -605,17 +616,17 @@ describe('Response body', () => {
     const server = createAdaptorServer(app)
 
     it('Should return JSON body from /json-blob', async () => {
-      const res = await request(server).get('/json-blob')
+      const res = await requestServer(server, { method: 'GET', path: '/json-blob' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('application/json')
-      expect(JSON.parse(res.text)).toEqual({ foo: 'blob' })
+      expect(res.headers.get('content-type')).toMatch('application/json')
+      expect(await res.json()).toEqual({ foo: 'blob' })
     })
 
     it('Should return JSON body from /json-buffer', async () => {
-      const res = await request(server).get('/json-buffer')
+      const res = await requestServer(server, { method: 'GET', path: '/json-buffer' })
       expect(res.status).toBe(200)
-      expect(res.headers['content-type']).toMatch('application/json')
-      expect(JSON.parse(res.text)).toEqual({ foo: 'buffer' })
+      expect(res.headers.get('content-type')).toMatch('application/json')
+      expect(await res.json()).toEqual({ foo: 'buffer' })
     })
   })
 })
@@ -632,10 +643,10 @@ describe('Middleware', () => {
   const server = createAdaptorServer(app)
 
   it('Should have correct header values', async () => {
-    const res = await request(server).get('/')
+    const res = await requestServer(server, { method: 'GET', path: '/' })
     expect(res.status).toBe(200)
-    expect(res.headers['x-powered-by']).toBe('Hono')
-    expect(res.headers['foo']).toBe('bar')
+    expect(res.headers.get('x-powered-by')).toBe('Hono')
+    expect(res.headers.get('foo')).toBe('bar')
   })
 })
 
@@ -653,19 +664,19 @@ describe('Error handling', () => {
   const server = createAdaptorServer(app)
 
   it('Should return 404 response', async () => {
-    const res = await request(server).get('/')
+    const res = await requestServer(server, { method: 'GET', path: '/' })
     expect(res.status).toBe(404)
-    expect(res.text).toBe('Custom NotFound')
+    expect(await res.text()).toBe('Custom NotFound')
   })
 
   it('Should return 500 response', async () => {
-    const res = await request(server).get('/error')
+    const res = await requestServer(server, { method: 'GET', path: '/error' })
     expect(res.status).toBe(500)
-    expect(res.text).toBe('Custom Error!')
+    expect(await res.text()).toBe('Custom Error!')
   })
 
   it('Should return 404 response - PURGE method', async () => {
-    const res = await request(server).purge('/')
+    const res = await requestServer(server, { method: 'PURGE', path: '/' })
     expect(res.status).toBe(404)
   })
 })
@@ -698,25 +709,31 @@ describe('Basic Auth Middleware', () => {
   const server = createAdaptorServer(app)
 
   it('Should not authorized', async () => {
-    const res = await request(server).get('/auth/a')
+    const res = await requestServer(server, { method: 'GET', path: '/auth/a' })
     expect(res.status).toBe(401)
-    expect(res.text).toBe('Unauthorized')
+    expect(await res.text()).toBe('Unauthorized')
   })
 
   it('Should authorized', async () => {
     const credential = Buffer.from(username + ':' + password).toString('base64')
-    const res = await request(server).get('/auth/a').set('Authorization', `Basic ${credential}`)
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/auth/a',
+      headers: { authorization: `Basic ${credential}` },
+    })
     expect(res.status).toBe(200)
-    expect(res.text).toBe('auth')
+    expect(await res.text()).toBe('auth')
   })
 
   it('Should authorize Unicode', async () => {
     const credential = Buffer.from(username + ':' + unicodePassword).toString('base64')
-    const res = await request(server)
-      .get('/auth-unicode/a')
-      .set('Authorization', `Basic ${credential}`)
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/auth-unicode/a',
+      headers: { authorization: `Basic ${credential}` },
+    })
     expect(res.status).toBe(200)
-    expect(res.text).toBe('auth')
+    expect(await res.text()).toBe('auth')
   })
 })
 
@@ -763,50 +780,44 @@ describe('Stream and non-stream response', () => {
   const server = createAdaptorServer(app)
 
   it('Should return JSON body', async () => {
-    const res = await request(server).get('/json')
+    const res = await requestServer(server, { method: 'GET', path: '/json' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-length']).toMatch('13')
-    expect(res.headers['content-type']).toMatch('application/json')
-    expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+    expect(res.headers.get('content-length')).toMatch('13')
+    expect(res.headers.get('content-type')).toMatch('application/json')
+    expect(await res.json()).toEqual({ foo: 'bar' })
   })
 
   it('Should return text body', async () => {
-    const res = await request(server).get('/text')
+    const res = await requestServer(server, { method: 'GET', path: '/text' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-length']).toMatch('6')
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.text).toBe('Hello!')
+    expect(res.headers.get('content-length')).toMatch('6')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(await res.text()).toBe('Hello!')
   })
 
   it('Should return JSON body - stream', async () => {
-    const res = await request(server).get('/json-stream')
+    const res = await requestServer(server, { method: 'GET', path: '/json-stream' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-length']).toBeUndefined()
-    expect(res.headers['content-type']).toMatch('application/json')
-    expect(res.headers['transfer-encoding']).toMatch('chunked')
-    expect(JSON.parse(res.text)).toEqual({ foo: 'bar' })
+    expect(res.headers.get('content-length')).toBeNull()
+    expect(res.headers.get('content-type')).toMatch('application/json')
+    expect(res.headers.get('transfer-encoding')).toMatch('chunked')
+    expect(await res.json()).toEqual({ foo: 'bar' })
   })
 
   it('Should return text body - stream', async () => {
-    const res = await request(server)
-      .get('/stream')
-      .parse((res, fn) => {
-        const chunks: string[] = ['data: Hello!\n\n', 'data: end\n\n']
-        let index = 0
-        res.on('data', (chunk) => {
-          const str = chunk.toString()
-          expect(str).toBe(chunks[index++])
-        })
-        res.on('end', () => fn(null, ''))
-      })
+    const { chunks, response: res } = await requestServerChunked(server, {
+      method: 'GET',
+      path: '/stream',
+    })
     expect(res.status).toBe(200)
-    expect(res.headers['content-length']).toBeUndefined()
-    expect(res.headers['content-type']).toMatch('text/event-stream')
-    expect(res.headers['transfer-encoding']).toMatch('chunked')
+    expect(res.headers.get('content-length')).toBeNull()
+    expect(res.headers.get('content-type')).toMatch('text/event-stream')
+    expect(res.headers.get('transfer-encoding')).toMatch('chunked')
+    expect(chunks.map((chunk) => chunk.toString())).toEqual(['data: Hello!\n\n', 'data: end\n\n'])
   })
 
   it('Should return error - stream without app crashing', async () => {
-    const result = request(server).get('/error-stream')
+    const result = requestServer(server, { method: 'GET', path: '/error-stream' })
     await expect(result).rejects.toThrow('aborted')
   })
 })
@@ -826,17 +837,17 @@ describe('SSL', () => {
   })
 
   it('Should return 200 response - GET /', async () => {
-    const res = await request(server).get('/').trustLocalhost()
+    const res = await requestServer(server, { method: 'GET', path: '/' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.text).toBe('Hello! Node!')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(await res.text()).toBe('Hello! Node!')
   })
 
   it('Should return 200 response - GET /url', async () => {
-    const res = await request(server).get('/url').trustLocalhost()
+    const res = await requestServer(server, { method: 'GET', path: '/url' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    const url = new URL(res.text)
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    const url = new URL(await res.text())
     expect(url.pathname).toBe('/url')
     expect(url.hostname).toBe('127.0.0.1')
     expect(url.protocol).toBe('https:')
@@ -859,29 +870,29 @@ describe('HTTP2', () => {
   })
 
   it('Should return 200 response - GET /', async () => {
-    const res = await request(server, { http2: true }).get('/').trustLocalhost()
+    const res = await requestServerHttp2(server, { method: 'GET', path: '/' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.text).toBe('Hello! Node!')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(await res.text()).toBe('Hello! Node!')
   })
 
   it('Should return 200 response - GET /headers', async () => {
-    const res = await request(server, { http2: true }).get('/headers').trustLocalhost()
+    const res = await requestServerHttp2(server, { method: 'GET', path: '/headers' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.text).toBe('Hello! Node!')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(await res.text()).toBe('Hello! Node!')
   })
 
   // Use :authority as the host for the url.
   it('Should return 200 response - GET /url', async () => {
-    const res = await request(server, { http2: true })
-      .get('/url')
-      .set(':scheme', 'https')
-      .set(':authority', '127.0.0.1')
-      .trustLocalhost()
+    const res = await requestServerHttp2(server, {
+      method: 'GET',
+      path: '/url',
+      headers: { ':authority': '127.0.0.1', ':scheme': 'https' },
+    })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    const url = new URL(res.text)
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    const url = new URL(await res.text())
     expect(url.pathname).toBe('/url')
     expect(url.hostname).toBe('127.0.0.1')
     expect(url.protocol).toBe('https:')
@@ -915,28 +926,40 @@ describe('Hono compression default gzip', () => {
 
   it('should return 200 response - GET /one', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).get('/one')
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/one',
+      headers: { 'accept-encoding': 'gzip, deflate' },
+    })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.headers['content-encoding']).toMatch('gzip')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(res.headers.get('content-encoding')).toMatch('gzip')
   })
 
   it('should return 404 Custom NotFound', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).get('/err')
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/err',
+      headers: { 'accept-encoding': 'gzip, deflate' },
+    })
     expect(res.status).toBe(404)
-    expect(res.text).toEqual('Custom NotFound')
-    expect(res.headers['content-type']).toEqual('text/plain; charset=UTF-8')
-    expect(res.headers['content-encoding']).toMatch('gzip')
+    expect(gunzipSync(Buffer.from(await res.arrayBuffer())).toString()).toEqual('Custom NotFound')
+    expect(res.headers.get('content-type')).toEqual('text/plain; charset=UTF-8')
+    expect(res.headers.get('content-encoding')).toMatch('gzip')
   })
 
   it('should return 500 Custom Error!', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).get('/error')
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/error',
+      headers: { 'accept-encoding': 'gzip, deflate' },
+    })
     expect(res.status).toBe(500)
-    expect(res.text).toEqual('Custom Error!')
-    expect(res.headers['content-type']).toEqual('text/plain; charset=UTF-8')
-    expect(res.headers['content-encoding']).toMatch('gzip')
+    expect(gunzipSync(Buffer.from(await res.arrayBuffer())).toString()).toEqual('Custom Error!')
+    expect(res.headers.get('content-type')).toEqual('text/plain; charset=UTF-8')
+    expect(res.headers.get('content-encoding')).toMatch('gzip')
   })
 })
 
@@ -967,28 +990,40 @@ describe('Hono compression deflate', () => {
 
   it('should return 200 response - GET /one', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).get('/one')
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/one',
+      headers: { 'accept-encoding': 'gzip, deflate' },
+    })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.headers['content-encoding']).toMatch('deflate')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(res.headers.get('content-encoding')).toMatch('deflate')
   })
 
   it('should return 404 Custom NotFound', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).get('/err')
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/err',
+      headers: { 'accept-encoding': 'gzip, deflate' },
+    })
     expect(res.status).toBe(404)
-    expect(res.text).toEqual('Custom NotFound')
-    expect(res.headers['content-type']).toEqual('text/plain; charset=UTF-8')
-    expect(res.headers['content-encoding']).toMatch('deflate')
+    expect(inflateSync(Buffer.from(await res.arrayBuffer())).toString()).toEqual('Custom NotFound')
+    expect(res.headers.get('content-type')).toEqual('text/plain; charset=UTF-8')
+    expect(res.headers.get('content-encoding')).toMatch('deflate')
   })
 
   it('should return 500 Custom Error!', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).get('/error')
+    const res = await requestServer(server, {
+      method: 'GET',
+      path: '/error',
+      headers: { 'accept-encoding': 'gzip, deflate' },
+    })
     expect(res.status).toBe(500)
-    expect(res.text).toEqual('Custom Error!')
-    expect(res.headers['content-type']).toEqual('text/plain; charset=UTF-8')
-    expect(res.headers['content-encoding']).toMatch('deflate')
+    expect(inflateSync(Buffer.from(await res.arrayBuffer())).toString()).toEqual('Custom Error!')
+    expect(res.headers.get('content-type')).toEqual('text/plain; charset=UTF-8')
+    expect(res.headers.get('content-encoding')).toMatch('deflate')
   })
 })
 
@@ -1006,9 +1041,9 @@ describe('set child response to c.res', () => {
 
   it('Should return 200 response - GET /json', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).get('/json')
+    const res = await requestServer(server, { method: 'GET', path: '/json' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('application/json')
+    expect(res.headers.get('content-type')).toMatch('application/json')
   })
 })
 
@@ -1033,11 +1068,11 @@ describe('Headers appended to a raw Response after construction (issue #304)', (
 
   it('Should preserve the appended Set-Cookie header', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).post('/test')
+    const res = await requestServer(server, { method: 'POST', path: '/test' })
     expect(res.status).toBe(200)
-    expect(res.text).toBe('hello')
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.headers['set-cookie']).toEqual(['session=abc; Path=/; HttpOnly'])
+    expect(await res.text()).toBe('hello')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(res.headers.getSetCookie()).toEqual(['session=abc; Path=/; HttpOnly'])
   })
 })
 
@@ -1054,13 +1089,14 @@ describe('forwarding IncomingMessage and ServerResponse in env', () => {
 
   it('Should add `incoming` and `outgoing` to env', async () => {
     const server = createAdaptorServer(app)
-    const res = await request(server).get('/')
+    const res = await requestServer(server, { method: 'GET', path: '/' })
 
     expect(res.status).toBe(200)
-    expect(res.body.incoming).toBe('IncomingMessage')
-    expect(res.body.url).toBe('/')
-    expect(res.body.outgoing).toBe('ServerResponse')
-    expect(res.body.status).toBe(200)
+    const body = await res.json()
+    expect(body.incoming).toBe('IncomingMessage')
+    expect(body.url).toBe('/')
+    expect(body.outgoing).toBe('ServerResponse')
+    expect(body.status).toBe(200)
   })
 })
 
@@ -1136,19 +1172,34 @@ describe('Memory leak test', () => {
     })
   })
 
+  // keep the server up across all tests so every request shares the same
+  // environment, as the GC assertions are sensitive to their surroundings
+  beforeAll(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(0, '127.0.0.1', resolve)
+      })
+  )
+
   afterAll(() => {
     server.close()
   })
 
   it('Should not have memory leak - GET /', async () => {
-    await request(server).get('/')
+    await requestServer(server, { method: 'GET', path: '/' })
     global.gc?.()
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(counter).toBe(0)
   })
 
   it('Should not have memory leak - POST /', async () => {
-    await request(server).post('/').set('Content-Type', 'application/json').send({ foo: 'bar' })
+    await requestServer(server, {
+      method: 'POST',
+      path: '/',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ foo: 'bar' }),
+    })
     global.gc?.()
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(counter).toBe(0)
@@ -1159,12 +1210,16 @@ describe('Memory leak test', () => {
       onAbort = resolve
     })
 
-    const req = request(server)
-      .get('/abort')
-      .end(() => {})
+    const controller = new AbortController()
+    const resPromise = requestServer(server, {
+      method: 'GET',
+      path: '/abort',
+      signal: controller.signal,
+    }).catch(() => {})
     await reqReadyPromise
-    req.abort()
+    controller.abort()
     await abortedPromise
+    await resPromise
     await new Promise((resolve) => setTimeout(resolve, 10))
 
     global.gc?.()
