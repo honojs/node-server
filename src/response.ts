@@ -46,21 +46,16 @@ export class Response {
   constructor(body?: BodyInit | null, init?: ResponseInit) {
     let headers: HeadersInit | undefined
     this.#body = body
-    if (init instanceof Response) {
+    if (init instanceof GlobalResponse) {
       const cachedGlobalResponse = (init as any)[responseCache]
       if (cachedGlobalResponse) {
         this.#init = cachedGlobalResponse
         // instantiate GlobalResponse cache and this object always returns value from global.Response
         this[getResponseCache]()
         return
-      } else {
-        this.#init = init.#init
-        // Read headers via the live getter so mutations made on `init` after
-        // construction (e.g. `init.headers.append('Set-Cookie', ...)`) are
-        // preserved on the clone. `new Headers(...)` still produces an
-        // independent copy so parent and child do not share the same object.
-        headers = new Headers(init.headers)
       }
+      this.#init = init instanceof Response ? init.#init : init
+      headers = new Headers(init.headers)
     } else {
       this.#init = init
     }
