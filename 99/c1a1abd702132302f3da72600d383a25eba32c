@@ -1,0 +1,19 @@
+.github/workflows/ci.yml
+  s_e8223a32c166c1::t_3874c4a4484a0f 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "99c1a1abd702132302f3da72600d383a25eba32c",
+  "prompts": {},
+  "sessions": {
+    "s_e8223a32c166c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "53cac504-40e1-4014-93d9-f865a9d70371",
+        "model": "unknown"
+      },
+      "human_author": "Yusuke Wada <yusuke@kamawada.com>"
+    }
+  }
+}
