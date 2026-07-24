@@ -384,6 +384,11 @@ describe('Serve Static Middleware', () => {
 
       const res3 = await request(server).get('/static//admin/secret.txt')
       expect(res3.status).toBe(404)
+
+      const res4 = await request(server).get('/static/admin%5Csecret.txt')
+      expect(res4.status).toBe(404)
+      expect(res4.headers['x-authorized']).toBeUndefined()
+      expect(res4.text).not.toBe('secret')
     })
   })
 
