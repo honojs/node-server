@@ -1,0 +1,19 @@
+src/response.ts
+  s_8b6371bf86bc6b::t_1ae0118d3154b9 49,57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b6a60ca30abd556e38e93ba93e040425af662439",
+  "prompts": {},
+  "sessions": {
+    "s_8b6371bf86bc6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91065213-4f60-4f7b-8ca1-32e6d6b1f658",
+        "model": "unknown"
+      },
+      "human_author": "Yusuke Wada <yusuke@kamawada.com>"
+    }
+  }
+}
