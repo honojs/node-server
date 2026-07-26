@@ -1,4 +1,7 @@
+import { EventEmitter } from 'node:events'
 import { createServer } from 'node:http'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { Readable } from 'node:stream'
 import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
@@ -539,6 +542,87 @@ describe('Abort request - cacheable response path', () => {
     await withTimeout(abortedPromise, 'request abort did not propagate for cacheable stream')
     expect(capturedReq?.signal.aborted).toBe(true)
     await resPromise
+  })
+})
+
+describe('Non-standard incoming request', () => {
+  class MockSocket extends EventEmitter {
+    remoteAddress = '127.0.0.1'
+    remotePort = 44936
+  }
+
+  class MockIncomingMessage extends Readable {
+    method = 'POST'
+    url = '/'
+    headers = { host: 'localhost' }
+    rawHeaders = ['host', 'localhost']
+
+    constructor(readonly socket: EventEmitter = new MockSocket()) {
+      super()
+    }
+
+    _read() {
+      // The body is never pushed and never ends, so draining cannot complete
+      // and the drain timeout is guaranteed to fire.
+    }
+  }
+
+  class MockServerResponse extends EventEmitter {
+    headersSent = false
+    writableFinished = false
+
+    writeHead() {
+      this.headersSent = true
+      return this
+    }
+
+    end() {
+      this.writableFinished = true
+      this.emit('finish')
+      this.emit('close')
+      return this
+    }
+  }
+
+  it('Should not throw when the drain timeout fires on a socket without destroySoon', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const requestListener = getRequestListener(() => new LightweightResponse('ok'))
+      await requestListener(
+        new MockIncomingMessage() as unknown as IncomingMessage,
+        new MockServerResponse() as unknown as ServerResponse
+      )
+
+      // The drain timeout fires on a timer, so a throw here is an uncatchable
+      // uncaughtException for the caller.
+      expect(() => vi.advanceTimersByTime(1_000)).not.toThrow()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Should destroy a socket that implements destroy but not destroySoon', async () => {
+    vi.useFakeTimers()
+
+    try {
+      // Duplex-based fakes provide the standard stream teardown method only.
+      class DuplexLikeSocket extends MockSocket {
+        destroy = vi.fn()
+      }
+      const socket = new DuplexLikeSocket()
+
+      const requestListener = getRequestListener(() => new LightweightResponse('ok'))
+      await requestListener(
+        new MockIncomingMessage(socket) as unknown as IncomingMessage,
+        new MockServerResponse() as unknown as ServerResponse
+      )
+      vi.advanceTimersByTime(1_000)
+
+      expect(socket.destroy).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

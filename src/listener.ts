@@ -65,7 +65,11 @@ const drainIncoming = (incoming: IncomingMessage | Http2ServerRequest): void => 
     cleanup()
     const socket = incoming.socket
     if (socket && !socket.destroyed) {
-      socket.destroySoon()
+      if (typeof socket.destroySoon === 'function') {
+        socket.destroySoon()
+      } else if (typeof socket.destroy === 'function') {
+        socket.destroy()
+      }
     }
   }
 
