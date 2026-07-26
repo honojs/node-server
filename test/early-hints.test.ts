@@ -1,6 +1,6 @@
-import type { Context } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import { Hono } from 'hono'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, expectTypeOf, vi } from 'vitest'
 import http, { createServer } from 'node:http'
 import http2 from 'node:http2'
 import type { AddressInfo } from 'node:net'
@@ -281,6 +281,27 @@ describe('HTTP/2 Early Hints Middleware', () => {
 })
 
 describe('Early Hints Middleware Unit & Edge Cases', () => {
+  it('should preserve the application Env type', () => {
+    type TestEnv = {
+      Bindings: {
+        theme: string
+      }
+      Variables: {
+        userId: string
+      }
+    }
+
+    const middleware = earlyHints<TestEnv>({
+      link: (c) => {
+        expectTypeOf(c.env.theme).toEqualTypeOf<string>()
+        expectTypeOf(c.get('userId')).toEqualTypeOf<string>()
+        return undefined
+      },
+    })
+
+    expectTypeOf(middleware).toEqualTypeOf<MiddlewareHandler<TestEnv>>()
+  })
+
   it('should warn once per middleware instance when writeEarlyHints is unavailable', async () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
