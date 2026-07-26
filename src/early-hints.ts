@@ -19,6 +19,13 @@ export const earlyHints = <E extends Env = any>(
   let warned = false
 
   return async (c, next) => {
+    const mode = c.req.header('Sec-Fetch-Mode')
+    const dest = c.req.header('Sec-Fetch-Dest')
+
+    if ((mode && mode !== 'navigate') || (dest && dest !== 'document')) {
+      return next()
+    }
+
     const env = c.env || {}
     const bindings = (env.server ? env.server : env) as HttpBindings
     const outgoing = bindings?.outgoing

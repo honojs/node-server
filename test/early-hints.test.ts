@@ -280,6 +280,70 @@ describe('HTTP/2 Early Hints Middleware', () => {
   })
 })
 
+describe('Early Hints Middleware Fetch Metadata Filtering', () => {
+  const createContext = (mode?: string, dest?: string) => {
+    const writeEarlyHints = vi.fn()
+    const context = {
+      req: {
+        header: (name: string) => {
+          if (name === 'Sec-Fetch-Mode') {
+            return mode
+          }
+          if (name === 'Sec-Fetch-Dest') {
+            return dest
+          }
+        },
+      },
+      env: {
+        outgoing: {
+          writeEarlyHints,
+          headersSent: false,
+        },
+      },
+    } as unknown as Context
+
+    return { context, writeEarlyHints }
+  }
+
+  it.each([
+    ['both headers are missing', undefined, undefined],
+    ['both headers match', 'navigate', 'document'],
+    ['only the mode header matches', 'navigate', undefined],
+    ['only the destination header matches', undefined, 'document'],
+  ])('should send hints when %s', async (_description, mode, dest) => {
+    const { context, writeEarlyHints } = createContext(mode, dest)
+    const next = vi.fn().mockResolvedValue(undefined)
+    const middleware = earlyHints({
+      link: '</style.css>; rel=preload; as=style',
+    })
+
+    await middleware(context, next)
+
+    expect(writeEarlyHints).toHaveBeenCalledWith({
+      link: '</style.css>; rel=preload; as=style',
+    })
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['the mode is cors', 'cors', undefined],
+    ['the destination is empty', undefined, 'empty'],
+    ['the destination is an iframe', 'navigate', 'iframe'],
+    ['the mode is no-cors', 'no-cors', 'document'],
+  ])('should skip hints when %s', async (_description, mode, dest) => {
+    const { context, writeEarlyHints } = createContext(mode, dest)
+    const next = vi.fn().mockResolvedValue(undefined)
+    const middleware = earlyHints({
+      link: '</style.css>; rel=preload; as=style',
+    })
+
+    await middleware(context, next)
+
+    expect(writeEarlyHints).not.toHaveBeenCalled()
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('Early Hints Middleware Unit & Edge Cases', () => {
   it('should preserve the application Env type', () => {
     type TestEnv = {
@@ -306,6 +370,9 @@ describe('Early Hints Middleware Unit & Edge Cases', () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const mockCtx = {
+      req: {
+        header: () => undefined,
+      },
       env: {
         outgoing: {
           headersSent: false,
@@ -337,6 +404,9 @@ describe('Early Hints Middleware Unit & Edge Cases', () => {
   it('should no-op safely when headersSent is true', async () => {
     const writeEarlyHintsMock = vi.fn()
     const mockCtx = {
+      req: {
+        header: () => undefined,
+      },
       env: {
         outgoing: {
           writeEarlyHints: writeEarlyHintsMock,
@@ -357,6 +427,9 @@ describe('Early Hints Middleware Unit & Edge Cases', () => {
   it('should skip sending hints when dynamic link function returns undefined or empty array', async () => {
     const writeEarlyHintsMock = vi.fn()
     const mockCtx = {
+      req: {
+        header: () => undefined,
+      },
       env: {
         outgoing: {
           writeEarlyHints: writeEarlyHintsMock,
