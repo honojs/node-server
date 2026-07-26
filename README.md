@@ -350,7 +350,6 @@ import { Hono } from 'hono'
 const app = new Hono()
 
 app.use(
-  '*',
   earlyHints({
     link: '</styles.css>; rel=preload; as=style'
   })
@@ -367,7 +366,6 @@ serve(app)
 
 ```ts
 app.use(
-  '*',
   earlyHints({
     link: (c) =>
       c.req.query('theme') === 'dark'
