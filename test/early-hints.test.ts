@@ -1,51 +1,55 @@
+import type { Context } from 'hono'
 import { Hono } from 'hono'
-import { createServer } from 'node:http'
-import http from 'node:http'
-import http2 from 'node:http2'
 import { describe, it, expect, vi } from 'vitest'
-import { writeEarlyHints, earlyHints } from '../src/early-hints'
+import http, { createServer } from 'node:http'
+import http2 from 'node:http2'
+import type { AddressInfo } from 'node:net'
+import { earlyHints } from '../src/early-hints'
 import { getRequestListener } from '../src/listener'
 
-describe('HTTP/1.1 Early Hints', () => {
-  it('should send a 103 early hints response before the final response', async () => {
+describe('HTTP/1.1 Early Hints Middleware', () => {
+  it('should send a 103 early hints response before the final response using a string link', async () => {
     const app = new Hono()
-    app.get('/', (c) => {
-      const hintsWritten = writeEarlyHints(c, {
+    app.use(
+      '*',
+      earlyHints({
         link: '</style.css>; rel=preload; as=style',
       })
-      expect(hintsWritten).toBe(true)
-      return c.text('Hello Early Hints')
-    })
+    )
+    app.get('/', (c) => c.text('Hello Early Hints'))
 
     const server = createServer(getRequestListener(app.fetch))
 
     await new Promise<void>((resolve, reject) => {
       server.listen(0, () => {
-        const address = server.address() as any
+        const address = server.address() as AddressInfo
         const port = address.port
 
-        const req = http.request({
-          port,
-          path: '/',
-        }, (res) => {
-          let body = ''
-          res.on('data', chunk => body += chunk)
-          res.on('end', () => {
-            try {
-              expect(res.statusCode).toBe(200)
-              expect(body).toBe('Hello Early Hints')
-              expect(earlyHintReceived).toBe(true)
-              server.close(err => err ? reject(err) : resolve())
-            } catch (err) {
+        const req = http.request(
+          {
+            port,
+            path: '/',
+          },
+          (res) => {
+            let body = ''
+            res.on('data', (chunk) => (body += chunk))
+            res.on('end', () => {
+              try {
+                expect(res.statusCode).toBe(200)
+                expect(body).toBe('Hello Early Hints')
+                expect(earlyHintReceived).toBe(true)
+                server.close((err) => (err ? reject(err) : resolve()))
+              } catch (err) {
+                server.close()
+                reject(err)
+              }
+            })
+            res.on('error', (err) => {
               server.close()
               reject(err)
-            }
-          })
-          res.on('error', (err) => {
-            server.close()
-            reject(err)
-          })
-        })
+            })
+          }
+        )
 
         let earlyHintReceived = false
         req.on('information', (info) => {
@@ -68,49 +72,56 @@ describe('HTTP/1.1 Early Hints', () => {
     })
   })
 
-  it('should send early hints using middleware', async () => {
+  it('should send early hints with an array of link headers', async () => {
     const app = new Hono()
-    app.use('*', earlyHints({
-      link: ['</style.css>; rel=preload; as=style', '</script.js>; rel=preload; as=script'],
-    }))
+    app.use(
+      '*',
+      earlyHints({
+        link: ['</style.css>; rel=preload; as=style', '</script.js>; rel=preload; as=script'],
+      })
+    )
     app.get('/', (c) => c.text('Hello Middleware'))
 
     const server = createServer(getRequestListener(app.fetch))
 
     await new Promise<void>((resolve, reject) => {
       server.listen(0, () => {
-        const address = server.address() as any
+        const address = server.address() as AddressInfo
         const port = address.port
 
-        const req = http.request({
-          port,
-          path: '/',
-        }, (res) => {
-          let body = ''
-          res.on('data', chunk => body += chunk)
-          res.on('end', () => {
-            try {
-              expect(res.statusCode).toBe(200)
-              expect(body).toBe('Hello Middleware')
-              expect(earlyHintReceived).toBe(true)
-              server.close(err => err ? reject(err) : resolve())
-            } catch (err) {
+        const req = http.request(
+          {
+            port,
+            path: '/',
+          },
+          (res) => {
+            let body = ''
+            res.on('data', (chunk) => (body += chunk))
+            res.on('end', () => {
+              try {
+                expect(res.statusCode).toBe(200)
+                expect(body).toBe('Hello Middleware')
+                expect(earlyHintReceived).toBe(true)
+                server.close((err) => (err ? reject(err) : resolve()))
+              } catch (err) {
+                server.close()
+                reject(err)
+              }
+            })
+            res.on('error', (err) => {
               server.close()
               reject(err)
-            }
-          })
-          res.on('error', (err) => {
-            server.close()
-            reject(err)
-          })
-        })
+            })
+          }
+        )
 
         let earlyHintReceived = false
         req.on('information', (info) => {
           try {
             expect(info.statusCode).toBe(103)
-            // In HTTP/1.x, multiple headers or array headers get combined into a single comma-separated string.
-            expect(info.headers.link).toBe('</style.css>; rel=preload; as=style, </script.js>; rel=preload; as=script')
+            expect(info.headers.link).toBe(
+              '</style.css>; rel=preload; as=style, </script.js>; rel=preload; as=script'
+            )
             earlyHintReceived = true
           } catch (err) {
             server.close()
@@ -127,51 +138,90 @@ describe('HTTP/1.1 Early Hints', () => {
     })
   })
 
-  it('should return false if writeEarlyHints is absent on the outgoing message', () => {
-    const mockCtx = {
-      env: {
-        outgoing: {
-          headersSent: false,
-        }
-      }
-    } as any
+  it('should evaluate dynamic link function with Context', async () => {
+    const app = new Hono()
+    app.use(
+      '*',
+      earlyHints({
+        link: (c) =>
+          c.req.query('theme') === 'dark'
+            ? '</dark.css>; rel=preload; as=style'
+            : '</light.css>; rel=preload; as=style',
+      })
+    )
+    app.get('/', (c) => c.text('Hello Dynamic'))
 
-    const result = writeEarlyHints(mockCtx, { link: '/style.css' })
-    expect(result).toBe(false)
-  })
+    const server = createServer(getRequestListener(app.fetch))
 
-  it('should return false if headers are already sent', () => {
-    const mockCtx = {
-      env: {
-        outgoing: {
-          writeEarlyHints: vi.fn(),
-          headersSent: true,
-        }
-      }
-    } as any
+    await new Promise<void>((resolve, reject) => {
+      server.listen(0, () => {
+        const address = server.address() as AddressInfo
+        const port = address.port
 
-    const result = writeEarlyHints(mockCtx, { link: '/style.css' })
-    expect(result).toBe(false)
-    expect(mockCtx.env.outgoing.writeEarlyHints).not.toHaveBeenCalled()
+        const req = http.request(
+          {
+            port,
+            path: '/?theme=dark',
+          },
+          (res) => {
+            let body = ''
+            res.on('data', (chunk) => (body += chunk))
+            res.on('end', () => {
+              try {
+                expect(res.statusCode).toBe(200)
+                expect(body).toBe('Hello Dynamic')
+                expect(earlyHintReceived).toBe(true)
+                server.close((err) => (err ? reject(err) : resolve()))
+              } catch (err) {
+                server.close()
+                reject(err)
+              }
+            })
+            res.on('error', (err) => {
+              server.close()
+              reject(err)
+            })
+          }
+        )
+
+        let earlyHintReceived = false
+        req.on('information', (info) => {
+          try {
+            expect(info.statusCode).toBe(103)
+            expect(info.headers.link).toBe('</dark.css>; rel=preload; as=style')
+            earlyHintReceived = true
+          } catch (err) {
+            server.close()
+            reject(err)
+          }
+        })
+
+        req.on('error', (err) => {
+          server.close()
+          reject(err)
+        })
+        req.end()
+      })
+    })
   })
 })
 
-describe('HTTP/2 Early Hints', () => {
-  it('should send a 103 early hints response before the final response over HTTP/2', async () => {
+describe('HTTP/2 Early Hints Middleware', () => {
+  it('should send a 103 early hints response over HTTP/2', async () => {
     const app = new Hono()
-    app.get('/', (c) => {
-      const hintsWritten = writeEarlyHints(c, {
+    app.use(
+      '*',
+      earlyHints({
         link: '</style.css>; rel=preload; as=style',
       })
-      expect(hintsWritten).toBe(true)
-      return c.text('Hello HTTP2 Early Hints')
-    })
+    )
+    app.get('/', (c) => c.text('Hello HTTP2 Early Hints'))
 
     const server = http2.createServer(getRequestListener(app.fetch))
 
     await new Promise<void>((resolve, reject) => {
       server.listen(0, () => {
-        const address = server.address() as any
+        const address = server.address() as AddressInfo
         const port = address.port
 
         const client = http2.connect(`http://localhost:${port}`)
@@ -204,7 +254,7 @@ describe('HTTP/2 Early Hints', () => {
         })
 
         let body = ''
-        req.on('data', chunk => body += chunk)
+        req.on('data', (chunk) => (body += chunk))
 
         req.on('end', () => {
           try {
@@ -212,7 +262,7 @@ describe('HTTP/2 Early Hints', () => {
             expect(finalResponseReceived).toBe(true)
             expect(body).toBe('Hello HTTP2 Early Hints')
             client.close()
-            server.close(err => err ? reject(err) : resolve())
+            server.close((err) => (err ? reject(err) : resolve()))
           } catch (err) {
             client.close()
             server.close()
@@ -227,5 +277,87 @@ describe('HTTP/2 Early Hints', () => {
         })
       })
     })
+  })
+})
+
+describe('Early Hints Middleware Unit & Edge Cases', () => {
+  it('should warn once per middleware instance when writeEarlyHints is unavailable', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const mockCtx = {
+      env: {
+        outgoing: {
+          headersSent: false,
+        },
+      },
+    } as unknown as Context
+
+    const nextFn = vi.fn().mockResolvedValue(undefined)
+
+    const mw1 = earlyHints({ link: '/style.css' })
+    await mw1(mockCtx, nextFn)
+    await mw1(mockCtx, nextFn)
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1)
+    expect(consoleSpy).toHaveBeenCalledWith(
+      'Early Hints Middleware is not supported because writeEarlyHints is not defined.'
+    )
+    expect(nextFn).toHaveBeenCalledTimes(2)
+
+    const mw2 = earlyHints({ link: '/style.css' })
+    await mw2(mockCtx, nextFn)
+
+    expect(consoleSpy).toHaveBeenCalledTimes(2)
+    expect(nextFn).toHaveBeenCalledTimes(3)
+
+    consoleSpy.mockRestore()
+  })
+
+  it('should no-op safely when headersSent is true', async () => {
+    const writeEarlyHintsMock = vi.fn()
+    const mockCtx = {
+      env: {
+        outgoing: {
+          writeEarlyHints: writeEarlyHintsMock,
+          headersSent: true,
+        },
+      },
+    } as unknown as Context
+
+    const nextFn = vi.fn().mockResolvedValue(undefined)
+    const mw = earlyHints({ link: '/style.css' })
+
+    await mw(mockCtx, nextFn)
+
+    expect(writeEarlyHintsMock).not.toHaveBeenCalled()
+    expect(nextFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('should skip sending hints when dynamic link function returns undefined or empty array', async () => {
+    const writeEarlyHintsMock = vi.fn()
+    const mockCtx = {
+      env: {
+        outgoing: {
+          writeEarlyHints: writeEarlyHintsMock,
+          headersSent: false,
+        },
+      },
+    } as unknown as Context
+
+    const nextFn = vi.fn().mockResolvedValue(undefined)
+
+    // Undefined return
+    const mwUndefined = earlyHints({ link: () => undefined })
+    await mwUndefined(mockCtx, nextFn)
+
+    expect(writeEarlyHintsMock).not.toHaveBeenCalled()
+    expect(nextFn).toHaveBeenCalledTimes(1)
+
+    // Empty array return
+    const mwEmptyArray = earlyHints({ link: () => [] })
+    await mwEmptyArray(mockCtx, nextFn)
+
+    expect(writeEarlyHintsMock).not.toHaveBeenCalled()
+    expect(nextFn).toHaveBeenCalledTimes(2)
   })
 })

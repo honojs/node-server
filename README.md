@@ -332,40 +332,15 @@ type Http2Bindings = {
 }
 ```
 
-## Early Hints Helper & Middleware
+## Early Hints Middleware
 
-You can send HTTP 103 Early Hints to instruct browsers to preload or preconnect resources before the final response is prepared. Both the helper function and the middleware sugar are supported under Node.js bindings (HTTP/1.1 and HTTP/2).
+You can send HTTP 103 Early Hints to instruct browsers to preload or preconnect resources before the final response is prepared. The middleware is supported under Node.js bindings (HTTP/1.1 and HTTP/2).
 
-### Using the Helper
+### Usage
 
-Import `writeEarlyHints` and call it inside your handler:
+Import `earlyHints` from `@hono/node-server/early-hints`:
 
-```ts
-import { serve } from '@hono/node-server'
-import { writeEarlyHints } from '@hono/node-server/early-hints'
-import { Hono } from 'hono'
-
-const app = new Hono()
-
-app.get('/', (c) => {
-  // Preload hints sent immediately
-  writeEarlyHints(c, {
-    link: [
-      '</styles.css>; rel=preload; as=style',
-      '</script.js>; rel=preload; as=script'
-    ]
-  })
-
-  // Long-running or async operation to generate the main page response
-  return c.html('<!DOCTYPE html><html><body><h1>Hello Hono!</h1></body></html>')
-})
-
-serve(app)
-```
-
-### Using the Middleware
-
-You can also use the `earlyHints` middleware to automatically send Early Hints:
+#### Static links
 
 ```ts
 import { serve } from '@hono/node-server'
@@ -375,7 +350,7 @@ import { Hono } from 'hono'
 const app = new Hono()
 
 app.use(
-  '/',
+  '*',
   earlyHints({
     link: '</styles.css>; rel=preload; as=style'
   })
@@ -386,6 +361,20 @@ app.get('/', (c) => {
 })
 
 serve(app)
+```
+
+#### Dynamic links
+
+```ts
+app.use(
+  '*',
+  earlyHints({
+    link: (c) =>
+      c.req.query('theme') === 'dark'
+        ? '</dark.css>; rel=preload; as=style'
+        : '</light.css>; rel=preload; as=style'
+  })
+)
 ```
 
 ## Direct response from Node.js API
