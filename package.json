@@ -59,7 +59,7 @@
     "watch": "tsup --watch",
     "postbuild": "publint",
     "prerelease": "bun run build && bun run test",
-    "release": "np",
+    "release": "np --no-publish --branch v1.x",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
     "format": "prettier --check \"src/**/*.{js,ts}\" \"test/**/*.{js,ts}\"",
