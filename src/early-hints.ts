@@ -1,8 +1,8 @@
-import type { Context, MiddlewareHandler } from 'hono'
+import type { Context, Env, MiddlewareHandler } from 'hono'
 import type { HttpBindings } from './types'
 
-export type EarlyHintsOptions = {
-  link: string | string[] | ((c: Context) => string | string[] | undefined)
+export type EarlyHintsOptions<E extends Env = Env> = {
+  link: string | string[] | ((c: Context<E>) => string | string[] | undefined)
 }
 
 /**
@@ -12,10 +12,20 @@ export type EarlyHintsOptions = {
  * @param options EarlyHintsOptions
  * @returns MiddlewareHandler
  */
-export const earlyHints = (options: EarlyHintsOptions): MiddlewareHandler => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const earlyHints = <E extends Env = any>(
+  options: EarlyHintsOptions<E>
+): MiddlewareHandler<E> => {
   let warned = false
 
   return async (c, next) => {
+    const mode = c.req.header('Sec-Fetch-Mode')
+    const dest = c.req.header('Sec-Fetch-Dest')
+
+    if ((mode && mode !== 'navigate') || (dest && dest !== 'document')) {
+      return next()
+    }
+
     const env = c.env || {}
     const bindings = (env.server ? env.server : env) as HttpBindings
     const outgoing = bindings?.outgoing
