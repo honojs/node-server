@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import request from 'supertest'
 import type { HttpBindings } from '../../src/'
 import { createAdaptorServer } from '../../src/server'
 import { RESPONSE_ALREADY_SENT } from '../../src/utils/response'
+import { requestServer } from '../helpers/request'
 
 describe('RESPONSE_ALREADY_SENT', () => {
   const app = new Hono<{ Bindings: HttpBindings }>()
@@ -15,9 +15,9 @@ describe('RESPONSE_ALREADY_SENT', () => {
   const server = createAdaptorServer(app)
 
   it('Should return 200 response - GET /', async () => {
-    const res = await request(server).get('/')
+    const res = await requestServer(server, { method: 'GET', path: '/' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toMatch('text/plain')
-    expect(res.text).toBe('Hono!')
+    expect(res.headers.get('content-type')).toMatch('text/plain')
+    expect(await res.text()).toBe('Hono!')
   })
 })

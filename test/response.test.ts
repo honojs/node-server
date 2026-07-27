@@ -139,6 +139,16 @@ describe('Response', () => {
     expect(res.headers.get('location')).toEqual('https://example.com/')
   })
 
+  it('Should copy headers when rebuilding a response from fetch()', async () => {
+    const upstream = await fetch(`http://localhost:${port}`)
+    const rebuilt = new Response(upstream.body, upstream)
+    rebuilt.headers.set('x-test', '1')
+    expect(rebuilt.headers.get('x-test')).toEqual('1')
+    expect(rebuilt.headers.get('content-type')).toEqual('application/json charset=UTF-8')
+    expect(upstream.headers.get('x-test')).toBeNull()
+    expect(await rebuilt.json()).toEqual({ status: 'ok' })
+  })
+
   it('Nested constructors should not cause an error even if ReadableStream is specified', async () => {
     const stream = new Response('hono').body
     const parentResponse = new Response(stream)

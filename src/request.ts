@@ -43,7 +43,9 @@ export class Request extends GlobalRequest {
   }
 }
 
-const newHeadersFromIncoming = (incoming: IncomingMessage | Http2ServerRequest) => {
+export const newHeadersFromIncoming = (
+  incoming: Pick<IncomingMessage | Http2ServerRequest, 'rawHeaders'>
+) => {
   const headerRecord: [string, string][] = []
   const rawHeaders = incoming.rawHeaders
   for (let i = 0, len = rawHeaders.length; i < len; i += 2) {
@@ -315,12 +317,17 @@ const normalizeIncomingMethod = (method: unknown): string => {
     case 'GET':
     case 'HEAD':
     case 'OPTIONS':
+    case 'PATCH':
     case 'POST':
     case 'PUT':
+    case 'QUERY':
       return method
   }
 
   const upper = method.toUpperCase()
+  // Fetch only normalizes these methods for backwards compatibility.
+  // HTTP methods are otherwise case-sensitive, so methods not in this list
+  // (including `query`) must retain their original casing.
   switch (upper) {
     case 'DELETE':
     case 'GET':
@@ -710,7 +717,9 @@ Object.defineProperty(requestPrototype, 'blob', {
     return readBodyWithFastPath(this, 'blob', (buf, request) => {
       const type = contentType(request)
       const init = type ? { headers: { 'content-type': type } } : undefined
-      return new Response(buf, init).blob()
+      // Buffer is typed over ArrayBufferLike, but request bodies are always
+      // backed by an ArrayBuffer, so cast instead of copying the bytes
+      return new Response(buf as Uint8Array<ArrayBuffer>, init).blob()
     })
   },
 })

@@ -1,8 +1,8 @@
-import request from 'supertest'
 import { createServer } from 'node:http'
 import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
+import { requestServer } from './helpers/request'
 
 const withTimeout = async <T>(promise: Promise<T>, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
@@ -27,7 +27,7 @@ const runRequestAndCollectOutgoingEvents = async (
   fetchCallback: Parameters<typeof getRequestListener>[0]
 ): Promise<{
   closeListenerCount: number
-  response: request.Response
+  response: Response
 }> => {
   let closeListenerCount = 0
   const requestListener = getRequestListener(fetchCallback)
@@ -44,12 +44,8 @@ const runRequestAndCollectOutgoingEvents = async (
     await requestListener(req, res)
   })
 
-  try {
-    const response = await request(server).get('/')
-    return { closeListenerCount, response }
-  } finally {
-    server.close()
-  }
+  const response = await requestServer(server, { method: 'GET', path: '/' })
+  return { closeListenerCount, response }
 }
 
 describe('Invalid request', () => {
@@ -58,12 +54,21 @@ describe('Invalid request', () => {
     const server = createServer(requestListener)
 
     it('Should return server error for a request w/o host header', async () => {
-      const res = await request(server).get('/').set('Host', '').send()
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/',
+        headers: { host: '' },
+        setHost: false,
+      })
       expect(res.status).toBe(400)
     })
 
     it('Should return server error for a request invalid host header', async () => {
-      const res = await request(server).get('/').set('Host', 'a b').send()
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/',
+        headers: { host: 'a b' },
+      })
       expect(res.status).toBe(400)
     })
   })
@@ -81,17 +86,30 @@ describe('Invalid request', () => {
     const server = createServer(requestListener)
 
     it('Should return server error for a request w/o host header', async () => {
-      const res = await request(server).get('/').set('Host', '').send()
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/',
+        headers: { host: '' },
+        setHost: false,
+      })
       expect(res.status).toBe(400)
     })
 
     it('Should return server error for a request invalid host header', async () => {
-      const res = await request(server).get('/').set('Host', 'a b').send()
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/',
+        headers: { host: 'a b' },
+      })
       expect(res.status).toBe(400)
     })
 
     it('Should return server error for host header with path', async () => {
-      const res = await request(server).get('/').set('Host', 'a/b').send()
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/',
+        headers: { host: 'a/b' },
+      })
       expect(res.status).toBe(400)
     })
   })
@@ -103,12 +121,21 @@ describe('Invalid request', () => {
     const server = createServer(requestListener)
 
     it('Should return 200 for a request w/o host header', async () => {
-      const res = await request(server).get('/').set('Host', '').send()
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/',
+        headers: { host: '' },
+        setHost: false,
+      })
       expect(res.status).toBe(200)
     })
 
     it('Should return server error for a request invalid host header', async () => {
-      const res = await request(server).get('/').set('Host', 'a b').send()
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/',
+        headers: { host: 'a b' },
+      })
       expect(res.status).toBe(400)
     })
   })
@@ -123,7 +150,7 @@ describe('Invalid request', () => {
     const server = createServer(requestListener)
 
     it('Should return a 500 for a malformed response', async () => {
-      const res = await request(server).get('/').send()
+      const res = await requestServer(server, { method: 'GET', path: '/' })
       expect(res.status).toBe(500)
     })
   })
@@ -136,10 +163,10 @@ describe('Response headers', () => {
   const server = createServer(requestListener)
 
   it('Should not set content-type for a null body response', async () => {
-    const res = await request(server).get('/').send()
+    const res = await requestServer(server, { method: 'GET', path: '/' })
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toBeUndefined()
-    expect(res.text).toBe('')
+    expect(res.headers.get('content-type')).toBeNull()
+    expect(await res.text()).toBe('')
   })
 })
 
@@ -169,10 +196,10 @@ describe('Error handling - sync fetchCallback', () => {
       return new Response(`${err}`, { status: 500, headers: { 'my-custom-header': 'hi' } })
     })
 
-    const res = await request(server).get('/throw-error')
+    const res = await requestServer(server, { method: 'GET', path: '/throw-error' })
     expect(res.status).toBe(500)
-    expect(res.headers['my-custom-header']).toBe('hi')
-    expect(res.text).toBe('Error: thrown error')
+    expect(res.headers.get('my-custom-header')).toBe('hi')
+    expect(await res.text()).toBe('Error: thrown error')
   })
 
   it('Should not set the response if the error handler does not return a response', async () => {
@@ -180,10 +207,10 @@ describe('Error handling - sync fetchCallback', () => {
       // do something else, such as passing error to vite next middleware, etc
     })
 
-    const res = await request(server).get('/throw-error')
+    const res = await requestServer(server, { method: 'GET', path: '/throw-error' })
     expect(errorHandler).toHaveBeenCalledTimes(1)
     expect(res.status).toBe(500)
-    expect(res.text).toBe('error handler did not return a response')
+    expect(await res.text()).toBe('error handler did not return a response')
   })
 })
 
@@ -213,10 +240,10 @@ describe('Error handling - async fetchCallback', () => {
       return new Response(`${err}`, { status: 500, headers: { 'my-custom-header': 'hi' } })
     })
 
-    const res = await request(server).get('/throw-error')
+    const res = await requestServer(server, { method: 'GET', path: '/throw-error' })
     expect(res.status).toBe(500)
-    expect(res.headers['my-custom-header']).toBe('hi')
-    expect(res.text).toBe('Error: thrown error')
+    expect(res.headers.get('my-custom-header')).toBe('hi')
+    expect(await res.text()).toBe('Error: thrown error')
   })
 
   it('Should not set the response if the error handler does not return a response', async () => {
@@ -224,10 +251,10 @@ describe('Error handling - async fetchCallback', () => {
       // do something else, such as passing error to vite next middleware, etc
     })
 
-    const res = await request(server).get('/throw-error')
+    const res = await requestServer(server, { method: 'GET', path: '/throw-error' })
     expect(errorHandler).toHaveBeenCalledTimes(1)
     expect(res.status).toBe(500)
-    expect(res.text).toBe('error handler did not return a response')
+    expect(await res.text()).toBe('error handler did not return a response')
   })
 })
 
@@ -253,10 +280,6 @@ describe('Abort request', () => {
     })
   })
 
-  afterAll(() => {
-    server.close()
-  })
-
   it.each(['get', 'put', 'patch', 'delete'] as const)(
     'should emit an abort event when the nodejs %s request is aborted',
     async (method) => {
@@ -268,15 +291,19 @@ describe('Abort request', () => {
         }
       })
 
-      const req = request(server)
-        [method]('/abort')
-        .end(() => {})
+      const controller = new AbortController()
+      const resPromise = requestServer(server, {
+        method: method.toUpperCase(),
+        path: '/abort',
+        signal: controller.signal,
+      }).catch(() => {})
 
       await reqReadyPromise
 
-      req.abort()
+      controller.abort()
 
       await abortedPromise
+      await resPromise
 
       expect(requests).toHaveLength(1)
       const abortedReq = requests[0]
@@ -302,15 +329,19 @@ describe('Abort request', () => {
           reqReadyResolve = r
         })
 
-        const req = request(server)
-          [method]('/abort')
-          .end(() => {})
+        const controller = new AbortController()
+        const resPromise = requestServer(server, {
+          method: method.toUpperCase(),
+          path: '/abort',
+          signal: controller.signal,
+        }).catch(() => {})
 
         await reqReadyPromise
 
-        req.abort()
+        controller.abort()
 
         await abortedPromise
+        await resPromise
       }
 
       expect(requests).toHaveLength(1)
@@ -332,15 +363,19 @@ describe('Abort request', () => {
           reqReadyResolve = r
         })
 
-        const req = request(server)
-          [method]('/abort')
-          .end(() => {})
+        const controller = new AbortController()
+        const resPromise = requestServer(server, {
+          method: method.toUpperCase(),
+          path: '/abort',
+          signal: controller.signal,
+        }).catch(() => {})
 
         await reqReadyPromise
 
-        req.abort()
+        controller.abort()
 
         await abortedPromise
+        await resPromise
       }
 
       expect(requests).toHaveLength(2)
@@ -359,8 +394,12 @@ describe('Abort request', () => {
     }
     const requestListener = getRequestListener(fetchCallback)
     const server = createServer(requestListener)
-    const req = request(server).post('/abort').timeout({ deadline: 1 })
-    await expect(req).rejects.toHaveProperty('timeout')
+    const req = requestServer(server, {
+      method: 'POST',
+      path: '/abort',
+      signal: AbortSignal.timeout(1),
+    })
+    await expect(req).rejects.toThrow()
   })
 })
 
@@ -401,17 +440,17 @@ describe('Abort request - error path', () => {
     const requestListener = getRequestListener(fetchCallback, { errorHandler })
     const server = createServer(requestListener)
 
-    try {
-      const req = request(server)
-        .get('/')
-        .end(() => {})
-      await withTimeout(errorHandlerStarted, 'error handler did not start')
-      req.abort()
-      await withTimeout(abortedPromise, 'request abort did not propagate')
-      expect(capturedReq?.signal.aborted).toBe(true)
-    } finally {
-      server.close()
-    }
+    const controller = new AbortController()
+    const resPromise = requestServer(server, {
+      method: 'GET',
+      path: '/',
+      signal: controller.signal,
+    }).catch(() => {})
+    await withTimeout(errorHandlerStarted, 'error handler did not start')
+    controller.abort()
+    await withTimeout(abortedPromise, 'request abort did not propagate')
+    expect(capturedReq?.signal.aborted).toBe(true)
+    await resPromise
   }
 
   it.each(['sync', 'async'] as const)(
@@ -437,9 +476,9 @@ describe('Abort request - cacheable response path', () => {
       expect(closeListenerCount).toBe(0)
 
       if (response.status === 204) {
-        expect(response.text).toBe('')
+        expect(response.body).toBeNull()
       } else {
-        expect(response.text).toBe('fast path')
+        expect(await response.text()).toBe('fast path')
       }
     }
   )
@@ -455,7 +494,7 @@ describe('Abort request - cacheable response path', () => {
     )
 
     expect(closeListenerCount).toBe(1)
-    expect(response.text).toBe('blob-body')
+    expect(await response.text()).toBe('blob-body')
   })
 
   it('should abort request signal when client disconnects during sync cacheable ReadableStream response', async () => {
@@ -489,17 +528,17 @@ describe('Abort request - cacheable response path', () => {
     const requestListener = getRequestListener(fetchCallback)
     const server = createServer(requestListener)
 
-    try {
-      const req = request(server)
-        .get('/')
-        .end(() => {})
-      await withTimeout(streamConstructed, 'stream body was not constructed')
-      req.abort()
-      await withTimeout(abortedPromise, 'request abort did not propagate for cacheable stream')
-      expect(capturedReq?.signal.aborted).toBe(true)
-    } finally {
-      server.close()
-    }
+    const controller = new AbortController()
+    const resPromise = requestServer(server, {
+      method: 'GET',
+      path: '/',
+      signal: controller.signal,
+    }).catch(() => {})
+    await withTimeout(streamConstructed, 'stream body was not constructed')
+    controller.abort()
+    await withTimeout(abortedPromise, 'request abort did not propagate for cacheable stream')
+    expect(capturedReq?.signal.aborted).toBe(true)
+    await resPromise
   })
 })
 
