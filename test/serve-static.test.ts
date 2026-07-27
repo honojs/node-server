@@ -437,7 +437,6 @@ describe('Serve Static Middleware with wrong path', () => {
         root: './public',
       })
     )
-
     expect(logSpy).toHaveBeenCalledWith(
       // eslint-disable-next-line quotes
       "serveStatic: root path './public' is not found, are you sure it's correct?"
