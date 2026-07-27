@@ -86,7 +86,7 @@ app.get(
   }))
 )
 
-const wss = new WebSocketServer({ noServer: true }) // important to create with `noServer: true`
+const wss = new WebSocketServer({ noServer: true })
 serve({
   fetch: app.fetch,
   websocket: { server: wss },
@@ -351,7 +351,7 @@ const app = new Hono()
 
 app.use(
   earlyHints({
-    link: '</styles.css>; rel=preload; as=style'
+    link: '</styles.css>; rel=preload; as=style',
   })
 )
 
@@ -370,10 +370,13 @@ app.use(
     link: (c) =>
       c.req.query('theme') === 'dark'
         ? '</dark.css>; rel=preload; as=style'
-        : '</light.css>; rel=preload; as=style'
+        : '</light.css>; rel=preload; as=style',
   })
 )
 ```
+
+> [!NOTE]
+> Early Hints are sent only for requests that look like document navigations. If `Sec-Fetch-Mode` or `Sec-Fetch-Dest` is present with a value other than `navigate` or `document`, for example a `fetch()` or XHR call from a browser, a subresource request, or an iframe navigation, the middleware skips the hints and continues to the handler. Requests without these headers, such as `curl` or `fetch()` from a JavaScript runtime, are treated as navigations and do receive Early Hints.
 
 ## Direct response from Node.js API
 
