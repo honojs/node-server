@@ -48,6 +48,16 @@
         "types": "./dist/conninfo.d.cts",
         "default": "./dist/conninfo.cjs"
       }
+    },
+    "./early-hints": {
+      "import": {
+        "types": "./dist/early-hints.d.mts",
+        "default": "./dist/early-hints.mjs"
+      },
+      "require": {
+        "types": "./dist/early-hints.d.cts",
+        "default": "./dist/early-hints.cjs"
+      }
     }
   },
   "typesVersions": {
@@ -63,6 +73,9 @@
       ],
       "conninfo": [
         "./dist/conninfo.d.mts"
+      ],
+      "early-hints": [
+        "./dist/early-hints.d.mts"
       ]
     }
   },
