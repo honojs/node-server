@@ -4,8 +4,6 @@ import type { Http2ServerRequest } from 'node:http2'
 type IncomingHeadersSource = Pick<IncomingMessage | Http2ServerRequest, 'rawHeaders'> & {
   headers?: Record<string, string | string[] | undefined>
 }
-const incomingHeadersKey = Symbol('incomingHeaders')
-type IncomingHeadersInit = { [incomingHeadersKey]: IncomingHeadersSource }
 
 // Node keeps only the first occurrence of these headers in `incoming.headers`,
 // while WHATWG Headers combines repeated values. Fall back to rawHeaders when
@@ -56,27 +54,12 @@ const materializeHeaders = (
   return headers
 }
 
-export class Headers {
+export class RequestHeaders {
   #incoming: IncomingHeadersSource
   #headers?: GlobalHeaders
 
-  constructor(init?: HeadersInit | IncomingHeadersInit) {
-    if (init && typeof init === 'object' && incomingHeadersKey in init) {
-      this.#incoming = init[incomingHeadersKey]
-    } else {
-      // When installed as global.Headers, ordinary `new Headers(init)` calls
-      // still need native constructor semantics. Only incoming Node headers
-      // have a source that can be read lazily.
-      this.#incoming = { rawHeaders: [] }
-      this.#headers = new GlobalHeaders(init as HeadersInit | undefined)
-    }
-  }
-
-  // Native Headers created before the global replacement must remain
-  // `instanceof Headers`. This also covers this facade because its prototype
-  // inherits from GlobalHeaders.prototype.
-  static [Symbol.hasInstance](value: unknown): boolean {
-    return value instanceof GlobalHeaders
+  constructor(incoming: IncomingHeadersSource) {
+    this.#incoming = incoming
   }
 
   get #native(): GlobalHeaders {
@@ -153,14 +136,7 @@ export class Headers {
   }
 
   getSetCookie(): string[] {
-    if (this.#headers) {
-      return this.#headers.getSetCookie()
-    }
-    const value = this.#incoming.headers?.['set-cookie']
-    if (Array.isArray(value)) {
-      return value.slice()
-    }
-    return value ? [value] : this.#incoming.headers ? [] : this.#native.getSetCookie()
+    return this.#native.getSetCookie()
   }
 
   keys(): HeadersIterator<string> {
@@ -189,20 +165,16 @@ export class Headers {
   }
 }
 
-Object.defineProperty(Headers.prototype, Symbol.for('nodejs.util.inspect.custom'), {
-  value: function (this: Headers, depth: number, options: object, inspectFn: Function) {
+Object.defineProperty(RequestHeaders.prototype, Symbol.for('nodejs.util.inspect.custom'), {
+  value: function (this: RequestHeaders, depth: number, options: object, inspectFn: Function) {
     const props = Object.fromEntries(this)
     return `Headers (lightweight) ${inspectFn(props, { ...options, depth: depth == null ? null : depth - 1 })}`
   },
 })
 
-// Match the native constructor hierarchy so static properties are inherited.
-Object.setPrototypeOf(Headers, GlobalHeaders)
-// Match the native instance hierarchy so both facades and native instances
-// satisfy the expected Headers instanceof checks.
-Object.setPrototypeOf(Headers.prototype, GlobalHeaders.prototype)
+// Keep request headers compatible with the global Headers constructor without
+// replacing it for application-created and response headers.
+Object.setPrototypeOf(RequestHeaders.prototype, GlobalHeaders.prototype)
 
 export const newHeadersFromIncoming = (incoming: IncomingHeadersSource): GlobalHeaders =>
-  global.Headers === Headers
-    ? (new Headers({ [incomingHeadersKey]: incoming }) as unknown as GlobalHeaders)
-    : materializeHeaders(incoming)
+  new RequestHeaders(incoming) as unknown as GlobalHeaders

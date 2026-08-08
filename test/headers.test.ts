@@ -1,10 +1,6 @@
 import type { IncomingMessage } from 'node:http'
 import { inspect } from 'node:util'
-import {
-  GlobalHeaders,
-  Headers as LightweightHeaders,
-  newHeadersFromIncoming,
-} from '../src/headers'
+import { GlobalHeaders, RequestHeaders, newHeadersFromIncoming } from '../src/headers'
 import { newRequest, Request as LightweightRequest } from '../src/request'
 
 // Compatibility cases adapted from srvx's Node header suite:
@@ -15,29 +11,10 @@ const incoming = (
   headers: Record<string, string | string[]>
 ): IncomingMessage => ({ rawHeaders, headers }) as IncomingMessage
 
-const lightweightHeaders = (request: IncomingMessage): GlobalHeaders => {
-  Object.defineProperty(global, 'Headers', {
-    value: LightweightHeaders,
-    writable: true,
-  })
-  return newHeadersFromIncoming(request)
-}
+const lightweightHeaders = (request: IncomingMessage): GlobalHeaders =>
+  newHeadersFromIncoming(request)
 
-describe('Headers', () => {
-  beforeEach(() => {
-    Object.defineProperty(global, 'Headers', {
-      value: GlobalHeaders,
-      writable: true,
-    })
-  })
-
-  afterEach(() => {
-    Object.defineProperty(global, 'Headers', {
-      value: GlobalHeaders,
-      writable: true,
-    })
-  })
-
+describe('RequestHeaders', () => {
   it('reads common headers without iterating rawHeaders', () => {
     let rawHeadersReads = 0
     const request = {
@@ -130,38 +107,28 @@ describe('Headers', () => {
     expect(inspect(headers)).toContain("Headers (lightweight) { 'x-test': 'value' }")
   })
 
-  it('supports the standard Headers constructor when installed globally', () => {
-    Object.defineProperty(global, 'Headers', {
-      value: LightweightHeaders,
-      writable: true,
-    })
-
+  it('leaves the standard Headers constructor unchanged', () => {
     const headers = new Headers({ 'x-test': 'one' })
     headers.append('x-test', 'two')
 
+    expect(global.Headers).toBe(GlobalHeaders)
+    expect(Object.getPrototypeOf(headers)).toBe(GlobalHeaders.prototype)
     expect(headers.get('x-test')).toBe('one, two')
     expect(new Headers(headers).get('x-test')).toBe('one, two')
     expect(new Headers({ rawHeaders: 'ordinary value' }).get('rawHeaders')).toBe('ordinary value')
   })
 
-  it('selects the implementation from the active global', () => {
+  it('uses the internal implementation without replacing the global constructor', () => {
     const request = incoming(['x-test', 'value'], { 'x-test': 'value' })
-    const native = newHeadersFromIncoming(request)
-    expect(Object.getPrototypeOf(native)).toBe(GlobalHeaders.prototype)
+    const headers = newHeadersFromIncoming(request)
 
-    Object.defineProperty(global, 'Headers', {
-      value: LightweightHeaders,
-      writable: true,
-    })
-    const lightweight = newHeadersFromIncoming(request)
-    expect(Object.getPrototypeOf(lightweight)).toBe(LightweightHeaders.prototype)
+    expect(global.Headers).toBe(GlobalHeaders)
+    expect(Object.getPrototypeOf(headers)).toBe(RequestHeaders.prototype)
+    expect(headers).toBeInstanceOf(GlobalHeaders)
+    expect(new GlobalHeaders(headers).get('x-test')).toBe('value')
   })
 
   it('can initialize and clone a native Request after header mutation', () => {
-    Object.defineProperty(global, 'Headers', {
-      value: LightweightHeaders,
-      writable: true,
-    })
     const request = newRequest({
       method: 'GET',
       url: '/',
