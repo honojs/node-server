@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:
 import { Http2ServerRequest, constants as h2constants } from 'node:http2'
 import type { Http2ServerResponse } from 'node:http2'
 import type { Writable } from 'node:stream'
+import { Headers as LightweightHeaders } from './headers'
 import type { IncomingMessageWithWrapBodyStream } from './request'
 import {
   abortRequest,
@@ -364,6 +365,9 @@ export const getRequestListener = (
 ) => {
   const autoCleanupIncoming = options.autoCleanupIncoming ?? true
   if (options.overrideGlobalObjects !== false && global.Request !== LightweightRequest) {
+    Object.defineProperty(global, 'Headers', {
+      value: LightweightHeaders,
+    })
     Object.defineProperty(global, 'Request', {
       value: LightweightRequest,
     })

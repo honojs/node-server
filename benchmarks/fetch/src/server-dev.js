@@ -1,4 +1,4 @@
-import { serve } from '@hono/node-server-dev'
+import { serve } from '../../../dist/index.mjs'
 import app from './app.js'
 
 const port = 3000

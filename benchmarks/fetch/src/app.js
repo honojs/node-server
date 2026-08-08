@@ -27,6 +27,16 @@ export default {
 
       case 'POST':
         switch (url.pathname) {
+          case '/headers': {
+            const body = await request.json()
+            return new Response(JSON.stringify(body), {
+              headers: {
+                'x-test': request.headers.get('x-test'),
+                'content-type': 'application/json;charset=UTF-8',
+              },
+            })
+          }
+
           case '/json':
             return Response.json(await request.json())
 

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { setTimeout } from 'node:timers/promises'
 
 const PORT = 3000
@@ -16,6 +17,7 @@ interface ServerResult {
   ping: number
   query: number
   body: number
+  headers: number
 }
 
 async function waitForServer(): Promise<void> {
@@ -42,6 +44,15 @@ async function retryFetch(url: string, options?: RequestInit, retries = 0): Prom
     await setTimeout(200)
     return retryFetch(url, options, retries + 1)
   }
+}
+
+async function stopServer(server: ReturnType<typeof spawn>): Promise<void> {
+  if (server.exitCode !== null || server.signalCode !== null) {
+    return
+  }
+  const exited = once(server, 'exit')
+  server.kill('SIGKILL')
+  await exited
 }
 
 async function testEndpoints(): Promise<void> {
@@ -75,6 +86,28 @@ async function testEndpoints(): Promise<void> {
       `Body: Result not match - expected ${JSON.stringify(body)}, got ${JSON.stringify(json3)}`
     )
   }
+
+  // Test incoming request-header access alongside JSON body processing.
+  const res4 = await retryFetch('http://127.0.0.1:3000/headers', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-test': '123',
+    },
+    body: JSON.stringify(body),
+  })
+  const json4 = await res4.json()
+  if (res4.status !== 200 || JSON.stringify(json4) !== JSON.stringify(body)) {
+    throw new Error(
+      `Headers: Result not match - expected ${JSON.stringify(body)}, got ${JSON.stringify(json4)}`
+    )
+  }
+  if (res4.headers.get('content-type') !== 'application/json;charset=UTF-8') {
+    throw new Error('Headers: Content-Type not match')
+  }
+  if (res4.headers.get('x-test') !== '123') {
+    throw new Error('Headers: X-Test not match')
+  }
 }
 
 async function runBenchmarkForServer(
@@ -102,6 +135,7 @@ async function runBenchmarkForServer(
       { name: 'GET /', url: 'http://127.0.0.1:3000/' },
       { name: 'GET /id/:id', url: 'http://127.0.0.1:3000/id/1?name=bun' },
       { name: 'POST /json', url: 'http://127.0.0.1:3000/json', method: 'POST' },
+      { name: 'POST /headers', url: 'http://127.0.0.1:3000/headers', method: 'POST' },
     ]
 
     const results: BenchmarkResult[] = []
@@ -110,6 +144,9 @@ async function runBenchmarkForServer(
       const args = ['--fasthttp', '-c', '500', '-d', '10s']
       if (bench.method === 'POST') {
         args.push('-m', 'POST', '-H', 'Content-Type:application/json', '-f', './scripts/body.json')
+      }
+      if (bench.name === 'POST /headers') {
+        args.push('-H', 'x-test:123')
       }
       args.push(bench.url)
 
@@ -147,7 +184,8 @@ async function runBenchmarkForServer(
     const ping = results[0]?.reqsPerSec || 0
     const query = results[1]?.reqsPerSec || 0
     const body = results[2]?.reqsPerSec || 0
-    const average = (ping + query + body) / 3
+    const headers = results[3]?.reqsPerSec || 0
+    const average = (ping + query + body + headers) / 4
 
     return {
       server: serverName,
@@ -156,14 +194,14 @@ async function runBenchmarkForServer(
       ping,
       query,
       body,
+      headers,
     }
   } catch (error) {
     console.error('Error:', (error as Error).message)
     throw error
   } finally {
     console.log('Stopping server...')
-    server.kill()
-    await setTimeout(1000)
+    await stopServer(server)
   }
 }
 
@@ -185,8 +223,7 @@ async function testServer(serverFile: string, serverName: string): Promise<boole
     console.log('  ', (error as Error)?.message || error)
     return false
   } finally {
-    server.kill()
-    await setTimeout(1000)
+    await stopServer(server)
   }
 }
 
@@ -264,21 +301,24 @@ async function main(): Promise<void> {
         console.log(
           `| Body (POST /json) | ${formatNumber(npmResult.body).padEnd(14)} | ${formatNumber(devResult.body).padEnd(14)} | ${formatDiff(npmResult.body, devResult.body).padEnd(11)} |`
         )
+        console.log(
+          `| Headers (POST)    | ${formatNumber(npmResult.headers).padEnd(14)} | ${formatNumber(devResult.headers).padEnd(14)} | ${formatDiff(npmResult.headers, devResult.headers).padEnd(11)} |`
+        )
       }
     } else {
       // Fallback: original table format
       console.log(
-        '|  Server                    | Runtime | Average      | Ping         | Query        | Body         |'
+        '|  Server                    | Runtime | Average      | Ping         | Query        | Body         | Headers      |'
       )
       console.log(
-        '| -------------------------- | ------- | ------------ | ------------ | ------------ | ------------ |'
+        '| -------------------------- | ------- | ------------ | ------------ | ------------ | ------------ | ------------ |'
       )
 
       const sortedResults = allResults.sort((a, b) => b.average - a.average)
 
       for (const result of sortedResults) {
         console.log(
-          `| ${result.server.padEnd(26)} | ${result.runtime.padEnd(7)} | ${formatNumber(result.average).padEnd(12)} | ${formatNumber(result.ping).padEnd(12)} | ${formatNumber(result.query).padEnd(12)} | ${formatNumber(result.body).padEnd(12)} |`
+          `| ${result.server.padEnd(26)} | ${result.runtime.padEnd(7)} | ${formatNumber(result.average).padEnd(12)} | ${formatNumber(result.ping).padEnd(12)} | ${formatNumber(result.query).padEnd(12)} | ${formatNumber(result.body).padEnd(12)} | ${formatNumber(result.headers).padEnd(12)} |`
         )
       }
     }
