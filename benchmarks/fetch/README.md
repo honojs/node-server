@@ -24,7 +24,7 @@ Tests four endpoints:
 1. **Ping (GET /)**: Simple response
 2. **Query (GET /id/:id)**: Path parameter and query parameter handling
 3. **Body (POST /json)**: JSON body processing
-4. **Headers (POST /headers)**: JSON body processing plus `request.headers.get()` and response-header creation
+4. **Headers (GET /headers)**: Isolated `request.headers.get()` access
 
 Each endpoint is tested with 500 concurrent connections for 10 seconds, measuring requests per second (Reqs/sec).
 
@@ -38,16 +38,16 @@ Each endpoint is tested with 500 concurrent connections for 10 seconds, measurin
 
 ## Understanding Results
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ```
 | Benchmark         | npm            | dev            | Difference  |
 | ----------------- | -------------- | -------------- | ----------- |
-| Average           | 80,044.29      | 82,505.86      | +3.08%      |
-| Ping (GET /)      | 96,506.07      | 96,795.17      | +0.30%      |
-| Query (GET /id)   | 91,878.51      | 91,992.57      | +0.12%      |
-| Body (POST /json) | 73,017.98      | 72,329.00      | -0.94%      |
-| Headers (POST)    | 58,774.58      | 68,906.70      | +17.24%     |
+| Average           | 85,426.86      | 89,117.13      | +4.32%      |
+| Ping (GET /)      | 95,338.29      | 97,649.91      | +2.42%      |
+| Query (GET /id)   | 91,903.68      | 92,684.33      | +0.85%      |
+| Body (POST /json) | 72,924.22      | 73,512.40      | +0.81%      |
+| Headers (GET)     | 81,541.25      | 92,621.86      | +13.59%     |
 ```
 
 - **npm**: Published npm version (`@hono/node-server`)

@@ -87,26 +87,15 @@ async function testEndpoints(): Promise<void> {
     )
   }
 
-  // Test incoming request-header access alongside JSON body processing.
+  // Test an isolated incoming request-header read.
   const res4 = await retryFetch('http://127.0.0.1:3000/headers', {
-    method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       'x-test': '123',
     },
-    body: JSON.stringify(body),
   })
-  const json4 = await res4.json()
-  if (res4.status !== 200 || JSON.stringify(json4) !== JSON.stringify(body)) {
-    throw new Error(
-      `Headers: Result not match - expected ${JSON.stringify(body)}, got ${JSON.stringify(json4)}`
-    )
-  }
-  if (res4.headers.get('content-type') !== 'application/json;charset=UTF-8') {
-    throw new Error('Headers: Content-Type not match')
-  }
-  if (res4.headers.get('x-test') !== '123') {
-    throw new Error('Headers: X-Test not match')
+  const text4 = await res4.text()
+  if (res4.status !== 200 || text4 !== '123') {
+    throw new Error(`Headers: Result not match - expected "123", got "${text4}"`)
   }
 }
 
@@ -135,7 +124,7 @@ async function runBenchmarkForServer(
       { name: 'GET /', url: 'http://127.0.0.1:3000/' },
       { name: 'GET /id/:id', url: 'http://127.0.0.1:3000/id/1?name=bun' },
       { name: 'POST /json', url: 'http://127.0.0.1:3000/json', method: 'POST' },
-      { name: 'POST /headers', url: 'http://127.0.0.1:3000/headers', method: 'POST' },
+      { name: 'GET /headers', url: 'http://127.0.0.1:3000/headers' },
     ]
 
     const results: BenchmarkResult[] = []
@@ -145,7 +134,7 @@ async function runBenchmarkForServer(
       if (bench.method === 'POST') {
         args.push('-m', 'POST', '-H', 'Content-Type:application/json', '-f', './scripts/body.json')
       }
-      if (bench.name === 'POST /headers') {
+      if (bench.name === 'GET /headers') {
         args.push('-H', 'x-test:123')
       }
       args.push(bench.url)
@@ -302,7 +291,7 @@ async function main(): Promise<void> {
           `| Body (POST /json) | ${formatNumber(npmResult.body).padEnd(14)} | ${formatNumber(devResult.body).padEnd(14)} | ${formatDiff(npmResult.body, devResult.body).padEnd(11)} |`
         )
         console.log(
-          `| Headers (POST)    | ${formatNumber(npmResult.headers).padEnd(14)} | ${formatNumber(devResult.headers).padEnd(14)} | ${formatDiff(npmResult.headers, devResult.headers).padEnd(11)} |`
+          `| Headers (GET)     | ${formatNumber(npmResult.headers).padEnd(14)} | ${formatNumber(devResult.headers).padEnd(14)} | ${formatDiff(npmResult.headers, devResult.headers).padEnd(11)} |`
         )
       }
     } else {

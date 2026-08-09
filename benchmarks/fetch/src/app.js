@@ -9,6 +9,8 @@ export default {
         switch (url.pathname) {
           case '/':
             return new Response('Hi')
+          case '/headers':
+            return new Response(request.headers.get('x-test'))
         }
 
         if (url.pathname.startsWith('/id/')) {
@@ -27,16 +29,6 @@ export default {
 
       case 'POST':
         switch (url.pathname) {
-          case '/headers': {
-            const body = await request.json()
-            return new Response(JSON.stringify(body), {
-              headers: {
-                'x-test': request.headers.get('x-test'),
-                'content-type': 'application/json;charset=UTF-8',
-              },
-            })
-          }
-
           case '/json':
             return Response.json(await request.json())
 
