@@ -218,7 +218,8 @@ async function testServer(serverFile: string, serverName: string): Promise<boole
 
 async function main(): Promise<void> {
   const servers = [
-    { file: 'src/server-npm.js', name: '@hono/node-server (npm)' },
+    { file: 'src/server-npm.js', name: '@hono/node-server (2.1.0)' },
+    { file: 'src/server-srvx.js', name: 'srvx (0.12.5, fast)' },
     { file: 'src/server-dev.js', name: '@hono/node-server (dev)' },
   ]
 
@@ -264,34 +265,37 @@ async function main(): Promise<void> {
       })
     }
 
-    const formatDiff = (npm: number, dev: number): string => {
-      const diff = ((dev - npm) / npm) * 100
-      const sign = diff > 0 ? '+' : ''
-      return `${sign}${diff.toFixed(2)}%`
+    const formatDiff = (baseline: number, dev: number): string => {
+      const diff = ((dev - baseline) / baseline) * 100
+      return `${diff > 0 ? '+' : ''}${diff.toFixed(2)}%`
     }
 
-    if (allResults.length === 2) {
-      // Comparison mode: npm vs dev
-      const npmResult = allResults.find((r) => r.server.includes('npm'))
+    if (allResults.length === 3) {
+      const npmResult = allResults.find((r) => r.server === '@hono/node-server (2.1.0)')
+      const srvxResult = allResults.find((r) => r.server === 'srvx (0.12.5, fast)')
       const devResult = allResults.find((r) => r.server.includes('dev'))
 
-      if (npmResult && devResult) {
-        console.log('| Benchmark         | npm            | dev            | Difference  |')
-        console.log('| ----------------- | -------------- | -------------- | ----------- |')
+      if (npmResult && srvxResult && devResult) {
         console.log(
-          `| Average           | ${formatNumber(npmResult.average).padEnd(14)} | ${formatNumber(devResult.average).padEnd(14)} | ${formatDiff(npmResult.average, devResult.average).padEnd(11)} |`
+          '| Benchmark         | @hono/node-server (2.1.0) | srvx (0.12.5, fast) | @hono/node-server (dev) | dev vs npm | dev vs srvx |'
         )
         console.log(
-          `| Ping (GET /)      | ${formatNumber(npmResult.ping).padEnd(14)} | ${formatNumber(devResult.ping).padEnd(14)} | ${formatDiff(npmResult.ping, devResult.ping).padEnd(11)} |`
+          '| ----------------- | ------------------------- | ------------------- | ----------------------- | ---------- | ----------- |'
         )
         console.log(
-          `| Query (GET /id)   | ${formatNumber(npmResult.query).padEnd(14)} | ${formatNumber(devResult.query).padEnd(14)} | ${formatDiff(npmResult.query, devResult.query).padEnd(11)} |`
+          `| Average           | ${formatNumber(npmResult.average).padEnd(25)} | ${formatNumber(srvxResult.average).padEnd(19)} | ${formatNumber(devResult.average).padEnd(23)} | ${formatDiff(npmResult.average, devResult.average).padEnd(10)} | ${formatDiff(srvxResult.average, devResult.average).padEnd(11)} |`
         )
         console.log(
-          `| Body (POST /json) | ${formatNumber(npmResult.body).padEnd(14)} | ${formatNumber(devResult.body).padEnd(14)} | ${formatDiff(npmResult.body, devResult.body).padEnd(11)} |`
+          `| Ping (GET /)      | ${formatNumber(npmResult.ping).padEnd(25)} | ${formatNumber(srvxResult.ping).padEnd(19)} | ${formatNumber(devResult.ping).padEnd(23)} | ${formatDiff(npmResult.ping, devResult.ping).padEnd(10)} | ${formatDiff(srvxResult.ping, devResult.ping).padEnd(11)} |`
         )
         console.log(
-          `| Headers (GET)     | ${formatNumber(npmResult.headers).padEnd(14)} | ${formatNumber(devResult.headers).padEnd(14)} | ${formatDiff(npmResult.headers, devResult.headers).padEnd(11)} |`
+          `| Query (GET /id)   | ${formatNumber(npmResult.query).padEnd(25)} | ${formatNumber(srvxResult.query).padEnd(19)} | ${formatNumber(devResult.query).padEnd(23)} | ${formatDiff(npmResult.query, devResult.query).padEnd(10)} | ${formatDiff(srvxResult.query, devResult.query).padEnd(11)} |`
+        )
+        console.log(
+          `| Body (POST /json) | ${formatNumber(npmResult.body).padEnd(25)} | ${formatNumber(srvxResult.body).padEnd(19)} | ${formatNumber(devResult.body).padEnd(23)} | ${formatDiff(npmResult.body, devResult.body).padEnd(10)} | ${formatDiff(srvxResult.body, devResult.body).padEnd(11)} |`
+        )
+        console.log(
+          `| Headers (GET)     | ${formatNumber(npmResult.headers).padEnd(25)} | ${formatNumber(srvxResult.headers).padEnd(19)} | ${formatNumber(devResult.headers).padEnd(23)} | ${formatDiff(npmResult.headers, devResult.headers).padEnd(10)} | ${formatDiff(srvxResult.headers, devResult.headers).padEnd(11)} |`
         )
       }
     } else {

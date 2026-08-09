@@ -1,6 +1,6 @@
 # Benchmark
 
-Benchmark to compare performance between the published npm version and local development version of @hono/node-server.
+Benchmark comparing the published npm version and local development version of @hono/node-server with srvx.
 
 This benchmark uses a basic Fetch API-based application without the Hono framework to measure the raw performance of @hono/node-server's adapter.
 
@@ -41,18 +41,20 @@ Each endpoint is tested with 500 concurrent connections for 10 seconds, measurin
 Last updated: 2026-08-09
 
 ```
-| Benchmark         | npm            | dev            | Difference  |
-| ----------------- | -------------- | -------------- | ----------- |
-| Average           | 85,426.86      | 89,117.13      | +4.32%      |
-| Ping (GET /)      | 95,338.29      | 97,649.91      | +2.42%      |
-| Query (GET /id)   | 91,903.68      | 92,684.33      | +0.85%      |
-| Body (POST /json) | 72,924.22      | 73,512.40      | +0.81%      |
-| Headers (GET)     | 81,541.25      | 92,621.86      | +13.59%     |
+| Benchmark         | @hono/node-server (2.1.0) | srvx (0.12.5, fast) | @hono/node-server (dev) | dev vs npm | dev vs srvx |
+| ----------------- | ------------------------- | ------------------- | ----------------------- | ---------- | ----------- |
+| Average           | 83,588.79                 | 89,245.89           | 88,398.73               | +5.75%     | -0.95%      |
+| Ping (GET /)      | 87,502.45                 | 97,875.62           | 96,320.69               | +10.08%    | -1.59%      |
+| Query (GET /id)   | 92,967.16                 | 89,524.22           | 93,474.95               | +0.55%     | +4.41%      |
+| Body (POST /json) | 72,621.78                 | 75,968.80           | 73,823.52               | +1.65%     | -2.82%      |
+| Headers (GET)     | 81,263.78                 | 93,614.90           | 89,975.77               | +10.72%    | -3.89%      |
 ```
 
-- **npm**: Published npm version (`@hono/node-server`)
-- **dev**: Local development version (from repository root `dist/`)
-- **Difference**: Performance difference (positive values indicate improvement, negative values indicate regression)
+- **@hono/node-server (2.1.0)**: Published npm version
+- **@hono/node-server (dev)**: Local development version (from repository root `dist/`)
+- **srvx (0.12.5, fast)**: Published npm version using its opt-in `FastResponse`
+- **dev vs npm**: Development Hono compared with published Hono
+- **dev vs srvx**: Development Hono compared with srvx
 
 ## Reference
 
