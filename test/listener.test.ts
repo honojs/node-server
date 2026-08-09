@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
-import { GlobalHeaders, Headers as LightweightHeaders } from '../src/headers'
+import { GlobalHeaders } from '../src/headers'
 import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
@@ -648,7 +648,7 @@ describe('overrideGlobalObjects', () => {
   describe('default', () => {
     it('Should be overridden', () => {
       getRequestListener(fetchCallback)
-      expect(global.Headers).toBe(LightweightHeaders)
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(LightweightRequest)
       expect(global.Response).toBe(LightweightResponse)
     })
@@ -659,7 +659,7 @@ describe('overrideGlobalObjects', () => {
       getRequestListener(fetchCallback, {
         overrideGlobalObjects: true,
       })
-      expect(global.Headers).toBe(LightweightHeaders)
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(LightweightRequest)
       expect(global.Response).toBe(LightweightResponse)
     })

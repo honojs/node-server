@@ -1,15 +1,14 @@
 import type { IncomingMessage } from 'node:http'
-import type { Http2ServerRequest } from 'node:http2'
+import { Http2ServerRequest } from 'node:http2'
 
 type IncomingHeadersSource = Pick<IncomingMessage | Http2ServerRequest, 'rawHeaders'> & {
-  headers?: Record<string, string | string[] | undefined>
+  headers?: IncomingMessage['headers']
 }
-const incomingHeadersKey = Symbol('incomingHeaders')
-type IncomingHeadersInit = { [incomingHeadersKey]: IncomingHeadersSource }
 
-// Node keeps only the first occurrence of these headers in `incoming.headers`,
-// while WHATWG Headers combines repeated values. Fall back to rawHeaders when
-// one of them is actually repeated.
+// Node's HTTP/1 parser already joins ordinary repeated headers with the same
+// separators as WHATWG Headers, so its parsed object is a safe fast path for
+// those names. It discards repeats of this fixed set by default, however, and
+// HTTP/2 has different collapsing rules; resolve those cases from rawHeaders.
 // https://nodejs.org/api/http.html#messageheaders
 // https://github.com/nodejs/node/blob/v26.7.0/lib/_http_incoming.js
 // https://www.rfc-editor.org/rfc/rfc9110.html#section-5.2
@@ -39,14 +38,37 @@ const nonJoinedHeaders = new Set([
 // https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2
 const validHeaderName = /^[!#$%&'*+\-.^_`|~\dA-Za-z]+$/
 
+const isHttpWhitespace = (code: number): boolean =>
+  code === 0x09 || code === 0x0a || code === 0x0d || code === 0x20
+
+const normalizeHeaderValue = (value: string): string => {
+  if (
+    !isHttpWhitespace(value.charCodeAt(0)) &&
+    !isHttpWhitespace(value.charCodeAt(value.length - 1))
+  ) {
+    return value
+  }
+  let start = 0
+  let end = value.length
+  while (start < end && isHttpWhitespace(value.charCodeAt(start))) {
+    start++
+  }
+  while (end > start && isHttpWhitespace(value.charCodeAt(end - 1))) {
+    end--
+  }
+  return value.slice(start, end)
+}
+
+const forbiddenHeaderValue = /[\0\r\n]/
+
 export const GlobalHeaders = globalThis.Headers
 export type GlobalHeaders = InstanceType<typeof GlobalHeaders>
 
 const materializeHeaders = (
-  incoming: Pick<IncomingMessage | Http2ServerRequest, 'rawHeaders'>
+  rawHeaders: string[],
+  HeadersCtor: typeof GlobalHeaders = GlobalHeaders
 ): GlobalHeaders => {
-  const headers = new GlobalHeaders()
-  const rawHeaders = incoming.rawHeaders
+  const headers = new HeadersCtor()
   for (let i = 0; i < rawHeaders.length; i += 2) {
     const name = rawHeaders[i]
     if (!name.startsWith(':')) {
@@ -56,32 +78,27 @@ const materializeHeaders = (
   return headers
 }
 
-export class Headers {
+export class RequestHeaders {
   #incoming: IncomingHeadersSource
+  #rawHeaders?: string[]
   #headers?: GlobalHeaders
+  #invalidValue?: boolean
 
-  constructor(init?: HeadersInit | IncomingHeadersInit) {
-    if (init && typeof init === 'object' && incomingHeadersKey in init) {
-      this.#incoming = init[incomingHeadersKey]
-    } else {
-      // When installed as global.Headers, ordinary `new Headers(init)` calls
-      // still need native constructor semantics. Only incoming Node headers
-      // have a source that can be read lazily.
-      this.#incoming = { rawHeaders: [] }
-      this.#headers = new GlobalHeaders(init as HeadersInit | undefined)
+  constructor(incoming: IncomingHeadersSource) {
+    this.#incoming = incoming
+    if (incoming instanceof Http2ServerRequest) {
+      this.#rawHeaders = incoming.rawHeaders.slice()
     }
   }
 
-  // Native Headers created before the global replacement must remain
-  // `instanceof Headers`. This also covers this facade because its prototype
-  // inherits from GlobalHeaders.prototype.
-  static [Symbol.hasInstance](value: unknown): boolean {
-    return value instanceof GlobalHeaders
+  get #lazyRawHeaders(): string[] {
+    return (this.#rawHeaders ??= this.#incoming.rawHeaders.slice())
   }
 
   get #native(): GlobalHeaders {
     if (!this.#headers) {
-      this.#headers = materializeHeaders(this.#incoming)
+      this.#headers = materializeHeaders(this.#lazyRawHeaders)
+      this.#rawHeaders = undefined
     }
     return this.#headers
   }
@@ -90,8 +107,54 @@ export class Headers {
     if (typeof name !== 'string') {
       return
     }
-    const lowerName = name.toLowerCase()
-    return validHeaderName.test(name) && lowerName !== '__proto__' ? lowerName : undefined
+    if (!validHeaderName.test(name)) {
+      throw new TypeError(`Invalid header name: ${name}`)
+    }
+    return name.toLowerCase()
+  }
+
+  // The HTTP/1 fast path trusts Node's parser-produced headers object. Mutating
+  // it through the incoming binding is outside this optimization's contract;
+  // detecting such changes would require scanning or copying every header.
+  #lookupHttp1(lowerName: string): string | null | undefined {
+    const headers =
+      this.#incoming instanceof Http2ServerRequest ? undefined : this.#incoming.headers
+    if (
+      !headers ||
+      nonJoinedHeaders.has(lowerName) ||
+      lowerName === 'set-cookie' ||
+      lowerName === '__proto__'
+    ) {
+      return
+    }
+
+    if (!Object.hasOwn(headers, lowerName)) {
+      return null
+    }
+    const rawValue = headers[lowerName]
+    if (typeof rawValue === 'string') {
+      const value = normalizeHeaderValue(rawValue)
+      return forbiddenHeaderValue.test(value) ? undefined : value
+    }
+    return
+  }
+
+  #lookup(rawHeaders: string[], lowerName: string): string | null | undefined {
+    const separator = lowerName === 'cookie' ? '; ' : ', '
+    let value: string | null = null
+    for (let i = 0; i < rawHeaders.length; i += 2) {
+      const rawName = rawHeaders[i]
+      if (rawName.length === lowerName.length && rawName.toLowerCase() === lowerName) {
+        const rawValue = normalizeHeaderValue(rawHeaders[i + 1])
+        if (forbiddenHeaderValue.test(rawValue)) {
+          this.#invalidValue = true
+          return
+        }
+        value = value === null ? rawValue : value + separator + rawValue
+      }
+    }
+
+    return value
   }
 
   append(name: string, value: string): void {
@@ -103,49 +166,33 @@ export class Headers {
   }
 
   get(name: string): string | null {
-    if (this.#headers) {
-      return this.#native.get(name)
-    }
-
     const lowerName = this.#normalizedName(name)
-    if (!lowerName) {
-      return this.#native.get(name)
-    }
-
-    const value = this.#incoming.headers?.[lowerName]
-    if (typeof value === 'string') {
-      if (nonJoinedHeaders.has(lowerName)) {
-        let found = false
-        for (let i = 0; i < this.#incoming.rawHeaders.length; i += 2) {
-          const rawName = this.#incoming.rawHeaders[i]
-          if (rawName.length === lowerName.length && rawName.toLowerCase() === lowerName) {
-            if (found) {
-              return this.#native.get(name)
-            }
-            found = true
-          }
-        }
+    if (lowerName && !this.#headers && !this.#invalidValue) {
+      const http1Value = this.#lookupHttp1(lowerName)
+      if (http1Value !== undefined) {
+        return http1Value
       }
-      return value
+      const value = this.#lookup(this.#lazyRawHeaders, lowerName)
+      if (value !== undefined) {
+        return value
+      }
     }
-    if (Array.isArray(value)) {
-      return value.join(', ')
-    }
-    return this.#incoming.headers ? null : this.#native.get(name)
+    return this.#native.get(name)
   }
 
   has(name: string): boolean {
-    if (this.#headers) {
-      return this.#native.has(name)
-    }
-
     const lowerName = this.#normalizedName(name)
-    if (!lowerName) {
-      return this.#native.has(name)
+    if (lowerName && !this.#headers && !this.#invalidValue) {
+      const http1Value = this.#lookupHttp1(lowerName)
+      if (http1Value !== undefined) {
+        return http1Value !== null
+      }
+      const value = this.#lookup(this.#lazyRawHeaders, lowerName)
+      if (value !== undefined) {
+        return value !== null
+      }
     }
-    return this.#incoming.headers
-      ? Object.hasOwn(this.#incoming.headers, lowerName)
-      : this.#native.has(name)
+    return this.#native.has(name)
   }
 
   set(name: string, value: string): void {
@@ -153,14 +200,7 @@ export class Headers {
   }
 
   getSetCookie(): string[] {
-    if (this.#headers) {
-      return this.#headers.getSetCookie()
-    }
-    const value = this.#incoming.headers?.['set-cookie']
-    if (Array.isArray(value)) {
-      return value.slice()
-    }
-    return value ? [value] : this.#incoming.headers ? [] : this.#native.getSetCookie()
+    return this.#native.getSetCookie()
   }
 
   keys(): HeadersIterator<string> {
@@ -189,20 +229,21 @@ export class Headers {
   }
 }
 
-Object.defineProperty(Headers.prototype, Symbol.for('nodejs.util.inspect.custom'), {
-  value: function (this: Headers, depth: number, options: object, inspectFn: Function) {
+Object.defineProperty(RequestHeaders.prototype, Symbol.for('nodejs.util.inspect.custom'), {
+  value: function (this: RequestHeaders, depth: number, options: object, inspectFn: Function) {
     const props = Object.fromEntries(this)
     return `Headers (lightweight) ${inspectFn(props, { ...options, depth: depth == null ? null : depth - 1 })}`
   },
 })
 
-// Match the native constructor hierarchy so static properties are inherited.
-Object.setPrototypeOf(Headers, GlobalHeaders)
-// Match the native instance hierarchy so both facades and native instances
-// satisfy the expected Headers instanceof checks.
-Object.setPrototypeOf(Headers.prototype, GlobalHeaders.prototype)
+// Keep request headers compatible with the captured Headers constructor so
+// `request.headers instanceof Headers` remains true without Symbol.hasInstance
+// or replacing the global constructor.
+Object.setPrototypeOf(RequestHeaders.prototype, GlobalHeaders.prototype)
 
+// Preserve the previous live-global behavior when a consumer installs a
+// Headers polyfill after this module has initialized.
 export const newHeadersFromIncoming = (incoming: IncomingHeadersSource): GlobalHeaders =>
-  global.Headers === Headers
-    ? (new Headers({ [incomingHeadersKey]: incoming }) as unknown as GlobalHeaders)
-    : materializeHeaders(incoming)
+  globalThis.Headers === GlobalHeaders
+    ? (new RequestHeaders(incoming) as unknown as GlobalHeaders)
+    : materializeHeaders(incoming.rawHeaders, globalThis.Headers)

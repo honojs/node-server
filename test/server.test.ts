@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
 import { gunzipSync, inflateSync } from 'node:zlib'
-import { GlobalHeaders, Headers as LightweightHeaders } from '../src/headers'
+import { GlobalHeaders } from '../src/headers'
 import { GlobalRequest, Request as LightweightRequest, getAbortController } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 import { createAdaptorServer, serve } from '../src/server'
@@ -1122,7 +1122,7 @@ describe('overrideGlobalObjects', () => {
   describe('default', () => {
     it('Should be overridden', () => {
       createAdaptorServer(app)
-      expect(global.Headers).toBe(LightweightHeaders)
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(LightweightRequest)
       expect(global.Response).toBe(LightweightResponse)
     })
@@ -1131,7 +1131,7 @@ describe('overrideGlobalObjects', () => {
   describe('overrideGlobalObjects: true', () => {
     it('Should be overridden', () => {
       createAdaptorServer({ overrideGlobalObjects: true, fetch: app.fetch })
-      expect(global.Headers).toBe(LightweightHeaders)
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(LightweightRequest)
       expect(global.Response).toBe(LightweightResponse)
     })
