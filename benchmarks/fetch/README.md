@@ -1,13 +1,13 @@
-# Benchmark
+# Fetch server benchmark
 
-Benchmark comparing the published npm version and local development version of @hono/node-server with srvx.
+This suite measures the raw HTTP-to-Fetch adapter cost of the published and development versions of `@hono/node-server`. A native `node:http` implementation is the performance floor, while srvx with `FastResponse` is another Fetch-compatible adapter for comparison.
 
-This benchmark uses a basic Fetch API-based application without the Hono framework to measure the raw performance of @hono/node-server's adapter.
+The benchmark intentionally avoids Hono routing so application-framework work does not obscure adapter work.
 
 ## Prerequisites
 
 - Node.js
-- [bombardier](https://github.com/codesenberg/bombardier) installation
+- [oha](https://github.com/hatoo/oha)
 
 ## Usage
 
@@ -17,45 +17,65 @@ pnpm run -w build
 pnpm run benchmark
 ```
 
-## What's Being Tested
+To replace the results below after a full successful run:
 
-Tests four endpoints:
-
-1. **Ping (GET /)**: Simple response
-2. **Query (GET /id/:id)**: Path parameter and query parameter handling
-3. **Body (POST /json)**: JSON body processing
-4. **Headers (GET /headers)**: Isolated `request.headers.get()` access
-
-Each endpoint is tested with 500 concurrent connections for 10 seconds, measuring requests per second (Reqs/sec).
-
-## Benchmark Environment
-
-- **Machine**: Lenovo LOQ 15IRX9 (83DV)
-- **CPU**: Intel Core i5-13450HX (10 cores, 16 threads)
-- **Memory**: 24 GB
-- **OS**: Arch Linux x86_64 (kernel 7.1.6)
-- **Node.js**: 24.19.0
-
-## Understanding Results
-
-Last updated: 2026-08-09
-
-```
-| Benchmark         | @hono/node-server (2.1.0) | srvx (0.12.5, fast) | @hono/node-server (dev) | dev vs npm | dev vs srvx |
-| ----------------- | ------------------------- | ------------------- | ----------------------- | ---------- | ----------- |
-| Average           | 83,588.79                 | 89,245.89           | 88,398.73               | +5.75%     | -0.95%      |
-| Ping (GET /)      | 87,502.45                 | 97,875.62           | 96,320.69               | +10.08%    | -1.59%      |
-| Query (GET /id)   | 92,967.16                 | 89,524.22           | 93,474.95               | +0.55%     | +4.41%      |
-| Body (POST /json) | 72,621.78                 | 75,968.80           | 73,823.52               | +1.65%     | -2.82%      |
-| Headers (GET)     | 81,263.78                 | 93,614.90           | 89,975.77               | +10.72%    | -3.89%      |
+```bash
+pnpm run benchmark --update
 ```
 
-- **@hono/node-server (2.1.0)**: Published npm version
-- **@hono/node-server (dev)**: Local development version (from repository root `dist/`)
-- **srvx (0.12.5, fast)**: Published npm version using its opt-in `FastResponse`
-- **dev vs npm**: Development Hono compared with published Hono
-- **dev vs srvx**: Development Hono compared with srvx
+Quick smoke run:
 
-## Reference
+```bash
+BENCH_CONNECTIONS=10 BENCH_WARMUP=1s BENCH_DURATION=1s BENCH_TRIES=1 pnpm run benchmark
+```
 
-This benchmark setup is based on [bun-http-framework-benchmark](https://github.com/SaltyAom/bun-http-framework-benchmark) by @SaltyAom.
+The defaults are 100 concurrent connections, a discarded two-second warmup, and the median of three five-second measurements. The server order is randomized to reduce systematic thermal or background-load bias.
+
+## Scenarios
+
+The suite validates every response before measuring it, rejects load-generator errors or unexpected status classes, and reports request rate, mean latency, response throughput, and isolated server peak RSS.
+
+It covers:
+
+1. A bodyless `204` response to `HEAD`
+2. A small text response
+3. URL and query-string parsing
+4. Incoming header reads and outgoing headers
+5. JSON serialization
+6. JSON request parsing and response serialization
+7. A 64 KiB request body
+8. A fixed 64 KiB response body
+9. A chunked `ReadableStream` response
+
+These are synthetic microbenchmarks. They are useful for finding adapter regressions, not for predicting application throughput in production.
+
+## Credits
+
+The benchmark methodology and reporting are inspired by the [srvx Node.js compatibility benchmarks](https://github.com/h3js/srvx/tree/main/test/bench-node). The endpoint suite builds on ideas from [bun-http-framework-benchmark](https://github.com/SaltyAom/bun-http-framework-benchmark).
+
+## Results
+
+<!-- automd:bench -->
+
+```text
+CPU:        13th Gen Intel(R) Core(TM) i5-13450HX
+Node.js:    v24.19.0
+OS:         linux x64
+OHA:        oha 1.15.0
+Config:     100 connections, 2s warmup, 3 × 5s
+```
+
+| Scenario          | node:http | @hono/node-server (npm) |     srvx (fast) | @hono/node-server (dev) |
+| ----------------- | --------: | ----------------------: | --------------: | ----------------------: |
+| empty response    |   117,877 |        105,569 (-10.4%) | 108,464 (-8.0%) |        105,096 (-10.8%) |
+| small text        |   107,385 |         95,037 (-11.5%) | 94,733 (-11.8%) |         93,184 (-13.2%) |
+| URL + query       |   102,987 |         90,440 (-12.2%) | 90,044 (-12.6%) |         89,240 (-13.3%) |
+| headers           |    96,469 |         75,109 (-22.1%) |  87,595 (-9.2%) |          87,909 (-8.9%) |
+| JSON response     |    97,773 |          90,378 (-7.6%) |  91,174 (-6.8%) |          91,514 (-6.4%) |
+| JSON round trip   |    81,818 |         70,050 (-14.4%) |  74,833 (-8.5%) |         71,683 (-12.4%) |
+| 64 KiB upload     |    29,078 |         20,101 (-30.9%) | 12,812 (-55.9%) |         20,268 (-30.3%) |
+| 64 KiB fixed body |    60,324 |          55,822 (-7.5%) |  56,836 (-5.8%) |          56,384 (-6.5%) |
+| 64 KiB stream     |    46,091 |         31,166 (-32.4%) | 33,847 (-26.6%) |         30,866 (-33.0%) |
+| peak RSS (MiB)    |     349.7 |                   364.4 |           330.7 |                   366.1 |
+
+<!-- /automd -->
