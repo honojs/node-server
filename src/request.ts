@@ -7,6 +7,8 @@ import { Readable } from 'node:stream'
 import type { ReadableStreamDefaultReader } from 'node:stream/web'
 import type { TLSSocket } from 'node:tls'
 import { RequestError } from './error'
+import { newHeadersFromIncoming } from './headers'
+import type { GlobalHeaders } from './headers'
 import { buildUrl } from './url'
 
 export { RequestError }
@@ -41,20 +43,6 @@ export class Request extends GlobalRequest {
     }
     super(input, options)
   }
-}
-
-export const newHeadersFromIncoming = (
-  incoming: Pick<IncomingMessage | Http2ServerRequest, 'rawHeaders'>
-) => {
-  const headerRecord: [string, string][] = []
-  const rawHeaders = incoming.rawHeaders
-  for (let i = 0, len = rawHeaders.length; i < len; i += 2) {
-    const key = rawHeaders[i]
-    if (key.charCodeAt(0) !== /*:*/ 0x3a) {
-      headerRecord.push([key, rawHeaders[i + 1]])
-    }
-  }
-  return new Headers(headerRecord)
 }
 
 export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
@@ -184,7 +172,7 @@ const enqueueBufferedBody = (
 const newRequestFromIncoming = (
   method: string,
   url: string,
-  headers: Headers,
+  headers: GlobalHeaders,
   incoming: IncomingMessage | Http2ServerRequest,
   abortController: AbortController
 ): Request => {

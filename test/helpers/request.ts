@@ -5,7 +5,7 @@ import { connect } from 'node:http2'
 import type { IncomingHttpHeaders as IncomingHttp2Headers } from 'node:http2'
 import { Server as HttpsServer, request as requestHTTPS } from 'node:https'
 import type { AddressInfo } from 'node:net'
-import { newHeadersFromIncoming } from '../../src/request'
+import { newHeadersFromIncoming } from '../../src/headers'
 import { GlobalResponse } from '../../src/response'
 import type { ServerType } from '../../src/types'
 

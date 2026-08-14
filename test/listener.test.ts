@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
+import { GlobalHeaders } from '../src/headers'
 import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
@@ -630,6 +631,10 @@ describe('overrideGlobalObjects', () => {
   const fetchCallback = vi.fn()
 
   beforeEach(() => {
+    Object.defineProperty(global, 'Headers', {
+      value: GlobalHeaders,
+      writable: true,
+    })
     Object.defineProperty(global, 'Request', {
       value: GlobalRequest,
       writable: true,
@@ -643,6 +648,7 @@ describe('overrideGlobalObjects', () => {
   describe('default', () => {
     it('Should be overridden', () => {
       getRequestListener(fetchCallback)
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(LightweightRequest)
       expect(global.Response).toBe(LightweightResponse)
     })
@@ -653,6 +659,7 @@ describe('overrideGlobalObjects', () => {
       getRequestListener(fetchCallback, {
         overrideGlobalObjects: true,
       })
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(LightweightRequest)
       expect(global.Response).toBe(LightweightResponse)
     })
@@ -663,6 +670,7 @@ describe('overrideGlobalObjects', () => {
       getRequestListener(fetchCallback, {
         overrideGlobalObjects: false,
       })
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(GlobalRequest)
       expect(global.Response).toBe(GlobalResponse)
     })

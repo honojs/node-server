@@ -10,3 +10,7 @@ Object.defineProperty(global, 'Request', {
   value: global.Request,
   writable: true,
 })
+Object.defineProperty(global, 'Headers', {
+  value: global.Headers,
+  writable: true,
+})

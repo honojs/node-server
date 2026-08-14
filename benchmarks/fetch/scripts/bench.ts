@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { setTimeout } from 'node:timers/promises'
 
 const PORT = 3000
@@ -16,6 +17,7 @@ interface ServerResult {
   ping: number
   query: number
   body: number
+  headers: number
 }
 
 async function waitForServer(): Promise<void> {
@@ -42,6 +44,15 @@ async function retryFetch(url: string, options?: RequestInit, retries = 0): Prom
     await setTimeout(200)
     return retryFetch(url, options, retries + 1)
   }
+}
+
+async function stopServer(server: ReturnType<typeof spawn>): Promise<void> {
+  if (server.exitCode !== null || server.signalCode !== null) {
+    return
+  }
+  const exited = once(server, 'exit')
+  server.kill('SIGKILL')
+  await exited
 }
 
 async function testEndpoints(): Promise<void> {
@@ -75,6 +86,17 @@ async function testEndpoints(): Promise<void> {
       `Body: Result not match - expected ${JSON.stringify(body)}, got ${JSON.stringify(json3)}`
     )
   }
+
+  // Test an isolated incoming request-header read.
+  const res4 = await retryFetch('http://127.0.0.1:3000/headers', {
+    headers: {
+      'x-test': '123',
+    },
+  })
+  const text4 = await res4.text()
+  if (res4.status !== 200 || text4 !== '123') {
+    throw new Error(`Headers: Result not match - expected "123", got "${text4}"`)
+  }
 }
 
 async function runBenchmarkForServer(
@@ -102,6 +124,7 @@ async function runBenchmarkForServer(
       { name: 'GET /', url: 'http://127.0.0.1:3000/' },
       { name: 'GET /id/:id', url: 'http://127.0.0.1:3000/id/1?name=bun' },
       { name: 'POST /json', url: 'http://127.0.0.1:3000/json', method: 'POST' },
+      { name: 'GET /headers', url: 'http://127.0.0.1:3000/headers' },
     ]
 
     const results: BenchmarkResult[] = []
@@ -110,6 +133,9 @@ async function runBenchmarkForServer(
       const args = ['--fasthttp', '-c', '500', '-d', '10s']
       if (bench.method === 'POST') {
         args.push('-m', 'POST', '-H', 'Content-Type:application/json', '-f', './scripts/body.json')
+      }
+      if (bench.name === 'GET /headers') {
+        args.push('-H', 'x-test:123')
       }
       args.push(bench.url)
 
@@ -147,7 +173,8 @@ async function runBenchmarkForServer(
     const ping = results[0]?.reqsPerSec || 0
     const query = results[1]?.reqsPerSec || 0
     const body = results[2]?.reqsPerSec || 0
-    const average = (ping + query + body) / 3
+    const headers = results[3]?.reqsPerSec || 0
+    const average = (ping + query + body + headers) / 4
 
     return {
       server: serverName,
@@ -156,14 +183,14 @@ async function runBenchmarkForServer(
       ping,
       query,
       body,
+      headers,
     }
   } catch (error) {
     console.error('Error:', (error as Error).message)
     throw error
   } finally {
     console.log('Stopping server...')
-    server.kill()
-    await setTimeout(1000)
+    await stopServer(server)
   }
 }
 
@@ -185,14 +212,14 @@ async function testServer(serverFile: string, serverName: string): Promise<boole
     console.log('  ', (error as Error)?.message || error)
     return false
   } finally {
-    server.kill()
-    await setTimeout(1000)
+    await stopServer(server)
   }
 }
 
 async function main(): Promise<void> {
   const servers = [
-    { file: 'src/server-npm.js', name: '@hono/node-server (npm)' },
+    { file: 'src/server-npm.js', name: '@hono/node-server (2.1.0)' },
+    { file: 'src/server-srvx.js', name: 'srvx (0.12.5, fast)' },
     { file: 'src/server-dev.js', name: '@hono/node-server (dev)' },
   ]
 
@@ -238,47 +265,53 @@ async function main(): Promise<void> {
       })
     }
 
-    const formatDiff = (npm: number, dev: number): string => {
-      const diff = ((dev - npm) / npm) * 100
-      const sign = diff > 0 ? '+' : ''
-      return `${sign}${diff.toFixed(2)}%`
+    const formatDiff = (baseline: number, dev: number): string => {
+      const diff = ((dev - baseline) / baseline) * 100
+      return `${diff > 0 ? '+' : ''}${diff.toFixed(2)}%`
     }
 
-    if (allResults.length === 2) {
-      // Comparison mode: npm vs dev
-      const npmResult = allResults.find((r) => r.server.includes('npm'))
+    if (allResults.length === 3) {
+      const npmResult = allResults.find((r) => r.server === '@hono/node-server (2.1.0)')
+      const srvxResult = allResults.find((r) => r.server === 'srvx (0.12.5, fast)')
       const devResult = allResults.find((r) => r.server.includes('dev'))
 
-      if (npmResult && devResult) {
-        console.log('| Benchmark         | npm            | dev            | Difference  |')
-        console.log('| ----------------- | -------------- | -------------- | ----------- |')
+      if (npmResult && srvxResult && devResult) {
         console.log(
-          `| Average           | ${formatNumber(npmResult.average).padEnd(14)} | ${formatNumber(devResult.average).padEnd(14)} | ${formatDiff(npmResult.average, devResult.average).padEnd(11)} |`
+          '| Benchmark         | @hono/node-server (2.1.0) | srvx (0.12.5, fast) | @hono/node-server (dev) | dev vs npm | dev vs srvx |'
         )
         console.log(
-          `| Ping (GET /)      | ${formatNumber(npmResult.ping).padEnd(14)} | ${formatNumber(devResult.ping).padEnd(14)} | ${formatDiff(npmResult.ping, devResult.ping).padEnd(11)} |`
+          '| ----------------- | ------------------------- | ------------------- | ----------------------- | ---------- | ----------- |'
         )
         console.log(
-          `| Query (GET /id)   | ${formatNumber(npmResult.query).padEnd(14)} | ${formatNumber(devResult.query).padEnd(14)} | ${formatDiff(npmResult.query, devResult.query).padEnd(11)} |`
+          `| Average           | ${formatNumber(npmResult.average).padEnd(25)} | ${formatNumber(srvxResult.average).padEnd(19)} | ${formatNumber(devResult.average).padEnd(23)} | ${formatDiff(npmResult.average, devResult.average).padEnd(10)} | ${formatDiff(srvxResult.average, devResult.average).padEnd(11)} |`
         )
         console.log(
-          `| Body (POST /json) | ${formatNumber(npmResult.body).padEnd(14)} | ${formatNumber(devResult.body).padEnd(14)} | ${formatDiff(npmResult.body, devResult.body).padEnd(11)} |`
+          `| Ping (GET /)      | ${formatNumber(npmResult.ping).padEnd(25)} | ${formatNumber(srvxResult.ping).padEnd(19)} | ${formatNumber(devResult.ping).padEnd(23)} | ${formatDiff(npmResult.ping, devResult.ping).padEnd(10)} | ${formatDiff(srvxResult.ping, devResult.ping).padEnd(11)} |`
+        )
+        console.log(
+          `| Query (GET /id)   | ${formatNumber(npmResult.query).padEnd(25)} | ${formatNumber(srvxResult.query).padEnd(19)} | ${formatNumber(devResult.query).padEnd(23)} | ${formatDiff(npmResult.query, devResult.query).padEnd(10)} | ${formatDiff(srvxResult.query, devResult.query).padEnd(11)} |`
+        )
+        console.log(
+          `| Body (POST /json) | ${formatNumber(npmResult.body).padEnd(25)} | ${formatNumber(srvxResult.body).padEnd(19)} | ${formatNumber(devResult.body).padEnd(23)} | ${formatDiff(npmResult.body, devResult.body).padEnd(10)} | ${formatDiff(srvxResult.body, devResult.body).padEnd(11)} |`
+        )
+        console.log(
+          `| Headers (GET)     | ${formatNumber(npmResult.headers).padEnd(25)} | ${formatNumber(srvxResult.headers).padEnd(19)} | ${formatNumber(devResult.headers).padEnd(23)} | ${formatDiff(npmResult.headers, devResult.headers).padEnd(10)} | ${formatDiff(srvxResult.headers, devResult.headers).padEnd(11)} |`
         )
       }
     } else {
       // Fallback: original table format
       console.log(
-        '|  Server                    | Runtime | Average      | Ping         | Query        | Body         |'
+        '|  Server                    | Runtime | Average      | Ping         | Query        | Body         | Headers      |'
       )
       console.log(
-        '| -------------------------- | ------- | ------------ | ------------ | ------------ | ------------ |'
+        '| -------------------------- | ------- | ------------ | ------------ | ------------ | ------------ | ------------ |'
       )
 
       const sortedResults = allResults.sort((a, b) => b.average - a.average)
 
       for (const result of sortedResults) {
         console.log(
-          `| ${result.server.padEnd(26)} | ${result.runtime.padEnd(7)} | ${formatNumber(result.average).padEnd(12)} | ${formatNumber(result.ping).padEnd(12)} | ${formatNumber(result.query).padEnd(12)} | ${formatNumber(result.body).padEnd(12)} |`
+          `| ${result.server.padEnd(26)} | ${result.runtime.padEnd(7)} | ${formatNumber(result.average).padEnd(12)} | ${formatNumber(result.ping).padEnd(12)} | ${formatNumber(result.query).padEnd(12)} | ${formatNumber(result.body).padEnd(12)} | ${formatNumber(result.headers).padEnd(12)} |`
         )
       }
     }

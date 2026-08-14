@@ -8,6 +8,7 @@ import fs from 'node:fs'
 import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
 import { gunzipSync, inflateSync } from 'node:zlib'
+import { GlobalHeaders } from '../src/headers'
 import { GlobalRequest, Request as LightweightRequest, getAbortController } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 import { createAdaptorServer, serve } from '../src/server'
@@ -1104,6 +1105,10 @@ describe('overrideGlobalObjects', () => {
   const app = new Hono()
 
   beforeEach(() => {
+    Object.defineProperty(global, 'Headers', {
+      value: GlobalHeaders,
+      writable: true,
+    })
     Object.defineProperty(global, 'Request', {
       value: GlobalRequest,
       writable: true,
@@ -1117,6 +1122,7 @@ describe('overrideGlobalObjects', () => {
   describe('default', () => {
     it('Should be overridden', () => {
       createAdaptorServer(app)
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(LightweightRequest)
       expect(global.Response).toBe(LightweightResponse)
     })
@@ -1125,6 +1131,7 @@ describe('overrideGlobalObjects', () => {
   describe('overrideGlobalObjects: true', () => {
     it('Should be overridden', () => {
       createAdaptorServer({ overrideGlobalObjects: true, fetch: app.fetch })
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(LightweightRequest)
       expect(global.Response).toBe(LightweightResponse)
     })
@@ -1133,6 +1140,7 @@ describe('overrideGlobalObjects', () => {
   describe('overrideGlobalObjects: false', () => {
     it('Should not be overridden', () => {
       createAdaptorServer({ overrideGlobalObjects: false, fetch: app.fetch })
+      expect(global.Headers).toBe(GlobalHeaders)
       expect(global.Request).toBe(GlobalRequest)
       expect(global.Response).toBe(GlobalResponse)
     })

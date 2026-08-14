@@ -9,6 +9,8 @@ export default {
         switch (url.pathname) {
           case '/':
             return new Response('Hi')
+          case '/headers':
+            return new Response(request.headers.get('x-test'))
         }
 
         if (url.pathname.startsWith('/id/')) {
