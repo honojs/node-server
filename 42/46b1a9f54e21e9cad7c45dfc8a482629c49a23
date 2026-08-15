@@ -1,0 +1,19 @@
+.github/workflows/autofix.yml
+  s_8b82c612742b3d::t_275efa104bddd7 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4246b1a9f54e21e9cad7c45dfc8a482629c49a23",
+  "prompts": {},
+  "sessions": {
+    "s_8b82c612742b3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "672e1b19-1652-4a0d-8eb7-dcdfdb5e00a1",
+        "model": "unknown"
+      },
+      "human_author": "Yusuke Wada <yusuke@kamawada.com>"
+    }
+  }
+}
