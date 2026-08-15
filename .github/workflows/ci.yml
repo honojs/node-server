@@ -28,6 +28,7 @@ jobs:
           run_install: true
       - run: pnpm run format
       - run: pnpm run lint
+      - run: pnpm run typecheck
       - run: pnpm run test
 
   ci-build:

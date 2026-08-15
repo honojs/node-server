@@ -27,7 +27,7 @@ export const earlyHints = <E extends Env = any>(
     }
 
     const env = c.env || {}
-    const bindings = (env.server ? env.server : env) as HttpBindings
+    const bindings = ('server' in env ? env.server : env) as HttpBindings
     const outgoing = bindings?.outgoing
 
     // Capability check: outgoing.writeEarlyHints exists and is a function.

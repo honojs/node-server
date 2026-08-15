@@ -86,6 +86,7 @@
     "postbuild": "publint",
     "prerelease": "pnpm run build && pnpm run test --run",
     "release": "np --no-publish",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint src test",
     "lint:fix": "eslint src test --fix",
     "format": "prettier --check \"src/**/*.{js,ts}\" \"test/**/*.{js,ts}\"",
