@@ -65,6 +65,17 @@ OHA:        oha 1.15.0
 Config:     100 connections, 2s warmup, 3 × 5s
 ```
 
+### JSON round trip
+
+| Rank | Server                  | Requests/sec | vs node:http |
+| ---: | ----------------------- | -----------: | -----------: |
+|    1 | node:http               |       81,818 |            — |
+|    2 | srvx (fast)             |       74,833 |        -8.5% |
+|    3 | @hono/node-server (dev) |       71,683 |       -12.4% |
+|    4 | @hono/node-server (npm) |       70,050 |       -14.4% |
+
+### All scenarios
+
 | Scenario          | node:http | @hono/node-server (npm) |     srvx (fast) | @hono/node-server (dev) |
 | ----------------- | --------: | ----------------------: | --------------: | ----------------------: |
 | empty response    |   117,877 |        105,569 (-10.4%) | 108,464 (-8.0%) |        105,096 (-10.8%) |

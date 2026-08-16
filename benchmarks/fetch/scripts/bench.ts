@@ -279,14 +279,36 @@ async function main(): Promise<void> {
     `| peak RSS (MiB) | ${ordered.map((result) => result.peakRssMb?.toFixed(1) ?? 'n/a').join(' | ')} |`
   )
 
-  console.log(`\nRequests per second (median; delta vs node:http)\n\n${table.join('\n')}`)
+  // Match srvx's headline ranking: one representative JSON round-trip result
+  // per server, ordered by the median requests per second.
+  const rankingScenario = 'JSON round trip'
+  const ranking = [...results].sort(
+    (a, b) => b.scenarios.get(rankingScenario)!.rps - a.scenarios.get(rankingScenario)!.rps
+  )
+  const rankingBaseline = baseline.scenarios.get(rankingScenario)!.rps
+  const rankingTable = [
+    '| Rank | Server | Requests/sec | vs node:http |',
+    '| ---: | --- | ---: | ---: |',
+    ...ranking.map((result, index) => {
+      const rps = result.scenarios.get(rankingScenario)!.rps
+      return `| ${index + 1} | ${result.server.name} | ${format(rps)} | ${result === baseline ? '—' : delta(rps, rankingBaseline)} |`
+    }),
+  ]
+
+  console.log(
+    `\nJSON round trip (median requests/sec)\n\n${rankingTable.join('\n')}` +
+      `\n\nAll scenarios (median requests/sec; delta vs node:http)\n\n${table.join('\n')}`
+  )
 
   if (process.argv.includes('--update')) {
     const readmePath = fileURLToPath(new URL('../README.md', import.meta.url))
     const readme = readFileSync(readmePath, 'utf8')
     const markers = /(<!--\s*automd:bench\s*-->)[\s\S]*?(<!--\s*\/automd\s*-->)/
     assert(markers.test(readme), 'README is missing the automd:bench markers')
-    const generated = `\`\`\`text\n${systemInfo}\n\`\`\`\n\n${table.join('\n')}`
+    const generated =
+      `\`\`\`text\n${systemInfo}\n\`\`\`\n\n` +
+      `### JSON round trip\n\n${rankingTable.join('\n')}\n\n` +
+      `### All scenarios\n\n${table.join('\n')}`
     writeFileSync(readmePath, readme.replace(markers, `$1\n\n${generated}\n\n$2`))
     console.log(`\nUpdated ${readmePath}`)
   }
