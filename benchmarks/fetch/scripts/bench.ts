@@ -1,326 +1,320 @@
-import { spawn } from 'node:child_process'
+import assert from 'node:assert/strict'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { cpus } from 'node:os'
 import { setTimeout } from 'node:timers/promises'
+import { fileURLToPath } from 'node:url'
 
 const PORT = 3000
-const WARMUP_TIME = 1000
+const CONNECTIONS = Number(process.env.BENCH_CONNECTIONS ?? 100)
+const DURATION = process.env.BENCH_DURATION ?? '5s'
+const WARMUP_DURATION = process.env.BENCH_WARMUP ?? '2s'
+const TRIES = Number(process.env.BENCH_TRIES ?? 3)
+const LARGE_SIZE = 64 * 1024
 
-interface BenchmarkResult {
+interface Server {
+  file: string
   name: string
-  reqsPerSec: number
+}
+
+interface Scenario {
+  name: string
+  path: string
+  method?: string
+  headers?: string[]
+  body?: string
+  expectedStatus?: number
+  verify: (response: Response) => Promise<void>
+}
+
+interface Sample {
+  rps: number
+  latencyMs: number
+  throughputMb: number
 }
 
 interface ServerResult {
-  server: string
-  runtime: string
-  average: number
-  ping: number
-  query: number
-  body: number
-  headers: number
+  server: Server
+  peakRssMb: number | null
+  scenarios: Map<string, Sample>
+}
+
+const jsonBody = JSON.stringify({ message: 'Hello!' })
+const uploadBody = 'x'.repeat(LARGE_SIZE)
+
+const scenarios: Scenario[] = [
+  {
+    name: 'empty response',
+    path: '/empty',
+    method: 'HEAD',
+    expectedStatus: 204,
+    verify: async (response) => assert.equal(await response.text(), ''),
+  },
+  {
+    name: 'small text',
+    path: '/',
+    verify: async (response) => assert.equal(await response.text(), 'Hi'),
+  },
+  {
+    name: 'URL + query',
+    path: '/query?id=123&name=benchmark',
+    verify: async (response) => assert.equal(await response.text(), '123 benchmark'),
+  },
+  {
+    name: 'headers',
+    path: '/headers',
+    headers: ['x-test: 123'],
+    verify: async (response) => {
+      assert.equal(await response.text(), '123')
+      assert.equal(response.headers.get('x-powered-by'), 'benchmark')
+      assert.equal(response.headers.get('cache-control'), 'public, max-age=60')
+    },
+  },
+  {
+    name: 'JSON response',
+    path: '/json',
+    verify: async (response) =>
+      assert.deepEqual(await response.json(), { message: 'Hello!', ok: true }),
+  },
+  {
+    name: 'JSON round trip',
+    path: '/json',
+    method: 'POST',
+    headers: ['content-type: application/json'],
+    body: jsonBody,
+    verify: async (response) => assert.deepEqual(await response.json(), { message: 'Hello!' }),
+  },
+  {
+    name: '64 KiB upload',
+    path: '/upload',
+    method: 'POST',
+    headers: ['content-type: application/octet-stream'],
+    body: uploadBody,
+    verify: async (response) => assert.equal(await response.text(), String(LARGE_SIZE)),
+  },
+  {
+    name: '64 KiB fixed body',
+    path: '/large',
+    verify: async (response) => assert.equal((await response.arrayBuffer()).byteLength, LARGE_SIZE),
+  },
+  {
+    name: '64 KiB stream',
+    path: '/stream',
+    verify: async (response) => assert.equal((await response.arrayBuffer()).byteLength, LARGE_SIZE),
+  },
+]
+
+const servers: Server[] = [
+  { file: 'src/server-node.js', name: 'node:http' },
+  { file: 'src/server-npm.js', name: '@hono/node-server (npm)' },
+  { file: 'src/server-srvx.js', name: 'srvx (fast)' },
+  { file: 'src/server-dev.js', name: '@hono/node-server (dev)' },
+]
+
+function ohaVersion(): string {
+  const result = spawnSync('oha', ['--version'], { encoding: 'utf8' })
+  if (result.error || result.status !== 0) {
+    throw new Error('oha is required: https://github.com/hatoo/oha')
+  }
+  return (result.stdout || result.stderr).trim() || 'unknown'
 }
 
 async function waitForServer(): Promise<void> {
-  const maxRetries = 30
-  for (let i = 0; i < maxRetries; i++) {
+  for (let attempt = 0; attempt < 50; attempt++) {
     try {
-      const response = await fetch(`http://localhost:${PORT}`)
-      if (response.ok) {
-        console.log('✓ Server is ready\n')
-        return
-      }
-    } catch (e) {
-      await setTimeout(100)
-    }
+      const response = await fetch(`http://127.0.0.1:${PORT}/`)
+      if (response.ok) return
+    } catch {}
+    await setTimeout(100)
   }
-  throw new Error('Server failed to start')
+  throw new Error('server did not become ready')
 }
 
-async function retryFetch(url: string, options?: RequestInit, retries = 0): Promise<Response> {
-  try {
-    return await fetch(url, options)
-  } catch (e) {
-    if (retries > 7) throw e
-    await setTimeout(200)
-    return retryFetch(url, options, retries + 1)
-  }
-}
-
-async function stopServer(server: ReturnType<typeof spawn>): Promise<void> {
-  if (server.exitCode !== null || server.signalCode !== null) {
-    return
-  }
-  const exited = once(server, 'exit')
-  server.kill('SIGKILL')
+async function stopServer(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  const exited = once(child, 'exit')
+  child.kill('SIGKILL')
   await exited
 }
 
-async function testEndpoints(): Promise<void> {
-  // Test GET /
-  const res1 = await retryFetch('http://127.0.0.1:3000/')
-  const text1 = await res1.text()
-  if (res1.status !== 200 || text1 !== 'Hi') {
-    throw new Error(`Index: Result not match - expected "Hi", got "${text1}"`)
-  }
-
-  // Test GET /id/:id
-  const res2 = await retryFetch('http://127.0.0.1:3000/id/1?name=bun')
-  const text2 = await res2.text()
-  if (res2.status !== 200 || text2 !== '1 bun') {
-    throw new Error(`Query: Result not match - expected "1 bun", got "${text2}"`)
-  }
-  if (!res2.headers.get('x-powered-by')?.includes('benchmark')) {
-    throw new Error('Query: X-Powered-By not match')
-  }
-
-  // Test POST /json
-  const body = { hello: 'world' }
-  const res3 = await retryFetch('http://127.0.0.1:3000/json', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json3 = await res3.json()
-  if (res3.status !== 200 || JSON.stringify(json3) !== JSON.stringify(body)) {
-    throw new Error(
-      `Body: Result not match - expected ${JSON.stringify(body)}, got ${JSON.stringify(json3)}`
-    )
-  }
-
-  // Test an isolated incoming request-header read.
-  const res4 = await retryFetch('http://127.0.0.1:3000/headers', {
-    headers: {
-      'x-test': '123',
-    },
-  })
-  const text4 = await res4.text()
-  if (res4.status !== 200 || text4 !== '123') {
-    throw new Error(`Headers: Result not match - expected "123", got "${text4}"`)
+function peakRssMb(pid: number | undefined): number | null {
+  if (!pid) return null
+  try {
+    const match = readFileSync(`/proc/${pid}/status`, 'utf8').match(/VmHWM:\s+(\d+)\s+kB/)
+    return match ? Number((Number(match[1]) / 1024).toFixed(1)) : null
+  } catch {
+    return null
   }
 }
 
-async function runBenchmarkForServer(
-  serverFile: string,
-  serverName: string
-): Promise<ServerResult> {
-  console.log(`\n${'='.repeat(60)}`)
-  console.log(`Starting ${serverName}...`)
-  console.log('='.repeat(60))
+function ohaArgs(scenario: Scenario, duration: string): string[] {
+  const args = [
+    `http://127.0.0.1:${PORT}${scenario.path}`,
+    '--no-tui',
+    '--output-format',
+    'json',
+    '-c',
+    String(CONNECTIONS),
+    '-z',
+    duration,
+    '-m',
+    scenario.method ?? 'GET',
+  ]
+  for (const header of scenario.headers ?? []) args.push('-H', header)
+  if (scenario.body !== undefined) args.push('-d', scenario.body)
+  return args
+}
 
-  const server = spawn('node', [serverFile], {
-    stdio: 'inherit',
-    cwd: process.cwd(),
+function runLoad(scenario: Scenario, duration: string): Sample {
+  const result = spawnSync('oha', ohaArgs(scenario, duration), {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
   })
-
-  try {
-    await waitForServer()
-    await setTimeout(WARMUP_TIME)
-
-    await testEndpoints()
-
-    console.log('Running benchmarks...\n')
-
-    const benchmarks = [
-      { name: 'GET /', url: 'http://127.0.0.1:3000/' },
-      { name: 'GET /id/:id', url: 'http://127.0.0.1:3000/id/1?name=bun' },
-      { name: 'POST /json', url: 'http://127.0.0.1:3000/json', method: 'POST' },
-      { name: 'GET /headers', url: 'http://127.0.0.1:3000/headers' },
-    ]
-
-    const results: BenchmarkResult[] = []
-
-    for (const bench of benchmarks) {
-      const args = ['--fasthttp', '-c', '500', '-d', '10s']
-      if (bench.method === 'POST') {
-        args.push('-m', 'POST', '-H', 'Content-Type:application/json', '-f', './scripts/body.json')
-      }
-      if (bench.name === 'GET /headers') {
-        args.push('-H', 'x-test:123')
-      }
-      args.push(bench.url)
-
-      const output = await new Promise<string>((resolve, reject) => {
-        let stdout = ''
-        const bombardier = spawn('bombardier', args)
-
-        bombardier.stdout?.on('data', (data) => {
-          const text = data.toString()
-          process.stdout.write(text)
-          stdout += text
-        })
-
-        bombardier.stderr?.on('data', (data) => {
-          process.stderr.write(data)
-        })
-
-        bombardier.on('close', (code) => {
-          if (code === 0) resolve(stdout)
-          else reject(new Error(`bombardier exited with code ${code}`))
-        })
-      })
-
-      // Parse output
-      const reqsMatch = output.match(/Reqs\/sec\s+([\d.]+)/)
-
-      results.push({
-        name: bench.name,
-        reqsPerSec: reqsMatch ? parseFloat(reqsMatch[1]) : 0,
-      })
-    }
-
-    console.log('\n✓ All benchmarks completed')
-
-    const ping = results[0]?.reqsPerSec || 0
-    const query = results[1]?.reqsPerSec || 0
-    const body = results[2]?.reqsPerSec || 0
-    const headers = results[3]?.reqsPerSec || 0
-    const average = (ping + query + body + headers) / 4
-
-    return {
-      server: serverName,
-      runtime: 'node',
-      average,
-      ping,
-      query,
-      body,
-      headers,
-    }
-  } catch (error) {
-    console.error('Error:', (error as Error).message)
-    throw error
-  } finally {
-    console.log('Stopping server...')
-    await stopServer(server)
+  if (result.error || result.status !== 0) {
+    throw new Error(result.stderr || result.error?.message || `oha exited ${result.status}`)
+  }
+  const output = JSON.parse(result.stdout)
+  const expected = String(scenario.expectedStatus ?? 200)
+  const statuses = Object.keys(output.statusCodeDistribution)
+  // A duration-limited oha run cancels requests still in flight at its deadline.
+  const errors = Object.keys(output.errorDistribution ?? {}).filter(
+    (error) => error !== 'aborted due to deadline'
+  )
+  if (errors.length || statuses.length !== 1 || statuses[0] !== expected) {
+    throw new Error(`load errors or unexpected responses: ${JSON.stringify({ errors, statuses })}`)
+  }
+  return {
+    rps: output.rps.mean,
+    latencyMs: output.summary.average * 1000,
+    throughputMb: output.summary.totalData / output.summary.total / 1024 / 1024,
   }
 }
 
-async function testServer(serverFile: string, serverName: string): Promise<boolean> {
-  console.log(`Testing ${serverName}...`)
-
-  const server = spawn('node', [serverFile], {
-    stdio: 'inherit',
-    cwd: process.cwd(),
+async function verifyScenario(scenario: Scenario): Promise<void> {
+  const headers = Object.fromEntries(
+    (scenario.headers ?? []).map((header) => {
+      const separator = header.indexOf(':')
+      return [header.slice(0, separator), header.slice(separator + 1).trim()]
+    })
+  )
+  const response = await fetch(`http://127.0.0.1:${PORT}${scenario.path}`, {
+    method: scenario.method,
+    headers,
+    body: scenario.body,
   })
+  assert.equal(response.status, scenario.expectedStatus ?? 200)
+  await scenario.verify(response)
+}
 
-  try {
-    await waitForServer()
-    await testEndpoints()
-    console.log(`✅ ${serverName}`)
-    return true
-  } catch (error) {
-    console.log(`❌ ${serverName}`)
-    console.log('  ', (error as Error)?.message || error)
-    return false
-  } finally {
-    await stopServer(server)
-  }
+function median(samples: Sample[]): Sample {
+  const middle = Math.floor(samples.length / 2)
+  const value = (key: keyof Sample) => [...samples].sort((a, b) => a[key] - b[key])[middle][key]
+  return { rps: value('rps'), latencyMs: value('latencyMs'), throughputMb: value('throughputMb') }
+}
+
+function format(value: number): string {
+  return Math.round(value).toLocaleString('en-US')
+}
+
+function delta(value: number, baseline: number): string {
+  const percent = (value / baseline - 1) * 100
+  return `${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`
 }
 
 async function main(): Promise<void> {
-  const servers = [
-    { file: 'src/server-npm.js', name: '@hono/node-server (2.1.0)' },
-    { file: 'src/server-srvx.js', name: 'srvx (0.12.5, fast)' },
-    { file: 'src/server-dev.js', name: '@hono/node-server (dev)' },
+  if (!Number.isInteger(TRIES) || TRIES < 1)
+    throw new Error('BENCH_TRIES must be a positive integer')
+  const toolVersion = ohaVersion()
+  const systemInfo = [
+    `CPU:        ${cpus()[0]?.model ?? 'unknown'}`,
+    `Node.js:    ${process.version}`,
+    `OS:         ${process.platform} ${process.arch}`,
+    `OHA:        ${toolVersion}`,
+    `Config:     ${CONNECTIONS} connections, ${WARMUP_DURATION} warmup, ${TRIES} × ${DURATION}`,
+  ].join('\n')
+  console.log(systemInfo)
+
+  const results: ServerResult[] = []
+  for (const server of [...servers].sort(() => Math.random() - 0.5)) {
+    console.log(`\n${server.name}`)
+    const child = spawn(process.execPath, [server.file], { stdio: ['ignore', 'ignore', 'inherit'] })
+    try {
+      await waitForServer()
+      for (const scenario of scenarios) await verifyScenario(scenario)
+
+      const scenarioResults = new Map<string, Sample>()
+      for (const scenario of scenarios) {
+        runLoad(scenario, WARMUP_DURATION)
+        const samples = Array.from({ length: TRIES }, () => runLoad(scenario, DURATION))
+        const result = median(samples)
+        scenarioResults.set(scenario.name, result)
+        console.log(
+          `  ${scenario.name.padEnd(20)} ${format(result.rps).padStart(10)} req/s  ` +
+            `${result.latencyMs.toFixed(2).padStart(8)} ms  ${result.throughputMb.toFixed(1).padStart(8)} MiB/s`
+        )
+      }
+      results.push({ server, peakRssMb: peakRssMb(child.pid), scenarios: scenarioResults })
+    } finally {
+      await stopServer(child)
+    }
+  }
+
+  const baseline = results.find((result) => result.server.name === 'node:http')
+  assert(baseline)
+  const ordered = servers.map((server) => results.find((result) => result.server === server)!)
+  const table = [
+    `| Scenario | ${ordered.map((result) => result.server.name).join(' | ')} |`,
+    `| --- | ${ordered.map(() => '---:').join(' | ')} |`,
+  ]
+  for (const scenario of scenarios) {
+    const base = baseline.scenarios.get(scenario.name)!.rps
+    const cells = ordered.map((result) => {
+      const rps = result.scenarios.get(scenario.name)!.rps
+      return result === baseline ? format(rps) : `${format(rps)} (${delta(rps, base)})`
+    })
+    table.push(`| ${scenario.name} | ${cells.join(' | ')} |`)
+  }
+  table.push(
+    `| peak RSS (MiB) | ${ordered.map((result) => result.peakRssMb?.toFixed(1) ?? 'n/a').join(' | ')} |`
+  )
+
+  // Match srvx's headline ranking: one representative JSON round-trip result
+  // per server, ordered by the median requests per second.
+  const rankingScenario = 'JSON round trip'
+  const ranking = [...results].sort(
+    (a, b) => b.scenarios.get(rankingScenario)!.rps - a.scenarios.get(rankingScenario)!.rps
+  )
+  const rankingBaseline = baseline.scenarios.get(rankingScenario)!.rps
+  const rankingTable = [
+    '| Rank | Server | Requests/sec | vs node:http |',
+    '| ---: | --- | ---: | ---: |',
+    ...ranking.map((result, index) => {
+      const rps = result.scenarios.get(rankingScenario)!.rps
+      return `| ${index + 1} | ${result.server.name} | ${format(rps)} | ${result === baseline ? '—' : delta(rps, rankingBaseline)} |`
+    }),
   ]
 
-  console.log('\n' + '='.repeat(60))
-  console.log('TEST PHASE')
-  console.log('='.repeat(60) + '\n')
+  console.log(
+    `\nJSON round trip (median requests/sec)\n\n${rankingTable.join('\n')}` +
+      `\n\nAll scenarios (median requests/sec; delta vs node:http)\n\n${table.join('\n')}`
+  )
 
-  const validServers = []
-  for (const server of servers) {
-    const isValid = await testServer(server.file, server.name)
-    if (isValid) {
-      validServers.push(server)
-    }
-  }
-
-  if (validServers.length === 0) {
-    console.error('\n❌ No servers passed the tests')
-    process.exit(1)
-  }
-
-  console.log(`\n✓ ${validServers.length} server(s) passed the tests`)
-  console.log('\n' + '='.repeat(60))
-  console.log('BENCHMARK PHASE')
-  console.log('='.repeat(60))
-
-  const allResults: ServerResult[] = []
-
-  try {
-    for (const server of validServers) {
-      const result = await runBenchmarkForServer(server.file, server.name)
-      allResults.push(result)
-    }
-
-    // Print comparison table
-    console.log('\n' + '='.repeat(60))
-    console.log('BENCHMARK RESULTS')
-    console.log('='.repeat(60) + '\n')
-
-    const formatNumber = (num: number): string => {
-      return num.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    }
-
-    const formatDiff = (baseline: number, dev: number): string => {
-      const diff = ((dev - baseline) / baseline) * 100
-      return `${diff > 0 ? '+' : ''}${diff.toFixed(2)}%`
-    }
-
-    if (allResults.length === 3) {
-      const npmResult = allResults.find((r) => r.server === '@hono/node-server (2.1.0)')
-      const srvxResult = allResults.find((r) => r.server === 'srvx (0.12.5, fast)')
-      const devResult = allResults.find((r) => r.server.includes('dev'))
-
-      if (npmResult && srvxResult && devResult) {
-        console.log(
-          '| Benchmark         | @hono/node-server (2.1.0) | srvx (0.12.5, fast) | @hono/node-server (dev) | dev vs npm | dev vs srvx |'
-        )
-        console.log(
-          '| ----------------- | ------------------------- | ------------------- | ----------------------- | ---------- | ----------- |'
-        )
-        console.log(
-          `| Average           | ${formatNumber(npmResult.average).padEnd(25)} | ${formatNumber(srvxResult.average).padEnd(19)} | ${formatNumber(devResult.average).padEnd(23)} | ${formatDiff(npmResult.average, devResult.average).padEnd(10)} | ${formatDiff(srvxResult.average, devResult.average).padEnd(11)} |`
-        )
-        console.log(
-          `| Ping (GET /)      | ${formatNumber(npmResult.ping).padEnd(25)} | ${formatNumber(srvxResult.ping).padEnd(19)} | ${formatNumber(devResult.ping).padEnd(23)} | ${formatDiff(npmResult.ping, devResult.ping).padEnd(10)} | ${formatDiff(srvxResult.ping, devResult.ping).padEnd(11)} |`
-        )
-        console.log(
-          `| Query (GET /id)   | ${formatNumber(npmResult.query).padEnd(25)} | ${formatNumber(srvxResult.query).padEnd(19)} | ${formatNumber(devResult.query).padEnd(23)} | ${formatDiff(npmResult.query, devResult.query).padEnd(10)} | ${formatDiff(srvxResult.query, devResult.query).padEnd(11)} |`
-        )
-        console.log(
-          `| Body (POST /json) | ${formatNumber(npmResult.body).padEnd(25)} | ${formatNumber(srvxResult.body).padEnd(19)} | ${formatNumber(devResult.body).padEnd(23)} | ${formatDiff(npmResult.body, devResult.body).padEnd(10)} | ${formatDiff(srvxResult.body, devResult.body).padEnd(11)} |`
-        )
-        console.log(
-          `| Headers (GET)     | ${formatNumber(npmResult.headers).padEnd(25)} | ${formatNumber(srvxResult.headers).padEnd(19)} | ${formatNumber(devResult.headers).padEnd(23)} | ${formatDiff(npmResult.headers, devResult.headers).padEnd(10)} | ${formatDiff(srvxResult.headers, devResult.headers).padEnd(11)} |`
-        )
-      }
-    } else {
-      // Fallback: original table format
-      console.log(
-        '|  Server                    | Runtime | Average      | Ping         | Query        | Body         | Headers      |'
-      )
-      console.log(
-        '| -------------------------- | ------- | ------------ | ------------ | ------------ | ------------ | ------------ |'
-      )
-
-      const sortedResults = allResults.sort((a, b) => b.average - a.average)
-
-      for (const result of sortedResults) {
-        console.log(
-          `| ${result.server.padEnd(26)} | ${result.runtime.padEnd(7)} | ${formatNumber(result.average).padEnd(12)} | ${formatNumber(result.ping).padEnd(12)} | ${formatNumber(result.query).padEnd(12)} | ${formatNumber(result.body).padEnd(12)} | ${formatNumber(result.headers).padEnd(12)} |`
-        )
-      }
-    }
-
-    console.log()
-  } catch (error) {
-    console.error('Failed to run benchmarks:', (error as Error).message)
-    process.exit(1)
+  if (process.argv.includes('--update')) {
+    const readmePath = fileURLToPath(new URL('../README.md', import.meta.url))
+    const readme = readFileSync(readmePath, 'utf8')
+    const markers = /(<!--\s*automd:bench\s*-->)[\s\S]*?(<!--\s*\/automd\s*-->)/
+    assert(markers.test(readme), 'README is missing the automd:bench markers')
+    const generated =
+      `\`\`\`text\n${systemInfo}\n\`\`\`\n\n` +
+      `### JSON round trip\n\n${rankingTable.join('\n')}\n\n` +
+      `### All scenarios\n\n${table.join('\n')}`
+    writeFileSync(readmePath, readme.replace(markers, `$1\n\n${generated}\n\n$2`))
+    console.log(`\nUpdated ${readmePath}`)
   }
 }
 
-main()
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})
