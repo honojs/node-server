@@ -5,35 +5,30 @@ Initially, Hono wasn't designed for Node.js, but with this adapter, you can now 
 
 ## Benchmarks
 
-Hono is 4.1 times faster than Express.
+The benchmark suite measures the raw HTTP-to-Fetch adapter cost without Hono routing. It compares the published and development versions of `@hono/node-server` with a native `node:http` implementation and srvx using `FastResponse`.
 
-Express:
-
-```txt
-$ bombardier -d 10s --fasthttp http://localhost:3000/
-
-Statistics        Avg      Stdev        Max
-  Reqs/sec     20803.37    1713.06   24910.85
-  Latency        6.01ms     5.21ms   451.37ms
-  HTTP codes:
-    1xx - 0, 2xx - 208131, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:     5.75MB/s
+```text
+CPU:        13th Gen Intel(R) Core(TM) i5-13450HX
+Node.js:    v24.19.0
+OS:         linux x64
+OHA:        oha 1.15.0
+Config:     100 connections, 2s warmup, 3 × 5s
 ```
 
-Hono + `@hono/node-server`:
+| Scenario          | node:http | @hono/node-server (npm) |     srvx (fast) | @hono/node-server (dev) |
+| ----------------- | --------: | ----------------------: | --------------: | ----------------------: |
+| empty response    |   117,877 |        105,569 (-10.4%) | 108,464 (-8.0%) |        105,096 (-10.8%) |
+| small text        |   107,385 |         95,037 (-11.5%) | 94,733 (-11.8%) |         93,184 (-13.2%) |
+| URL + query       |   102,987 |         90,440 (-12.2%) | 90,044 (-12.6%) |         89,240 (-13.3%) |
+| headers           |    96,469 |         75,109 (-22.1%) |  87,595 (-9.2%) |          87,909 (-8.9%) |
+| JSON response     |    97,773 |          90,378 (-7.6%) |  91,174 (-6.8%) |          91,514 (-6.4%) |
+| JSON round trip   |    81,818 |         70,050 (-14.4%) |  74,833 (-8.5%) |         71,683 (-12.4%) |
+| 64 KiB upload     |    29,078 |         20,101 (-30.9%) | 12,812 (-55.9%) |         20,268 (-30.3%) |
+| 64 KiB fixed body |    60,324 |          55,822 (-7.5%) |  56,836 (-5.8%) |          56,384 (-6.5%) |
+| 64 KiB stream     |    46,091 |         31,166 (-32.4%) | 33,847 (-26.6%) |         30,866 (-33.0%) |
+| peak RSS (MiB)    |     349.7 |                   364.4 |           330.7 |                   366.1 |
 
-```txt
-$ bombardier -d 10s --fasthttp http://localhost:3000/
-
-Statistics        Avg      Stdev        Max
-  Reqs/sec     85405.51    7250.65  102658.51
-  Latency        1.46ms     1.00ms   149.95ms
-  HTTP codes:
-    1xx - 0, 2xx - 854120, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:    18.49MB/s
-```
+These are synthetic microbenchmarks intended to identify adapter regressions rather than predict production application throughput. See the [fetch server benchmark](./benchmarks/fetch/README.md) for the methodology, scenarios, and instructions for reproducing the results.
 
 ## Requirements
 
