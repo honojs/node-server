@@ -5,20 +5,20 @@ Initially, Hono wasn't designed for Node.js, but with this adapter, you can now 
 
 ## Benchmarks
 
-Hono is 4.1 times faster than Express.
+Hono is 3.1 times faster than Express.
 
-Express:
+Express v5:
 
 ```txt
 $ bombardier -d 10s --fasthttp http://localhost:3000/
 
 Statistics        Avg      Stdev        Max
-  Reqs/sec     20803.37    1713.06   24910.85
-  Latency        6.01ms     5.21ms   451.37ms
+  Reqs/sec     24380.41    1409.74   26604.88
+  Latency        5.12ms     2.95ms   305.21ms
   HTTP codes:
-    1xx - 0, 2xx - 208131, 3xx - 0, 4xx - 0, 5xx - 0
+    1xx - 0, 2xx - 243915, 3xx - 0, 4xx - 0, 5xx - 0
     others - 0
-  Throughput:     5.75MB/s
+  Throughput:     6.98MB/s
 ```
 
 Hono + `@hono/node-server`:
@@ -27,12 +27,12 @@ Hono + `@hono/node-server`:
 $ bombardier -d 10s --fasthttp http://localhost:3000/
 
 Statistics        Avg      Stdev        Max
-  Reqs/sec     85405.51    7250.65  102658.51
-  Latency        1.46ms     1.00ms   149.95ms
+  Reqs/sec     74428.96    3815.27   88228.32
+  Latency        1.68ms   621.25us   106.20ms
   HTTP codes:
-    1xx - 0, 2xx - 854120, 3xx - 0, 4xx - 0, 5xx - 0
+    1xx - 0, 2xx - 744378, 3xx - 0, 4xx - 0, 5xx - 0
     others - 0
-  Throughput:    18.49MB/s
+  Throughput:    16.82MB/s
 ```
 
 ## Requirements
