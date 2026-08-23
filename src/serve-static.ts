@@ -18,6 +18,22 @@ export type ServeStaticOptions<E extends Env = Env> = {
   onNotFound?: (path: string, c: Context<E>) => void | Promise<void>
 }
 
+export type SendFileOptions<E extends Env = Env> = {
+  /**
+   * Root path. Relative path is based on current working directory from which the app was started.
+   */
+  root?: string
+  index?: string // default is 'index.html'
+  precompressed?: boolean
+  onFound?: (path: string, c: Context<E>) => void | Promise<void>
+  /**
+   * Called when the file is not found. Unlike the `onNotFound` option of `serveStatic`,
+   * it can return a `Response`, which is then used as the response.
+   * If it returns nothing, the Not Found Response of the Context (`c.notFound()`) is used.
+   */
+  onNotFound?: (path: string, c: Context<E>) => Response | void | Promise<Response | void>
+}
+
 const COMPRESSIBLE_CONTENT_TYPE_REGEX =
   /^\s*(?:text\/[^;\s]+|application\/(?:javascript|json|xml|xml-dtd|ecmascript|dart|postscript|rtf|tar|toml|vnd\.dart|vnd\.ms-fontobject|vnd\.ms-opentype|wasm|x-httpd-php|x-javascript|x-ns-proxy-autoconfig|x-sh|x-tar|x-virtualbox-hdd|x-virtualbox-ova|x-virtualbox-ovf|x-virtualbox-vbox|x-virtualbox-vdi|x-virtualbox-vhd|x-virtualbox-vmdk|x-www-form-urlencoded)|font\/(?:otf|ttf)|image\/(?:bmp|vnd\.adobe\.photoshop|vnd\.microsoft\.icon|vnd\.ms-dds|x-icon|x-ms-bmp)|message\/rfc822|model\/gltf-binary|x-shader\/x-fragment|x-shader\/x-vertex|[^;\s]+?\+(?:json|text|xml|yaml))(?:[;\s]|$)/i
 const ENCODINGS = {
@@ -103,6 +119,106 @@ const tryDecode = (str: string, decoder: Decoder): string => {
 
 const tryDecodeURI = (str: string) => tryDecode(str, decodeURI)
 
+type FoundFile = { path: string; stats: Stats | undefined }
+
+// Resolve the file to serve for a path, appending the index file for directories,
+// in the same way as the `serveStatic` middleware.
+const findFile = (path: string, index: string | undefined): FoundFile => {
+  let stats = getStats(path)
+
+  if (stats && stats.isDirectory()) {
+    const indexFile = index ?? 'index.html'
+    path = join(path, indexFile)
+    stats = getStats(path)
+  }
+
+  return { path, stats }
+}
+
+type ServeFileOptions<E extends Env> = Pick<ServeStaticOptions<E>, 'precompressed' | 'onFound'>
+
+// Serve the file found at `path`, setting the same headers and supporting the
+// same features (HEAD/OPTIONS, range requests, precompressed files) as the
+// `serveStatic` middleware.
+const serveFile = async <E extends Env>(
+  c: Context<E>,
+  path: string,
+  stats: Stats,
+  options: ServeFileOptions<E>
+): Promise<Response> => {
+  const mimeType = getMimeType(path)
+  c.header('Content-Type', mimeType || 'application/octet-stream')
+
+  if (
+    options.precompressed &&
+    (!mimeType ||
+      mimeType === 'application/octet-stream' ||
+      COMPRESSIBLE_CONTENT_TYPE_REGEX.test(mimeType))
+  ) {
+    const acceptEncodingSet = new Set(
+      c.req
+        .header('Accept-Encoding')
+        ?.split(',')
+        .map((encoding) => encoding.trim())
+    )
+
+    for (const encoding of ENCODINGS_ORDERED_KEYS) {
+      if (!acceptEncodingSet.has(encoding)) {
+        continue
+      }
+      const precompressedStats = getStats(path + ENCODINGS[encoding])
+      if (precompressedStats) {
+        c.header('Content-Encoding', encoding)
+        c.header('Vary', 'Accept-Encoding', { append: true })
+        stats = precompressedStats
+        path = path + ENCODINGS[encoding]
+        break
+      }
+    }
+  }
+
+  let result
+  const size = stats.size
+  const range = c.req.header('range') || ''
+  c.header('Last-Modified', stats.mtime.toUTCString())
+
+  if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
+    c.header('Content-Length', size.toString())
+    c.status(200)
+    result = c.body(null)
+  } else if (!range) {
+    c.header('Content-Length', size.toString())
+    result = c.body(createStreamBody(createReadStream(path)), 200)
+  } else {
+    c.header('Accept-Ranges', 'bytes')
+
+    // Preserve the existing behavior of serving the whole representation for
+    // a malformed range.
+    const rangeSpec: ByteRangeSpec = parseByteRange(range) ?? {
+      type: 'open-ended',
+      start: 0,
+    }
+    const resolvedRange = resolveByteRange(rangeSpec, size)
+
+    if (!resolvedRange) {
+      c.header('Content-Range', `bytes */${size}`)
+      result = c.body(null, 416)
+    } else {
+      const { start, end } = resolvedRange
+      const chunkSize = end - start + 1
+      const stream = createReadStream(path, { start, end })
+
+      c.header('Content-Length', chunkSize.toString())
+      c.header('Content-Range', `bytes ${start}-${end}/${size}`)
+
+      result = c.body(createStreamBody(stream), 206)
+    }
+  }
+
+  await options.onFound?.(path, c)
+  return result
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const serveStatic = <E extends Env = any>(
   options: ServeStaticOptions<E> = { root: '' }
@@ -136,94 +252,67 @@ export const serveStatic = <E extends Env = any>(
       }
     }
 
-    let path = join(
+    const requestPath = join(
       root,
       !optionPath && options.rewriteRequestPath ? options.rewriteRequestPath(filename, c) : filename
     )
 
-    let stats = getStats(path)
+    const found = findFile(requestPath, options.index)
 
-    if (stats && stats.isDirectory()) {
-      const indexFile = options.index ?? 'index.html'
-      path = join(path, indexFile)
-      stats = getStats(path)
-    }
-
-    if (!stats) {
-      await options.onNotFound?.(path, c)
+    if (!found.stats) {
+      await options.onNotFound?.(found.path, c)
       return next()
     }
 
-    const mimeType = getMimeType(path)
-    c.header('Content-Type', mimeType || 'application/octet-stream')
-
-    if (
-      options.precompressed &&
-      (!mimeType ||
-        mimeType === 'application/octet-stream' ||
-        COMPRESSIBLE_CONTENT_TYPE_REGEX.test(mimeType))
-    ) {
-      const acceptEncodingSet = new Set(
-        c.req
-          .header('Accept-Encoding')
-          ?.split(',')
-          .map((encoding) => encoding.trim())
-      )
-
-      for (const encoding of ENCODINGS_ORDERED_KEYS) {
-        if (!acceptEncodingSet.has(encoding)) {
-          continue
-        }
-        const precompressedStats = getStats(path + ENCODINGS[encoding])
-        if (precompressedStats) {
-          c.header('Content-Encoding', encoding)
-          c.header('Vary', 'Accept-Encoding', { append: true })
-          stats = precompressedStats
-          path = path + ENCODINGS[encoding]
-          break
-        }
-      }
-    }
-
-    let result
-    const size = stats.size
-    const range = c.req.header('range') || ''
-    c.header('Last-Modified', stats.mtime.toUTCString())
-
-    if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
-      c.header('Content-Length', size.toString())
-      c.status(200)
-      result = c.body(null)
-    } else if (!range) {
-      c.header('Content-Length', size.toString())
-      result = c.body(createStreamBody(createReadStream(path)), 200)
-    } else {
-      c.header('Accept-Ranges', 'bytes')
-
-      // Preserve the existing behavior of serving the whole representation for
-      // a malformed range.
-      const rangeSpec: ByteRangeSpec = parseByteRange(range) ?? {
-        type: 'open-ended',
-        start: 0,
-      }
-      const resolvedRange = resolveByteRange(rangeSpec, size)
-
-      if (!resolvedRange) {
-        c.header('Content-Range', `bytes */${size}`)
-        result = c.body(null, 416)
-      } else {
-        const { start, end } = resolvedRange
-        const chunkSize = end - start + 1
-        const stream = createReadStream(path, { start, end })
-
-        c.header('Content-Length', chunkSize.toString())
-        c.header('Content-Range', `bytes ${start}-${end}/${size}`)
-
-        result = c.body(createStreamBody(stream), 206)
-      }
-    }
-
-    await options.onFound?.(path, c)
-    return result
+    return serveFile(c, found.path, found.stats, options)
   }
+}
+
+/**
+ * Send a file as the response, like `res.sendFile()` of Express.
+ *
+ * This is a handler helper complementing the `serveStatic` middleware: while
+ * `serveStatic` serves files based on the request path, `sendFile` serves the
+ * file at the given path, so it is useful when you want to determine the file
+ * to serve dynamically. It sets the same headers (e.g. `Content-Type`,
+ * `Content-Length`, `Last-Modified`) and supports the same features (range
+ * requests, HEAD/OPTIONS requests, precompressed files) as `serveStatic`.
+ *
+ * Unlike `serveStatic`, which calls the next handler when a file is not found,
+ * `sendFile` returns the Not Found Response of the Context by default. You can
+ * customize it with the `onNotFound` option.
+ *
+ * @example
+ * ```ts
+ * import { sendFile } from '@hono/node-server/send-file'
+ *
+ * const app = new Hono()
+ * app.get('/download/:id', (c) => {
+ *   const filePath = lookupFilePathById(c.req.param('id')) // dynamically determined
+ *   return sendFile(c, filePath)
+ * })
+ * ```
+ *
+ * @see {@link https://github.com/honojs/node-server/issues/205}
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const sendFile = async <E extends Env = any>(
+  c: Context<E>,
+  path: string,
+  options: SendFileOptions<E> = {}
+): Promise<Response> => {
+  // Do nothing if Response is already set
+  if (c.finalized) {
+    return c.res
+  }
+
+  const root = options.root || ''
+  const found = findFile(join(root, path), options.index)
+
+  if (!found.stats) {
+    const response = await options.onNotFound?.(found.path, c)
+    return response ?? (await c.notFound())
+  }
+
+  return serveFile(c, found.path, found.stats, options)
 }

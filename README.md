@@ -285,6 +285,47 @@ app.use(
 )
 ```
 
+## Send File Helper
+
+While `serveStatic` serves files based on the request path, the `sendFile` helper serves the file at the path you specify. It is useful when you want to determine the file to serve dynamically, like `res.sendFile()` of Express. It sets the same headers (e.g. `Content-Type`, `Content-Length`, `Last-Modified`) and supports the same features (range requests, HEAD/OPTIONS requests, precompressed files) as `serveStatic`.
+
+```ts
+import { Hono } from 'hono'
+import { sendFile } from '@hono/node-server/send-file'
+
+const app = new Hono()
+
+app.get('/download/:id', (c) => {
+  // Serve the file at a dynamically determined path
+  const filePath = lookupFilePathById(c.req.param('id'))
+  return sendFile(c, filePath)
+})
+```
+
+If the file is not found, `sendFile` returns the Not Found Response of the Context by default. You can customize it with the `onNotFound` option, which can return a `Response`.
+
+```ts
+app.get('/download/:id', (c) => {
+  return sendFile(c, lookupFilePathById(c.req.param('id')), {
+    onNotFound: (path, c) => {
+      return c.text(`No file found at ${path}`, 404)
+    },
+  })
+})
+```
+
+### Options
+
+`sendFile` accepts the following options. `root`, `index`, `precompressed` and `onFound` work in the same way as the [options of `serveStatic`](#options-1). The given `path` is resolved relative to `root` when it is set.
+
+| Option | Description |
+| ------ | ----------- |
+| `root` | Root path to resolve the given `path` against. |
+| `index` | Index file name to serve when the `path` points to a directory. Default is `index.html`. |
+| `precompressed` | Serve precompressed files with `.br`/`.zst`/`.gz` extensions based on the `Accept-Encoding` header. |
+| `onFound` | Callback called with the resolved file path and the Context when the file is found. |
+| `onNotFound` | Callback called when the file is not found. Unlike `serveStatic`, it can return a `Response`, which is then used as the response. |
+
 ## ConnInfo Helper
 
 You can use the [ConnInfo Helper](https://hono.dev/docs/helpers/conninfo) by importing `getConnInfo` from `@hono/node-server/conninfo`.
