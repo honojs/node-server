@@ -8,10 +8,7 @@ import { requestServer } from './helpers/request'
 describe('Send File Helper', () => {
   const server = createAdaptorServer(
     new Hono()
-      // The primary use case of `sendFile`: serving a file whose path is
-      // determined dynamically, without reading the whole file into memory.
-      // https://github.com/honojs/node-server/issues/205
-      // Registered with `.all()` like `app.use(...)` in the serveStatic tests,
+      // Registered with `.all()` (like `app.use(...)` in the serveStatic tests)
       // so HEAD/OPTIONS requests also reach `sendFile`.
       .all('/dynamic/*', (c) => {
         const requested = c.req.path.replace('/dynamic/', '')
@@ -61,7 +58,7 @@ describe('Send File Helper', () => {
     expect(await res.text()).toBe('This is plain.txt')
   })
 
-  it('Should return index.html for a directory by default', async () => {
+  it('Should return the HTML file at the given path', async () => {
     const res = await requestServer(server, { method: 'GET', path: '/dynamic/root' })
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8')
@@ -132,9 +129,8 @@ describe('Send File Helper', () => {
   })
 
   it('Should return 200 response to OPTIONS request', async () => {
-    // `sendFile` answers OPTIONS with `Content-Length` set to the file size and
-    // no body, in the same way as `serveStatic`. Such a response cannot be read
-    // with the `requestServer` helper, so check the `Response` directly.
+    // The `requestServer` helper cannot read a bodiless response, so check the
+    // `Response` directly.
     const app = new Hono().options('/file', (c) => sendFile(c, './test/assets/static/plain.txt'))
     const res = await app.request('/file', { method: 'OPTIONS' })
     expect(res.status).toBe(200)
