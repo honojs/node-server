@@ -615,6 +615,125 @@ describe('Serve Static Middleware', () => {
       }
     )
   })
+  describe('If-Modified-Since', () => {
+    it('Should return 304 when the file has not been modified since the date', async () => {
+      const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': stats.mtime.toUTCString() },
+      })
+      expect(res.status).toBe(304)
+      expect(res.headers.get('last-modified')).toBe(stats.mtime.toUTCString())
+      expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+      expect(res.headers.get('content-length')).toBeNull()
+      expect(res.headers.get('content-range')).toBeNull()
+      expect(await res.text()).toBe('')
+    })
+
+    it('Should return 304 when the date is newer than the file mtime', async () => {
+      const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: {
+          'if-modified-since': new Date(stats.mtimeMs + 60_000).toUTCString(),
+        },
+      })
+      expect(res.status).toBe(304)
+      expect(await res.text()).toBe('')
+    })
+
+    it('Should return 200 when the file mtime is newer than the date', async () => {
+      const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
+      const lastModifiedMs = Math.floor(stats.mtimeMs / 1000) * 1000
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': new Date(lastModifiedMs - 1_000).toUTCString() },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    it('Should ignore an invalid If-Modified-Since header', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': 'not-a-date' },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    it('Should ignore If-Modified-Since when If-None-Match is present', async () => {
+      const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: {
+          'if-none-match': '"v1"',
+          'if-modified-since': stats.mtime.toUTCString(),
+        },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    it('Should return 304 for a HEAD request when not modified', async () => {
+      const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
+      const res = await requestServer(server, {
+        method: 'HEAD',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': stats.mtime.toUTCString() },
+      })
+      expect(res.status).toBe(304)
+      expect(res.body).toBeNull()
+    })
+
+    it('Should return 304 for a range request when not modified', async () => {
+      const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { range: '0-9', 'if-modified-since': stats.mtime.toUTCString() },
+      })
+      expect(res.status).toBe(304)
+      expect(res.headers.get('content-range')).toBeNull()
+      expect(res.headers.get('accept-ranges')).toBeNull()
+      expect(await res.text()).toBe('')
+    })
+
+    it('Should return 304 for a precompressed response when not modified', async () => {
+      const stats = statSync(
+        path.join(__dirname, 'assets', 'static-with-precompressed', 'hello.txt.zst')
+      )
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static-with-precompressed/hello.txt',
+        headers: {
+          'accept-encoding': 'zstd',
+          'if-modified-since': stats.mtime.toUTCString(),
+        },
+      })
+      expect(res.status).toBe(304)
+      expect(res.headers.get('content-encoding')).toBe('zstd')
+      expect(res.headers.get('last-modified')).toBe(stats.mtime.toUTCString())
+      expect(res.headers.get('vary')).toBe('Accept-Encoding')
+      expect(await res.text()).toBe('')
+    })
+
+    it('Should call onFound for a 304 response', async () => {
+      const stats = statSync(path.join(__dirname, 'assets', 'static', 'plain.txt'))
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': stats.mtime.toUTCString() },
+      })
+      expect(res.status).toBe(304)
+      expect(res.headers.get('x-custom')).toContain('plain.txt')
+    })
+  })
 })
 
 describe('Serve Static Middleware with wrong path', () => {

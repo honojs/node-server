@@ -285,6 +285,10 @@ app.use(
 )
 ```
 
+### Conditional Requests
+
+`serveStatic` sets the `Last-Modified` header on responses. For `GET` and `HEAD` requests carrying an `If-Modified-Since` header, it responds with `304 Not Modified` when the file has not been modified since that date, per [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#name-if-modified-since). An `If-Modified-Since` header is ignored when `If-None-Match` is present, as the latter takes precedence.
+
 ## ConnInfo Helper
 
 You can use the [ConnInfo Helper](https://hono.dev/docs/helpers/conninfo) by importing `getConnInfo` from `@hono/node-server/conninfo`.
