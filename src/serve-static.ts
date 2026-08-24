@@ -205,6 +205,11 @@ export const serveStatic = <E extends Env = any>(
       (c.req.method === 'GET' || c.req.method === 'HEAD') &&
       isNotModifiedSince(ifModifiedSince, stats.mtimeMs)
     ) {
+      // A 304 response cannot carry representation metadata, so the content
+      // headers set above are removed. `Last-Modified` and `Vary` are kept,
+      // as they exist to guide cache updates. See RFC 9110 Section 15.4.5.
+      c.header('Content-Type', undefined)
+      c.header('Content-Encoding', undefined)
       await options.onFound?.(path, c)
       return c.body(null, 304)
     }

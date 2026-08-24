@@ -615,6 +615,7 @@ describe('Serve Static Middleware', () => {
       }
     )
   })
+
   describe('If-Modified-Since', () => {
     const plainTxtPath = path.join(__dirname, 'assets', 'static', 'plain.txt')
     const zstPath = path.join(__dirname, 'assets', 'static-with-precompressed', 'hello.txt.zst')
@@ -628,7 +629,8 @@ describe('Serve Static Middleware', () => {
       })
       expect(res.status).toBe(304)
       expect(res.headers.get('last-modified')).toBe(lastModified(plainTxtPath))
-      expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+      expect(res.headers.get('content-type')).toBeNull()
+      expect(res.headers.get('content-encoding')).toBeNull()
       expect(res.headers.get('content-length')).toBeNull()
       expect(res.headers.get('content-range')).toBeNull()
       expect(await res.text()).toBe('')
@@ -711,10 +713,34 @@ describe('Serve Static Middleware', () => {
         },
       })
       expect(res.status).toBe(304)
-      expect(res.headers.get('content-encoding')).toBe('zstd')
+      expect(res.headers.get('content-encoding')).toBeNull()
       expect(res.headers.get('last-modified')).toBe(lastModified(zstPath))
       expect(res.headers.get('vary')).toBe('Accept-Encoding')
       expect(await res.text()).toBe('')
+    })
+
+    it('Should ignore If-Modified-Since for a method other than GET/HEAD', async () => {
+      const res = await requestServer(server, {
+        method: 'POST',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': lastModified(plainTxtPath) },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    // RFC 9110 Section 13.1.3: a field value with more than one member is
+    // ignored. Node joins repeated headers into one comma-separated value.
+    it('Should ignore If-Modified-Since when the field value has more than one member', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: {
+          'if-modified-since': `${lastModified(plainTxtPath)}, ${lastModified(plainTxtPath)}`,
+        },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
     })
 
     it('Should call onFound for a 304 response', async () => {
