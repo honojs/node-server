@@ -84,6 +84,12 @@ const resolveByteRange = (spec: ByteRangeSpec, size: number): ByteRange | undefi
   return { start: spec.start, end }
 }
 
+// HTTP dates only have second precision, so compare at second granularity.
+const isNotModifiedSince = (ifModifiedSince: string, mtimeMs: number): boolean => {
+  const sinceMs = Date.parse(ifModifiedSince)
+  return !Number.isNaN(sinceMs) && Math.floor(mtimeMs / 1000) <= Math.floor(sinceMs / 1000)
+}
+
 type Decoder = (str: string) => string
 
 const tryDecode = (str: string, decoder: Decoder): string => {
@@ -189,6 +195,24 @@ export const serveStatic = <E extends Env = any>(
     const size = stats.size
     const range = c.req.header('range') || ''
     c.header('Last-Modified', stats.mtime.toUTCString())
+
+    // RFC 9110: If-Modified-Since applies only to GET/HEAD requests and is
+    // ignored when If-None-Match is present.
+    const ifModifiedSince = c.req.header('if-modified-since')
+    if (
+      ifModifiedSince &&
+      !c.req.header('if-none-match') &&
+      (c.req.method === 'GET' || c.req.method === 'HEAD') &&
+      isNotModifiedSince(ifModifiedSince, stats.mtimeMs)
+    ) {
+      // A 304 response cannot carry representation metadata, so the content
+      // headers set above are removed. `Last-Modified` and `Vary` are kept,
+      // as they exist to guide cache updates. See RFC 9110 Section 15.4.5.
+      c.header('Content-Type', undefined)
+      c.header('Content-Encoding', undefined)
+      await options.onFound?.(path, c)
+      return c.body(null, 304)
+    }
 
     if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
       c.header('Content-Length', size.toString())

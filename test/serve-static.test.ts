@@ -615,6 +615,144 @@ describe('Serve Static Middleware', () => {
       }
     )
   })
+
+  describe('If-Modified-Since', () => {
+    const plainTxtPath = path.join(__dirname, 'assets', 'static', 'plain.txt')
+    const zstPath = path.join(__dirname, 'assets', 'static-with-precompressed', 'hello.txt.zst')
+    const lastModified = (file: string) => statSync(file).mtime.toUTCString()
+
+    it('Should return 304 when the file has not been modified since the date', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': lastModified(plainTxtPath) },
+      })
+      expect(res.status).toBe(304)
+      expect(res.headers.get('last-modified')).toBe(lastModified(plainTxtPath))
+      expect(res.headers.get('content-type')).toBeNull()
+      expect(res.headers.get('content-encoding')).toBeNull()
+      expect(res.headers.get('content-length')).toBeNull()
+      expect(res.headers.get('content-range')).toBeNull()
+      expect(await res.text()).toBe('')
+    })
+
+    it('Should return 304 when the date is newer than the file mtime', async () => {
+      const mtimeMs = statSync(plainTxtPath).mtimeMs
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': new Date(mtimeMs + 60_000).toUTCString() },
+      })
+      expect(res.status).toBe(304)
+      expect(await res.text()).toBe('')
+    })
+
+    it('Should return 200 when the file mtime is newer than the date', async () => {
+      const mtimeMs = Math.floor(statSync(plainTxtPath).mtimeMs / 1000) * 1000
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': new Date(mtimeMs - 1_000).toUTCString() },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    it('Should ignore an invalid If-Modified-Since header', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': 'not-a-date' },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    it('Should ignore If-Modified-Since when If-None-Match is present', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: {
+          'if-none-match': '"v1"',
+          'if-modified-since': lastModified(plainTxtPath),
+        },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    it('Should return 304 for a HEAD request when not modified', async () => {
+      const res = await requestServer(server, {
+        method: 'HEAD',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': lastModified(plainTxtPath) },
+      })
+      expect(res.status).toBe(304)
+      expect(res.body).toBeNull()
+    })
+
+    it('Should return 304 for a range request when not modified', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { range: '0-9', 'if-modified-since': lastModified(plainTxtPath) },
+      })
+      expect(res.status).toBe(304)
+      expect(res.headers.get('content-range')).toBeNull()
+      expect(res.headers.get('accept-ranges')).toBeNull()
+      expect(await res.text()).toBe('')
+    })
+
+    it('Should return 304 for a precompressed response when not modified', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static-with-precompressed/hello.txt',
+        headers: {
+          'accept-encoding': 'zstd',
+          'if-modified-since': lastModified(zstPath),
+        },
+      })
+      expect(res.status).toBe(304)
+      expect(res.headers.get('content-encoding')).toBeNull()
+      expect(res.headers.get('last-modified')).toBe(lastModified(zstPath))
+      expect(res.headers.get('vary')).toBe('Accept-Encoding')
+      expect(await res.text()).toBe('')
+    })
+
+    it('Should ignore If-Modified-Since for a method other than GET/HEAD', async () => {
+      const res = await requestServer(server, {
+        method: 'POST',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': lastModified(plainTxtPath) },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    // RFC 9110 Section 13.1.3: a field value with more than one member is
+    // ignored. Node joins repeated headers into one comma-separated value.
+    it('Should ignore If-Modified-Since when the field value has more than one member', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: {
+          'if-modified-since': `${lastModified(plainTxtPath)}, ${lastModified(plainTxtPath)}`,
+        },
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('This is plain.txt')
+    })
+
+    it('Should call onFound for a 304 response', async () => {
+      const res = await requestServer(server, {
+        method: 'GET',
+        path: '/static/plain.txt',
+        headers: { 'if-modified-since': lastModified(plainTxtPath) },
+      })
+      expect(res.status).toBe(304)
+      expect(res.headers.get('x-custom')).toContain('plain.txt')
+    })
+  })
 })
 
 describe('Serve Static Middleware with wrong path', () => {
