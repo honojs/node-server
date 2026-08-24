@@ -84,6 +84,12 @@ const resolveByteRange = (spec: ByteRangeSpec, size: number): ByteRange | undefi
   return { start: spec.start, end }
 }
 
+// HTTP dates only have second precision, so compare at second granularity.
+const isNotModifiedSince = (ifModifiedSince: string, mtimeMs: number): boolean => {
+  const sinceMs = Date.parse(ifModifiedSince)
+  return !Number.isNaN(sinceMs) && Math.floor(mtimeMs / 1000) <= Math.floor(sinceMs / 1000)
+}
+
 type Decoder = (str: string) => string
 
 const tryDecode = (str: string, decoder: Decoder): string => {
@@ -190,24 +196,17 @@ export const serveStatic = <E extends Env = any>(
     const range = c.req.header('range') || ''
     c.header('Last-Modified', stats.mtime.toUTCString())
 
-    // Respond with 304 if the file has not been modified since the
-    // If-Modified-Since date. Per RFC 9110, If-Modified-Since is only used
-    // for GET/HEAD requests and is ignored when If-None-Match is present.
+    // RFC 9110: If-Modified-Since applies only to GET/HEAD requests and is
+    // ignored when If-None-Match is present.
     const ifModifiedSince = c.req.header('if-modified-since')
     if (
       ifModifiedSince &&
       !c.req.header('if-none-match') &&
-      (c.req.method === 'GET' || c.req.method === 'HEAD')
+      (c.req.method === 'GET' || c.req.method === 'HEAD') &&
+      isNotModifiedSince(ifModifiedSince, stats.mtimeMs)
     ) {
-      const sinceMs = Date.parse(ifModifiedSince)
-      // HTTP dates only have second precision, so compare at second granularity
-      if (
-        !Number.isNaN(sinceMs) &&
-        Math.floor(stats.mtimeMs / 1000) <= Math.floor(sinceMs / 1000)
-      ) {
-        await options.onFound?.(path, c)
-        return c.body(null, 304)
-      }
+      await options.onFound?.(path, c)
+      return c.body(null, 304)
     }
 
     if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
