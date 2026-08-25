@@ -627,6 +627,81 @@ describe('Non-standard incoming request', () => {
   })
 })
 
+describe('Release cloned request body', () => {
+  it('should keep the original body readable after a clone has consumed it', async () => {
+    const body = JSON.stringify({ data: 'foobar' })
+    const requestListener = getRequestListener(async (req) => {
+      const { data } = (await req.clone().json()) as { data: string }
+      // middleware read the clone; the handler still reads the original body,
+      // like a native Request allows after clone()
+      return new Response(`${data}:${await req.text()}`)
+    })
+    const server = createServer(requestListener)
+
+    const res = await requestServer(server, {
+      method: 'POST',
+      path: '/',
+      headers: { 'content-type': 'application/json' },
+      body,
+    })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe(`foobar:${body}`)
+  })
+
+  it('should release the shared body of a synchronous cacheable response on close', async () => {
+    class MockIncomingMessage extends Readable {
+      method = 'POST'
+      url = '/'
+      headers = { host: 'localhost' }
+      rawHeaders = ['host', 'localhost']
+
+      constructor() {
+        super()
+        this.push('foobar')
+        this.push(null)
+      }
+
+      _read() {
+        // The full body is pushed in the constructor; nothing to pull.
+      }
+    }
+
+    class MockServerResponse extends EventEmitter {
+      headersSent = false
+      writableFinished = false
+
+      writeHead() {
+        this.headersSent = true
+        return this
+      }
+
+      end() {
+        this.writableFinished = true
+        this.emit('finish')
+        this.emit('close')
+        return this
+      }
+    }
+
+    let unreadClone: LightweightRequest | undefined
+    const requestListener = getRequestListener((req) => {
+      unreadClone = req.clone()
+      return new Response('fast path')
+    })
+
+    await requestListener(
+      new MockIncomingMessage() as unknown as IncomingMessage,
+      new MockServerResponse() as unknown as ServerResponse
+    )
+
+    // 'close' has been emitted: the unread clone no longer pins the body —
+    // its canceled replay stream is disturbed, like a native Request whose
+    // body stream was canceled
+    expect(unreadClone).toBeDefined()
+    await expect(unreadClone!.text()).rejects.toThrow(TypeError)
+  })
+})
+
 describe('overrideGlobalObjects', () => {
   const fetchCallback = vi.fn()
 

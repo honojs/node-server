@@ -259,6 +259,15 @@ const bodyReadPromiseKey = Symbol('bodyReadPromise')
 const bodyConsumedDirectlyKey = Symbol('bodyConsumedDirectly')
 const bodyLockReaderKey = Symbol('bodyLockReader')
 const abortReasonKey = Symbol('abortReason')
+// clone() switches the request to buffer-once + replay semantics: the body is
+// read from the IncomingMessage exactly once into a Buffer shared by the
+// original request and every clone, instead of tee()-ing the socket-backed
+// stream, whose unread branch pins the whole raw body in memory for as long as
+// the request graph stays reachable. See https://github.com/honojs/node-server/issues/347
+export const bodySharedBufferKey = Symbol('bodySharedBuffer')
+const bodySharedStreamsKey = Symbol('bodySharedStreams')
+const bodyReleasedKey = Symbol('bodyReleased')
+export const releaseSharedBody = Symbol('releaseSharedBody')
 
 const newBodyUnusableError = (): TypeError => {
   return new TypeError('Body is unusable')
@@ -266,6 +275,23 @@ const newBodyUnusableError = (): TypeError => {
 
 const rejectBodyUnusable = (): Promise<never> => {
   return Promise.reject(newBodyUnusableError())
+}
+
+const createBufferReplayStream = (
+  bufferPromise: Promise<Buffer>,
+  streams: Set<ReadableStream<Uint8Array>>
+): ReadableStream<Uint8Array> => {
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        enqueueBufferedBody(controller, await bufferPromise)
+      } catch (error) {
+        controller.error(error)
+      }
+    },
+  })
+  streams.add(stream)
+  return stream
 }
 
 const textDecoder = new TextDecoder()
@@ -549,6 +575,44 @@ const readBodyDirect = (request: Record<string | symbol, any>): Promise<Buffer> 
   return promise
 }
 
+// Read the body exactly once into the Buffer shared by the original request
+// and its clones. Cache the resolved Buffer for later direct reads of the
+// original request, unless the response already completed and the buffer
+// was released.
+const shareBodyBufferOnce = (request: Record<string | symbol, any>): Promise<Buffer> => {
+  if (!request[bodySharedBufferKey]) {
+    const raw = readRawBodyIfAvailable(request)
+    request[bodySharedBufferKey] = raw ? Promise.resolve(raw) : readBodyDirect(request)
+  }
+  const bufferPromise = request[bodySharedBufferKey] as Promise<Buffer>
+  bufferPromise.then(
+    (buffer) => {
+      if (!request[bodyReleasedKey]) {
+        request[bodyBufferKey] ||= buffer
+      }
+    },
+    () => {} // readers surface the error via their replay stream
+  )
+  return bufferPromise
+}
+
+const newReplayRequest = (
+  request: Record<string | symbol, any>,
+  method: string,
+  bufferPromise: Promise<Buffer>
+): Request => {
+  const replayStreams = (request[bodySharedStreamsKey] ??= new Set<ReadableStream<Uint8Array>>())
+  return new Request(
+    request[urlKey] as string,
+    {
+      method,
+      headers: request.headers,
+      signal: request[getAbortController]().signal,
+      body: createBufferReplayStream(bufferPromise, replayStreams),
+    } as RequestInit
+  )
+}
+
 const requestPrototype: Record<string | symbol, any> = {
   get method() {
     return this[methodKey]
@@ -578,6 +642,22 @@ const requestPrototype: Record<string | symbol, any> = {
       this[abortControllerKey].abort(this[abortReasonKey])
     }
     return this[abortControllerKey]
+  },
+
+  // Called by the listener when the response has completed: cancel replay
+  // streams nobody is reading and drop the shared body buffer, so a retained
+  // request no longer pins the raw body in memory. Locked streams (actively
+  // being read) are left alone and finish naturally.
+  [releaseSharedBody]() {
+    this[bodyReleasedKey] = true
+    for (const stream of this[bodySharedStreamsKey] ?? []) {
+      if (!stream.locked) {
+        stream.cancel().catch(() => {})
+      }
+    }
+    this[bodySharedStreamsKey] = undefined
+    this[bodySharedBufferKey] = undefined
+    this[bodyBufferKey] = undefined
   },
 
   [getRequestCache]() {
@@ -614,6 +694,10 @@ const requestPrototype: Record<string | symbol, any> = {
         })
       }
       return (this[requestCache] = req)
+    }
+
+    if (this[bodySharedBufferKey]) {
+      return (this[requestCache] = newReplayRequest(this, method, this[bodySharedBufferKey]))
     }
 
     return (this[requestCache] = newRequestFromIncoming(
@@ -673,18 +757,30 @@ Object.defineProperty(requestPrototype, 'signal', {
     },
   })
 })
-;['clone', 'formData'].forEach((k) => {
-  Object.defineProperty(requestPrototype, k, {
-    value: function () {
-      if (this[bodyConsumedDirectlyKey]) {
-        if (k === 'clone') {
-          throw newBodyUnusableError()
-        }
-        return rejectBodyUnusable()
-      }
-      return this[getRequestCache]()[k]()
-    },
-  })
+Object.defineProperty(requestPrototype, 'formData', {
+  value: function () {
+    if (this[bodyConsumedDirectlyKey]) {
+      return rejectBodyUnusable()
+    }
+    return this[getRequestCache]().formData()
+  },
+})
+Object.defineProperty(requestPrototype, 'clone', {
+  value: function (): Request {
+    if (this[bodyConsumedDirectlyKey]) {
+      throw newBodyUnusableError()
+    }
+    const method = this.method as string
+    if (method === 'GET' || method === 'HEAD' || method === 'TRACE') {
+      return this[getRequestCache]().clone()
+    }
+    // A cached native Request already owns the socket-backed body; its native
+    // clone() (tee) keeps the socket single-consumer.
+    if (this[requestCache]) {
+      return (this[requestCache] as Request).clone()
+    }
+    return newReplayRequest(this, method, shareBodyBufferOnce(this))
+  },
 })
 
 // Direct body reading for text/arrayBuffer/blob/json: bypass getRequestCache()

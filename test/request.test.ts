@@ -10,6 +10,7 @@ import {
   GlobalRequest,
   getAbortController,
   abortControllerKey,
+  releaseSharedBody,
   RequestError,
 } from '../src/request'
 
@@ -559,6 +560,72 @@ describe('Request', () => {
       const formData = await reqForFormData.formData()
       expect(formData.get('a')).toBe('1')
       expect(formData.get('b')).toBe('2')
+    })
+
+    it('should replay the buffered body to clones while leaving the original readable', async () => {
+      const socket = new Socket()
+      const incomingMessage = new IncomingMessage(socket)
+      incomingMessage.method = 'POST'
+      incomingMessage.headers = {
+        host: 'localhost',
+      }
+      incomingMessage.rawHeaders = ['host', 'localhost']
+      incomingMessage.url = '/foo.txt'
+      incomingMessage.push('foobar')
+      incomingMessage.push(null)
+      const req = newRequest(incomingMessage)
+
+      const clone1 = req.clone()
+      const clone2 = req.clone()
+      expect(req.bodyUsed).toBe(false)
+      await expect(clone1.text()).resolves.toBe('foobar')
+      await expect(clone2.text()).resolves.toBe('foobar')
+      // the clones replay the body instead of consuming it, so the original
+      // request stays readable
+      await expect(req.text()).resolves.toBe('foobar')
+    })
+
+    it('should cancel unread clones when the shared body buffer is released', async () => {
+      const socket = new Socket()
+      const incomingMessage = new IncomingMessage(socket)
+      incomingMessage.method = 'POST'
+      incomingMessage.headers = {
+        host: 'localhost',
+      }
+      incomingMessage.rawHeaders = ['host', 'localhost']
+      incomingMessage.url = '/foo.txt'
+      incomingMessage.push('foobar')
+      incomingMessage.push(null)
+      const req = newRequest(incomingMessage)
+
+      const clone = req.clone()
+      req[releaseSharedBody]()
+      // a clone nobody is reading no longer delivers — or pins — the body:
+      // canceling its replay stream marks it disturbed, like a native Request
+      // whose body stream was canceled
+      await expect(clone.text()).rejects.toThrow(TypeError)
+    })
+
+    it('should keep delivering to a clone that is being read when the shared body buffer is released', async () => {
+      const socket = new Socket()
+      const incomingMessage = new IncomingMessage(socket)
+      incomingMessage.method = 'POST'
+      incomingMessage.headers = {
+        host: 'localhost',
+      }
+      incomingMessage.rawHeaders = ['host', 'localhost']
+      incomingMessage.url = '/foo.txt'
+      incomingMessage.push('foobar')
+      incomingMessage.push(null)
+      const req = newRequest(incomingMessage)
+
+      const clone = req.clone()
+      const reader = clone.body!.getReader()
+      req[releaseSharedBody]()
+      const { done, value } = await reader.read()
+      expect(done).toBe(false)
+      expect(Buffer.from(value as Uint8Array).toString()).toBe('foobar')
+      await expect(reader.read()).resolves.toMatchObject({ done: true })
     })
 
     it('should reject direct body read when incoming stream has already been consumed', async () => {

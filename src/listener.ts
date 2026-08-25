@@ -5,6 +5,8 @@ import type { Writable } from 'node:stream'
 import type { IncomingMessageWithWrapBodyStream } from './request'
 import {
   abortRequest,
+  bodySharedBufferKey,
+  releaseSharedBody,
   newRequest,
   recordBodyBufferedBeforeDisconnect,
   Request as LightweightRequest,
@@ -99,6 +101,8 @@ const makeCloseHandler =
     needsBodyCleanup: boolean
   ): (() => void) =>
   () => {
+    // The response is over: release clone-shared body buffers.
+    req[releaseSharedBody]()
     if (incoming.errored) {
       recordBodyBufferedBeforeDisconnect(incoming)
       req[abortRequest](incoming.errored.toString())
@@ -431,6 +435,16 @@ export const getRequestListener = (
         // Synchronous cacheable response — no close listener needed.
         // No I/O events can fire between fetchCallback returning and responseViaCache
         // completing, so abort detection is not needed here.
+        // Release the clone-shared body buffer once the response completes, but
+        // only when there is one: the fast path must stay free of close
+        // listeners otherwise. Hook 'close' rather than 'finish' so the buffer
+        // is also released when the client disconnects before the response is
+        // flushed.
+        if (req[bodySharedBufferKey]) {
+          outgoing.once('close', () => {
+            req[releaseSharedBody]()
+          })
+        }
         if (needsBodyCleanup && !incoming.readableEnded) {
           // Handler returned without consuming the body; drain after the
           // response is flushed so the socket is freed gracefully (avoids

@@ -9,7 +9,12 @@ import { createServer as createHttp2Server } from 'node:http2'
 import { createServer as createHTTPSServer } from 'node:https'
 import { gunzipSync, inflateSync } from 'node:zlib'
 import { GlobalHeaders } from '../src/headers'
-import { GlobalRequest, Request as LightweightRequest, getAbortController } from '../src/request'
+import {
+  GlobalRequest,
+  Request as LightweightRequest,
+  getAbortController,
+  bodySharedBufferKey,
+} from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 import { createAdaptorServer, serve } from '../src/server'
 import type { HttpBindings, ServerType } from '../src/types'
@@ -1230,6 +1235,64 @@ describe('Memory leak test', () => {
     await resPromise
     await new Promise((resolve) => setTimeout(resolve, 10))
 
+    global.gc?.()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(counter).toBe(0)
+  })
+})
+
+describe('Memory leak test - cloned request body', () => {
+  let counter = 0
+  const registry = new FinalizationRegistry(() => {
+    counter--
+  })
+  // Simulates production retention (logger/tracing contexts) that outlives the
+  // response.
+  const retained: Request[] = []
+  let responseClosed: Promise<void> | undefined
+  const server = createAdaptorServer({
+    fetch: async (req, { outgoing }) => {
+      counter++
+      retained.push(req)
+      const clone = req.clone()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      registry.register(await (req as any)[bodySharedBufferKey], 'bodyBuffer')
+      const { data } = (await clone.json()) as { data: string }
+      responseClosed = new Promise((resolve) => {
+        outgoing.once('close', () => setTimeout(resolve))
+      })
+      return new Response(String(data.length))
+    },
+  })
+
+  beforeAll(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(0, '127.0.0.1', resolve)
+      })
+  )
+
+  afterAll(() => {
+    server.close()
+  })
+
+  it('Should not have memory leak - cloned and retained request body', async () => {
+    const res = await requestServer(server, {
+      method: 'POST',
+      path: '/',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ data: 'x'.repeat(1024) }),
+    })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('1024')
+    expect(retained.length).toBe(1)
+
+    // The response has completed and the shared body buffer was released, so
+    // it must be collectable even though the request is still retained.
+    await responseClosed
+    global.gc?.()
+    await new Promise((resolve) => setTimeout(resolve, 10))
     global.gc?.()
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(counter).toBe(0)
