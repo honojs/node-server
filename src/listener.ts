@@ -11,7 +11,12 @@ import {
   wrapBodyStream,
   toRequestError,
 } from './request'
-import { defaultContentType, cacheKey, Response as LightweightResponse } from './response'
+import {
+  defaultContentType,
+  cacheKey,
+  consumeSharedBody,
+  Response as LightweightResponse,
+} from './response'
 import type { InternalCache } from './response'
 import type { CustomErrorHandler, FetchCallback, HttpBindings } from './types'
 import {
@@ -169,6 +174,9 @@ const responseViaCache = async (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
 ): Promise<undefined | void> => {
+  if (!consumeSharedBody(res)) {
+    return responseViaResponseObject(res, outgoing)
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let [status, body, header] = (res as any)[cacheKey] as InternalCache
 
