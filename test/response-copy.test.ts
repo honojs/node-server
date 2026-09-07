@@ -15,6 +15,29 @@ const light = (body: BodyInit | null, init?: ResponseInit) =>
   new LightweightResponse(body, init) as unknown as Response
 
 describe('Response header copies', () => {
+  it('matches the rebuild path content type before and after header observation', () => {
+    const initializers: (ResponseInit | undefined)[] = [
+      undefined,
+      {},
+      { headers: {} },
+      { headers: { 'x-before': 'yes' } },
+      { headers: { 'content-type': 'text/custom' } },
+    ]
+    for (const init of initializers) {
+      for (const observeHeaders of [false, true]) {
+        const original = light('value', init)
+        const control = light('value', init)
+        if (observeHeaders) {
+          void original.headers
+          void control.headers
+        }
+        const expected = new GlobalResponse(control.body, control)
+        const replacement = copy(original)!
+        expect([...replacement.headers]).toEqual([...expected.headers])
+      }
+    }
+  })
+
   it('preserves saved response state after real HTTP writes', async () => {
     const states = []
     for (const optimized of [false, true]) {
