@@ -130,6 +130,43 @@ describe('Basic', () => {
     const res = await requestServer(server, { method: 'TRACE', path: '/' })
     expect(await res.text()).toBe('headers: {}')
   })
+
+  it.each([
+    { name: 'string', body: 'hello', expectedLen: '5' },
+    { name: 'Uint8Array', body: new Uint8Array([104, 105]), expectedLen: '2' },
+    { name: 'Blob', body: new Blob(['blob-test']), expectedLen: '9' },
+  ])(
+    'Should not mutate caller header object when setting Content-Length with $name body',
+    async ({ body, expectedLen }) => {
+      const customHeaders: Record<string, string> = { 'x-custom': 'val' }
+      const testApp = new Hono()
+      testApp.get('/test', () => new Response(body, { headers: customHeaders }))
+      const testServer = createAdaptorServer(testApp)
+
+      const res1 = await requestServer(testServer, { method: 'GET', path: '/test' })
+      expect(res1.status).toBe(200)
+      expect(res1.headers.get('content-length')).toBe(expectedLen)
+      expect(customHeaders).toEqual({ 'x-custom': 'val' })
+      expect('Content-Length' in customHeaders).toBe(false)
+
+      const res2 = await requestServer(testServer, { method: 'GET', path: '/test' })
+      expect(res2.status).toBe(200)
+      expect(res2.headers.get('content-length')).toBe(expectedLen)
+      expect('Content-Length' in customHeaders).toBe(false)
+    }
+  )
+
+  it('Should handle Object.freeze headers without error', async () => {
+    const frozenHeaders = Object.freeze({ 'x-frozen': 'true' })
+    const testApp = new Hono()
+    testApp.get('/frozen', () => new Response('frozen', { headers: frozenHeaders }))
+    const testServer = createAdaptorServer(testApp)
+
+    const res = await requestServer(testServer, { method: 'GET', path: '/frozen' })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('frozen')
+    expect(res.headers.get('content-length')).toBe('6')
+  })
 })
 
 describe('various response body types', () => {

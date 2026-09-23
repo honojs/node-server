@@ -226,12 +226,20 @@ const responseViaCache = async (
 
   // in `responseViaCache`, if body is not stream, Transfer-Encoding is considered not chunked
   if (!hasContentLength) {
+    let contentLength: number | undefined
     if (typeof body === 'string') {
-      header['Content-Length'] = Buffer.byteLength(body)
+      contentLength = Buffer.byteLength(body)
     } else if (body instanceof Uint8Array) {
-      header['Content-Length'] = body.byteLength
+      contentLength = body.byteLength
     } else if (body instanceof Blob) {
-      header['Content-Length'] = body.size
+      contentLength = body.size
+    }
+
+    if (contentLength !== undefined) {
+      header = {
+        ...header,
+        'Content-Length': contentLength,
+      }
     }
   }
 
