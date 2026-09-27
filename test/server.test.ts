@@ -132,6 +132,55 @@ describe('Basic', () => {
   })
 })
 
+describe.each([
+  { protocol: 'HTTP/1.1', serverOptions: {}, request: requestServer },
+  {
+    protocol: 'HTTP/2',
+    serverOptions: { createServer: createHttp2Server },
+    request: requestServerHttp2,
+  },
+])('Caller-owned response headers over $protocol', ({ serverOptions, request }) => {
+  it('should allow reusing the headers passed to c.body()', async () => {
+    const headers = { 'content-type': 'text/plain' }
+    const testApp = new Hono()
+    testApp.get('/', (c) => c.body(new Uint8Array([104, 105]), 200, headers))
+    const server = createAdaptorServer({ fetch: testApp.fetch, ...serverOptions })
+
+    for (let i = 0; i < 2; i++) {
+      const res = await request(server, { method: 'GET', path: '/' })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('hi')
+      expect(headers).toEqual({ 'content-type': 'text/plain' })
+    }
+  })
+
+  describe.each([false, true])('frozen headers: %s', (frozen) => {
+    it.each([
+      { name: 'string', makeBody: (text: string) => text },
+      { name: 'Uint8Array', makeBody: (text: string) => new TextEncoder().encode(text) },
+      { name: 'Blob', makeBody: (text: string) => new Blob([text]) },
+    ])('should preserve shared headers with a $name body', async ({ makeBody }) => {
+      const headers = { 'content-type': 'text/plain' }
+      if (frozen) {
+        Object.freeze(headers)
+      }
+      const bodies = ['hi', 'hello', '']
+      let index = 0
+      const testApp = new Hono()
+      testApp.get('/', () => new Response(makeBody(bodies[index++]), { headers }))
+      const server = createAdaptorServer({ fetch: testApp.fetch, ...serverOptions })
+
+      for (const body of bodies) {
+        const res = await request(server, { method: 'GET', path: '/' })
+        expect(res.status).toBe(200)
+        expect(res.headers.get('content-length')).toBe(String(Buffer.byteLength(body)))
+        expect(await res.text()).toBe(body)
+        expect(headers).toEqual({ 'content-type': 'text/plain' })
+      }
+    })
+  })
+})
+
 describe('various response body types', () => {
   const runner = (Response: typeof GlobalResponse) => {
     const largeText = 'a'.repeat(1024 * 1024 * 10)

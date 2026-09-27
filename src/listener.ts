@@ -30,6 +30,11 @@ type OutgoingHasOutgoingEnded = Http2ServerResponse & {
 type IncomingHasDrainState = (IncomingMessage | Http2ServerRequest) & {
   [incomingDraining]?: boolean
 }
+type Http1ResponseWithContentLength = ServerResponse & {
+  _contentLength: number | null
+  _hasBody: boolean
+  _removedContLen: boolean
+}
 
 const DRAIN_TIMEOUT_MS = 500
 const MAX_DRAIN_BYTES = 64 * 1024 * 1024
@@ -165,6 +170,48 @@ const flushHeaders = (outgoing: ServerResponse | Http2ServerResponse) => {
   }
 }
 
+// Node's HTTP/1 serializer can add Content-Length without adding a header field.
+// These private fields are covered by compatibility tests in CI. Fall back
+// when automatic insertion would omit the header or preserve a framing header.
+const trySetContentLength = (
+  outgoing: ServerResponse | Http2ServerResponse,
+  status: number,
+  length: number
+): boolean => {
+  const http1 = outgoing as Http1ResponseWithContentLength
+  if (
+    http1._contentLength === null &&
+    http1._hasBody &&
+    http1.useChunkedEncodingByDefault &&
+    !http1._removedContLen &&
+    status >= 200 &&
+    status !== 204 &&
+    status !== 304 &&
+    !outgoing.hasHeader('content-length') &&
+    !outgoing.hasHeader('transfer-encoding') &&
+    !outgoing.hasHeader('trailer')
+  ) {
+    http1._contentLength = length
+    return true
+  }
+  return false
+}
+
+const writeDefaultHeaders = (
+  outgoing: ServerResponse | Http2ServerResponse,
+  status: number,
+  length: number
+): void => {
+  if (trySetContentLength(outgoing, status, length)) {
+    outgoing.writeHead(status, { 'Content-Type': defaultContentType })
+  } else {
+    outgoing.writeHead(status, {
+      'Content-Type': defaultContentType,
+      'Content-Length': length,
+    })
+  }
+}
+
 const responseViaCache = async (
   res: Response,
   outgoing: ServerResponse | Http2ServerResponse
@@ -172,29 +219,19 @@ const responseViaCache = async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let [status, body, header] = (res as any)[cacheKey] as InternalCache
 
-  // Fast path: no custom headers — create the final header object in one shot
-  // (avoids shape transitions from mutating a single-key object).
+  // Fast path: no custom headers. Let Node add the length when possible.
   if (!header) {
     if (body === null) {
       outgoing.writeHead(status)
       outgoing.end()
     } else if (typeof body === 'string') {
-      outgoing.writeHead(status, {
-        'Content-Type': defaultContentType,
-        'Content-Length': Buffer.byteLength(body),
-      })
+      writeDefaultHeaders(outgoing, status, Buffer.byteLength(body))
       outgoing.end(body)
     } else if (body instanceof Uint8Array) {
-      outgoing.writeHead(status, {
-        'Content-Type': defaultContentType,
-        'Content-Length': body.byteLength,
-      })
+      writeDefaultHeaders(outgoing, status, body.byteLength)
       outgoing.end(body)
     } else if (body instanceof Blob) {
-      outgoing.writeHead(status, {
-        'Content-Type': defaultContentType,
-        'Content-Length': body.size,
-      })
+      writeDefaultHeaders(outgoing, status, body.size)
       outgoing.end(new Uint8Array(await body.arrayBuffer()))
     } else {
       outgoing.writeHead(status, { 'Content-Type': defaultContentType })
@@ -208,6 +245,8 @@ const responseViaCache = async (
   }
 
   let hasContentLength = false
+  let plainHeaders = false
+  let canAutoLength = true
   if (header instanceof Headers) {
     hasContentLength = header.has('content-length')
     header = buildOutgoingHttpHeaders(header, body === null ? undefined : defaultContentType)
@@ -216,22 +255,39 @@ const responseViaCache = async (
     hasContentLength = headerObj.has('content-length')
     header = buildOutgoingHttpHeaders(headerObj, body === null ? undefined : defaultContentType)
   } else {
+    plainHeaders = true
     for (const key in header) {
       if (key.length === 14 && key.toLowerCase() === 'content-length') {
         hasContentLength = true
         break
+      }
+      if (
+        (key.length === 17 && key.toLowerCase() === 'transfer-encoding') ||
+        (key.length === 7 && key.toLowerCase() === 'trailer')
+      ) {
+        canAutoLength = false
       }
     }
   }
 
   // in `responseViaCache`, if body is not stream, Transfer-Encoding is considered not chunked
   if (!hasContentLength) {
+    let length: number | undefined
     if (typeof body === 'string') {
-      header['Content-Length'] = Buffer.byteLength(body)
+      length = Buffer.byteLength(body)
     } else if (body instanceof Uint8Array) {
-      header['Content-Length'] = body.byteLength
+      length = body.byteLength
     } else if (body instanceof Blob) {
-      header['Content-Length'] = body.size
+      length = body.size
+    }
+    if (
+      length !== undefined &&
+      (!plainHeaders || !canAutoLength || !trySetContentLength(outgoing, status, length))
+    ) {
+      if (plainHeaders) {
+        header = { ...header }
+      }
+      header['Content-Length'] = length
     }
   }
 
