@@ -24,8 +24,8 @@ importers:
         specifier: ^9.10.0
         version: 9.39.4
       hono:
-        specifier: ^4.12.8
-        version: 4.12.8
+        specifier: ^4.13.9
+        version: 4.13.9
       np:
         specifier: ^11.2.1
         version: 11.2.1(@types/node@20.19.37)(typescript@5.9.3)
@@ -52,7 +52,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^2.1.0
-        version: 2.1.0(hono@4.12.8)
+        version: 2.1.0(hono@4.13.9)
       srvx:
         specifier: ^0.12.5
         version: 0.12.5
@@ -1536,8 +1536,8 @@ packages:
     resolution: {integrity: sha512-CsNUt5x9LUdx6hnk/E2SZLsDyvfqANZSUq4+D3D8RzDJ2M+HDTIkF60ibS1vHaK55vzgiZw1bEPFG9yH7l33wA==}
     engines: {node: '>=12'}
 
-  hono@4.12.8:
-    resolution: {integrity: sha512-VJCEvtrezO1IAR+kqEYnxUOoStaQPGrCmX3j4wDTNOcD1uRPFpGlwQUIW8niPuvHXaTUxeOUl5MMDGrl+tmO9A==}
+  hono@4.13.9:
+    resolution: {integrity: sha512-7dMkQmZoC4E6F7AtaQSPhlWAdnBti+j7rreMZl8QB4jFiEhP9TWbGWUMi8WYzBCgmgulxuvLQupKqo+Co6Omyg==}
     engines: {node: '>=16.9.0'}
 
   hookable@6.1.0:
@@ -2899,9 +2899,9 @@ snapshots:
       - eslint-plugin-import
       - supports-color
 
-  '@hono/node-server@2.1.0(hono@4.12.8)':
+  '@hono/node-server@2.1.0(hono@4.13.9)':
     dependencies:
-      hono: 4.12.8
+      hono: 4.13.9
 
   '@humanfs/core@0.19.1': {}
 
@@ -4110,7 +4110,7 @@ snapshots:
 
   has-flag@5.0.1: {}
 
-  hono@4.12.8: {}
+  hono@4.13.9: {}
 
   hookable@6.1.0: {}
 

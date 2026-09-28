@@ -2,7 +2,7 @@
 
 Compare the original caller-header mutation, a copy of plain header records, and
 an HTTP/1 `_contentLength` candidate with compatibility guards. Dependencies are
-resolved from the repository's unchanged frozen lockfile (currently Hono 4.12.8).
+resolved from the repository's frozen lockfile (currently Hono 4.13.9).
 The harness records the installed Hono version without requiring a particular
 release.
 
@@ -59,7 +59,7 @@ Each mode defaults to five rounds and rotates variant order. `BENCH_ROUNDS` and
 JSON with seven additional headers, and `c.text()` with no custom headers as
 controls. Pipeline and HTTP results record the actual header representation
 before timing, without materializing `response.headers`. Ordinary `c.json()`
-uses `Headers` in Hono 4.12.8 and a plain record in 4.13.8, so these versions
+uses `Headers` in Hono 4.12.8 and a plain record in 4.13.8/4.13.9, so these versions
 exercise different adapter paths. The `micro` cases exercise plain records
 directly, independently of Hono's response construction. Summaries separate
 results by Hono version and recorded header representation.
