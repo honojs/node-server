@@ -1,4 +1,5 @@
-import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:http'
+import { ServerResponse } from 'node:http'
+import type { IncomingMessage, OutgoingHttpHeaders } from 'node:http'
 import { Http2ServerRequest, constants as h2constants } from 'node:http2'
 import type { Http2ServerResponse } from 'node:http2'
 import type { Writable } from 'node:stream'
@@ -155,6 +156,10 @@ const handleResponseError = (e: unknown, outgoing: ServerResponse | Http2ServerR
   } else {
     console.error(e)
     if (!outgoing.headersSent) {
+      if (outgoing instanceof ServerResponse) {
+        // writeHead() may have failed after the fast path set the original body's length.
+        ;(outgoing as Http1ResponseWithContentLength)._contentLength = null
+      }
       outgoing.writeHead(500, { 'Content-Type': 'text/plain' })
     }
     outgoing.end(`Error: ${err.message}`)

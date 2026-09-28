@@ -1,7 +1,10 @@
 import { Hono } from 'hono'
+import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer as createHttp2Server } from 'node:http2'
+import { connect as connectNet } from 'node:net'
+import type { AddressInfo } from 'node:net'
 import { getRequestListener } from '../src/listener'
 import { defaultContentType } from '../src/response'
 import { createAdaptorServer } from '../src/server'
@@ -192,5 +195,54 @@ describe('automatic Content-Length compatibility', () => {
     const res = await requestServer(server, { path: '/' })
     expect(res.headers.get('content-length')).toBe('00005')
     expect(await res.text()).toBe('hello')
+  })
+
+  it.each([
+    {
+      name: 'an invalid header value',
+      response: () => new Response('hi', { headers: { 'x-bad': 'a\r\nb' } }),
+    },
+    {
+      name: 'an invalid status code with custom headers',
+      response: () => new Response('hi', { status: 1000, headers: { 'x-ok': '1' } }),
+    },
+    {
+      name: 'an invalid status code without custom headers',
+      response: () => new Response('hi', { status: 1000 }),
+    },
+  ])('does not leak a stale length into the 500 response after $name', async ({ response }) => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const server = createServer(getRequestListener(async () => response()))
+    try {
+      server.listen(0, '127.0.0.1')
+      await once(server, 'listening')
+      const { port } = server.address() as AddressInfo
+      // Read the wire response so a stale length cannot truncate the observed body.
+      const raw = await new Promise<string>((resolve, reject) => {
+        const chunks: Buffer[] = []
+        const socket = connectNet(port, '127.0.0.1', () => {
+          socket.write('GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n')
+        })
+        socket.setTimeout(2000, () => socket.destroy(new Error('Response timed out')))
+        socket.on('data', (chunk) => chunks.push(chunk))
+        socket.on('end', () => resolve(Buffer.concat(chunks).toString('latin1')))
+        socket.on('error', reject)
+      })
+      const separator = raw.indexOf('\r\n\r\n')
+      expect(separator).toBeGreaterThan(0)
+      const head = raw.slice(0, separator)
+      const body = raw.slice(separator + 4)
+      expect(head).toMatch(/^HTTP\/1\.1 500 /)
+      expect(body).toContain('Error: ')
+      const contentLength = head.match(/^content-length: (\d+)$/im)?.[1]
+      if (contentLength !== undefined) {
+        expect(Number(contentLength)).toBe(Buffer.byteLength(body, 'latin1'))
+      } else {
+        expect(head).toMatch(/^transfer-encoding: chunked$/im)
+      }
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      consoleSpy.mockRestore()
+    }
   })
 })
