@@ -315,7 +315,7 @@ describe('Request', () => {
       await closed
 
       const req = newRequest(incomingMessage)
-      expect(() => req.body).toThrow(TypeError)
+      await expect(async () => new Response(req.body).text()).rejects.toThrow()
     })
 
     it('should reject with the underlying error when a complete stream was destroyed with an application error', async () => {
