@@ -29,6 +29,16 @@
         "default": "./dist/serve-static.cjs"
       }
     },
+    "./send-file": {
+      "import": {
+        "types": "./dist/send-file.d.mts",
+        "default": "./dist/send-file.mjs"
+      },
+      "require": {
+        "types": "./dist/send-file.d.cts",
+        "default": "./dist/send-file.cjs"
+      }
+    },
     "./utils/*": {
       "import": {
         "types": "./dist/utils/*.d.mts",
@@ -67,6 +77,9 @@
       ],
       "serve-static": [
         "./dist/serve-static.d.mts"
+      ],
+      "send-file": [
+        "./dist/send-file.d.mts"
       ],
       "utils/*": [
         "./dist/utils/*.d.mts"
