@@ -226,6 +226,17 @@ Notice that `root` here is not relative to `src/index.ts`, rather to `my-hono-pr
 
 ### Options
 
+#### `allowPercentInPath`
+
+By default, `serveStatic` skips request paths that still contain `%` after routing. This prevents a second decoding step from serving a file under a different path than the one checked by route middleware. Set `allowPercentInPath: true` to keep the previous behavior when serving files whose names contain percent signs.
+
+If you restrict access to only some paths under `root` (for example, `/static/admin/*`), enabling this option may let requests bypass those restrictions. Apply access control to the same route pattern as `serveStatic` (for example, `/static/*`), before the static middleware:
+
+```ts
+app.use('/static/*', authMiddleware)
+app.use('/static/*', serveStatic({ root: './static', allowPercentInPath: true }))
+```
+
 #### `rewriteRequestPath`
 
 If you want to serve files in `./.foojs` with the request path `/__foo/*`, you can write like the following.

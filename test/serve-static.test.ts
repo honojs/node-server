@@ -1,5 +1,14 @@
 import { Hono } from 'hono'
-import { chmodSync, rmSync, statSync, symlinkSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
@@ -583,6 +592,148 @@ describe('Serve Static Middleware', () => {
       expect(res4.status).toBe(404)
       expect(res4.headers.get('x-authorized')).toBeNull()
       expect(await res4.text()).not.toBe('secret')
+    })
+  })
+
+  describe('Percent signs in request paths', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'node-server-serve-static-'))
+    const staticRoot = path.join(root, 'static')
+    for (const filePath of [
+      '100%.txt',
+      '100%/hello.txt',
+      '%2Fadmin/secret.txt',
+      'hello world.txt',
+      '炎.txt',
+    ]) {
+      const fullPath = path.join(staticRoot, filePath)
+      mkdirSync(path.dirname(fullPath), { recursive: true })
+      writeFileSync(fullPath, `Hello in static/${filePath}`)
+    }
+
+    afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+    it.each([
+      ['/static/%E7%82%8E.txt', 'static/炎.txt'],
+      ['/static/hello%20world.txt', 'static/hello world.txt'],
+    ])('Should decode URI strings - %s', async (url, filePath) => {
+      const fileApp = new Hono().use('/static/*', serveStatic({ root }))
+      const res = await requestServer(createAdaptorServer(fileApp), {
+        method: 'GET',
+        path: url,
+      })
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toMatch(/^text\/plain/)
+      expect(await res.text()).toBe(`Hello in ${filePath}`)
+    })
+
+    it.each(['/static/100%25.txt', '/static/100%25/hello.txt', '/static/%2Fadmin/secret.txt'])(
+      'Should skip paths containing percent signs by default - %s',
+      async (url) => {
+        const onNotFound = vi.fn()
+        const rewriteRequestPath = vi.fn((filePath: string) => filePath)
+        const fileApp = new Hono().use(
+          '/static/*',
+          serveStatic({ root, onNotFound, rewriteRequestPath })
+        )
+
+        const res = await requestServer(createAdaptorServer(fileApp), { method: 'GET', path: url })
+
+        expect(res.status).toBe(404)
+        expect(rewriteRequestPath).not.toHaveBeenCalled()
+        expect(onNotFound).toHaveBeenCalledWith(url, expect.anything())
+      }
+    )
+
+    it.each([
+      ['/static/100%25.txt', 'static/100%.txt'],
+      ['/static/100%25/hello.txt', 'static/100%/hello.txt'],
+      ['/static/%2Fadmin/secret.txt', 'static/%2Fadmin/secret.txt'],
+    ])('Should allow percent signs when opted in - %s', async (url, filePath) => {
+      const fileApp = new Hono().use('/static/*', serveStatic({ root, allowPercentInPath: true }))
+
+      const res = await requestServer(createAdaptorServer(fileApp), { method: 'GET', path: url })
+
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe(`Hello in ${filePath}`)
+    })
+
+    it('Should not bypass authentication through a second decode', async () => {
+      const protectedApp = new Hono()
+      const rewriteRequestPath = vi.fn((filePath: string) => filePath)
+      protectedApp.use('/static/admin/*', async (c) => c.text('Unauthorized', 401))
+      protectedApp.use('/static/*', serveStatic({ root: './test/assets', rewriteRequestPath }))
+      const protectedServer = createAdaptorServer(protectedApp)
+
+      for (const url of ['/static/admin/secret.txt', '/static/%61dmin/secret.txt']) {
+        const protectedRes = await requestServer(protectedServer, { method: 'GET', path: url })
+        expect(protectedRes.status).toBe(401)
+        expect(await protectedRes.text()).toBe('Unauthorized')
+      }
+
+      const res = await requestServer(protectedServer, {
+        method: 'GET',
+        path: '/static/%%36%31dmin/secret.txt',
+      })
+      expect(res.status).toBe(404)
+      expect(rewriteRequestPath).not.toHaveBeenCalled()
+      expect(await res.text()).not.toBe('secret')
+    })
+
+    it('Should pass the routed path and context to onNotFound, then continue', async () => {
+      const fileApp = new Hono()
+      let hookPath: string | undefined
+      let contextPath: string | undefined
+      fileApp.use(
+        '/static/*',
+        serveStatic({
+          root,
+          onNotFound: (requestPath, c) => {
+            hookPath = requestPath
+            contextPath = c.req.path
+          },
+        })
+      )
+      fileApp.get('/static/*', (c) => c.text('next handler', 202))
+
+      const res = await requestServer(createAdaptorServer(fileApp), {
+        method: 'GET',
+        path: '/static/100%25.txt',
+      })
+      expect(res.status).toBe(202)
+      expect(await res.text()).toBe('next handler')
+      expect(hookPath).toBe('/static/100%25.txt')
+      expect(contextPath).toBe(hookPath)
+    })
+
+    it.each(['/static/%2e%2e%5C100%.txt', '/static//100%.txt', '/static/%5C100%.txt'])(
+      'Should retain path validation when opted in: %s',
+      async (requestPath) => {
+        const fileApp = new Hono()
+        const rewriteRequestPath = vi.fn((requestPath: string) => requestPath)
+        const onNotFound = vi.fn()
+        fileApp.use(
+          '/static/*',
+          serveStatic({ root, allowPercentInPath: true, rewriteRequestPath, onNotFound })
+        )
+        const res = await requestServer(createAdaptorServer(fileApp), {
+          method: 'GET',
+          path: requestPath,
+        })
+        expect(res.status).toBe(404)
+        expect(rewriteRequestPath).not.toHaveBeenCalled()
+        expect(onNotFound).toHaveBeenCalledOnce()
+      }
+    )
+
+    it('Should preserve the fixed path option for percent filenames', async () => {
+      const fileApp = new Hono()
+      fileApp.use('/static/*', serveStatic({ root, path: 'static/100%.txt' }))
+      const res = await requestServer(createAdaptorServer(fileApp), {
+        method: 'GET',
+        path: '/static/100%25.txt',
+      })
+      expect(res.status).toBe(200)
+      expect(await res.text()).toBe('Hello in static/100%.txt')
     })
   })
 
