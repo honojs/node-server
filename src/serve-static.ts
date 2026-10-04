@@ -122,6 +122,10 @@ export const serveStatic = <E extends Env = any>(
       return next()
     }
 
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      return next()
+    }
+
     let filename: string
 
     if (optionPath) {
@@ -195,7 +199,7 @@ export const serveStatic = <E extends Env = any>(
     const range = c.req.header('range') || ''
     c.header('Last-Modified', stats.mtime.toUTCString())
 
-    if (c.req.method == 'HEAD' || c.req.method == 'OPTIONS') {
+    if (c.req.method === 'HEAD') {
       c.header('Content-Length', size.toString())
       c.status(200)
       result = c.body(null)
