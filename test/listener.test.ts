@@ -1,6 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import {
+  connect as http2Connect,
+  constants as http2Constants,
+  createServer as createHttp2Server,
+} from 'node:http2'
+import type { AddressInfo } from 'node:net'
 import { Readable } from 'node:stream'
 import { GlobalHeaders } from '../src/headers'
 import { getRequestListener } from '../src/listener'
@@ -405,6 +411,49 @@ describe('Abort request', () => {
     })
     await expect(req).rejects.toThrow()
   })
+
+  it.each(['stream', 'session'] as const)(
+    'should emit an abort event when an HTTP/2 client closes the %s',
+    async (target) => {
+      let resolveReady!: () => void
+      const ready = new Promise<void>((r) => {
+        resolveReady = r
+      })
+      let resolveAborted!: (req: Request) => void
+      const aborted = new Promise<Request>((r) => {
+        resolveAborted = r
+      })
+
+      const server = createHttp2Server(
+        getRequestListener(async (req: Request) => {
+          req.signal.addEventListener('abort', () => resolveAborted(req))
+          resolveReady()
+          await new Promise(() => {}) // never resolve
+        })
+      )
+      await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+      const { port } = server.address() as AddressInfo
+      const client = http2Connect(`http://127.0.0.1:${port}`)
+
+      try {
+        const stream = client.request({ ':path': '/abort' })
+        stream.on('error', () => {})
+        await withTimeout(ready, 'request did not reach the handler')
+
+        if (target === 'stream') {
+          stream.close(http2Constants.NGHTTP2_CANCEL)
+        } else {
+          client.destroy()
+        }
+
+        const req = await withTimeout(aborted, 'abort signal did not fire')
+        expect(req.signal.aborted).toBe(true)
+      } finally {
+        client.destroy()
+        await new Promise<void>((r) => server.close(() => r()))
+      }
+    }
+  )
 })
 
 describe('Abort request - error path', () => {

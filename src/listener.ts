@@ -108,7 +108,12 @@ const makeCloseHandler =
     if (incoming.errored) {
       recordBodyBufferedBeforeDisconnect(incoming)
       req[abortRequest](incoming.errored.toString())
-    } else if (!outgoing.writableFinished) {
+    } else if (
+      !outgoing.writableFinished ||
+      // An HTTP/2 response reports writableFinished once its stream is destroyed, including
+      // when the client resets the stream mid-response. `aborted` is only set in that case.
+      (incoming instanceof Http2ServerRequest && incoming.aborted)
+    ) {
       recordBodyBufferedBeforeDisconnect(incoming)
       req[abortRequest]('Client connection prematurely closed.')
     }
