@@ -224,6 +224,8 @@ app.use('/static/*', serveStatic({ root: './static' }))
 
 Notice that `root` here is not relative to `src/index.ts`, rather to `my-hono-project`.
 
+Only `GET` and `HEAD` requests are served. Requests with other methods are passed to the next middleware.
+
 ### Options
 
 #### `allowPercentInPath`

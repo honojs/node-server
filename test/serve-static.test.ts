@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
+import type * as fs from 'node:fs'
 import {
   chmodSync,
+  createReadStream,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -13,6 +15,15 @@ import path from 'node:path'
 import { serveStatic } from './../src/serve-static'
 import { createAdaptorServer } from './../src/server'
 import { requestServer } from './helpers/request'
+
+vi.mock('node:fs', async (importOriginal) => {
+  const originalFs = await importOriginal<typeof fs>()
+  return {
+    ...originalFs,
+    statSync: vi.fn(originalFs.statSync),
+    createReadStream: vi.fn(originalFs.createReadStream),
+  }
+})
 
 describe('Serve Static Middleware', () => {
   const app = new Hono<{
@@ -75,6 +86,52 @@ describe('Serve Static Middleware', () => {
   )
 
   const server = createAdaptorServer(app)
+
+  describe('HTTP methods', () => {
+    beforeEach(() => {
+      vi.mocked(statSync).mockClear()
+      vi.mocked(createReadStream).mockClear()
+    })
+
+    it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'PROPFIND'])(
+      'Should pass %s requests to the next handler without accessing files',
+      async (method) => {
+        const rewriteRequestPath = vi.fn((path: string) => path)
+        const onFound = vi.fn()
+        const onNotFound = vi.fn()
+        const app = new Hono().use(
+          '/static/*',
+          serveStatic({ root: './test/assets', rewriteRequestPath, onFound, onNotFound })
+        )
+        app.on(method, '/static/plain.txt', (c) => c.text('Handled downstream', 202))
+
+        const res = await requestServer(createAdaptorServer(app), {
+          method,
+          path: '/static/plain.txt',
+        })
+
+        expect(res.status).toBe(202)
+        expect(await res.text()).toBe('Handled downstream')
+        expect(rewriteRequestPath).not.toHaveBeenCalled()
+        expect(statSync).not.toHaveBeenCalled()
+        expect(createReadStream).not.toHaveBeenCalled()
+        expect(onFound).not.toHaveBeenCalled()
+        expect(onNotFound).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each(['/static/plain.txt', '/static/does-not-exist.html'])(
+      'Should return 404 for an unhandled POST request regardless of file existence - %s',
+      async (path) => {
+        const res = await requestServer(server, { method: 'POST', path })
+
+        expect(res.status).toBe(404)
+        expect(await res.text()).toBe('404 Not Found')
+        expect(statSync).not.toHaveBeenCalled()
+        expect(createReadStream).not.toHaveBeenCalled()
+      }
+    )
+  })
 
   it('Should return index.html', async () => {
     const res = await requestServer(server, { method: 'GET', path: '/static/' })
