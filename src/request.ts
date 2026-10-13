@@ -660,6 +660,7 @@ Object.defineProperty(requestPrototype, 'signal', {
   'cache',
   'credentials',
   'destination',
+  'duplex',
   'integrity',
   'mode',
   'redirect',

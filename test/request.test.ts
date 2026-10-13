@@ -34,6 +34,7 @@ describe('Request', () => {
       expect(req.url).toBe('http://localhost/')
       expect(req.headers.get('host')).toBe('localhost')
       expect(req.keepalive).toBe(false)
+      expect(req.duplex).toBe('half')
     })
 
     it('Should not generate GlobalRequest when accessing method, url or headers', async () => {
@@ -1169,6 +1170,37 @@ describe('Request', () => {
       const req2 = new Request('http://localhost/subapp', req)
       expect(req2).toBeInstanceOf(GlobalRequest)
       await expect(req2.text()).resolves.toBe('bar')
+    })
+
+    it('should be success to create instance with a lightweight GET request as init option', () => {
+      const req = newRequest({
+        method: 'GET',
+        url: '/',
+        headers: {
+          host: 'localhost',
+        },
+        rawHeaders: ['host', 'localhost'],
+      } as IncomingMessage)
+      const req2 = new Request('http://localhost/subapp', req)
+      expect(req2).toBeInstanceOf(GlobalRequest)
+      expect(req2.method).toBe('GET')
+      expect(req2.url).toBe('http://localhost/subapp')
+    })
+
+    it('should be success to create instance with a lightweight POST request as init option', async () => {
+      const req = newRequest({
+        method: 'POST',
+        url: '/',
+        headers: {
+          host: 'localhost',
+        },
+        rawHeaders: ['host', 'localhost'],
+        rawBody: Buffer.from('foo'),
+      } as IncomingMessage & { rawBody: Buffer })
+      const req2 = new Request('http://localhost/subapp', req)
+      expect(req2).toBeInstanceOf(GlobalRequest)
+      expect(req2.method).toBe('POST')
+      await expect(req2.text()).resolves.toBe('foo')
     })
   })
 })
