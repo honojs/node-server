@@ -475,12 +475,19 @@ describe.each([
       const handled = new Promise<void>((r) => {
         resolveHandled = r
       })
+      let assertListenersClean!: () => void
       const cancel = vi.fn(resolveCancelled)
       const requestListener = getRequestListener(async (_req, { outgoing }) => {
         // Wait for the actual response close event, not just the client's reset.
         const closed = new Promise<void>((r) => outgoing.once('close', r))
         resolveReady()
         await closed
+        const closeListeners = outgoing.listeners('close')
+        const errorListeners = outgoing.listeners('error')
+        assertListenersClean = () => {
+          expect(outgoing.listeners('close')).toEqual(closeListeners)
+          expect(outgoing.listeners('error')).toEqual(errorListeners)
+        }
         return new ResponseClass(
           new ReadableStream({
             start(controller) {
@@ -511,12 +518,65 @@ describe.each([
         await withTimeout(cancelled, 'late response body was not cancelled')
         await withTimeout(handled, 'request listener did not finish')
         expect(cancel).toHaveBeenCalledTimes(1)
+        expect(cancel).toHaveBeenCalledWith(undefined)
+        assertListenersClean()
       } finally {
         client.destroy()
         await new Promise<void>((r) => server.close(() => r()))
       }
     }
   )
+
+  it('should cancel after the client receives a prefix and resets the stream', async () => {
+    let resolveCancelled!: () => void
+    const cancelled = new Promise<void>((r) => {
+      resolveCancelled = r
+    })
+    let resolveHandled!: () => void
+    const handled = new Promise<void>((r) => {
+      resolveHandled = r
+    })
+    const cancel = vi.fn(resolveCancelled)
+    const requestListener = getRequestListener(
+      () =>
+        new ResponseClass(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('prefix'))
+            },
+            cancel,
+          })
+        )
+    )
+    const server = createHttp2Server(async (req, res) => {
+      await requestListener(req, res)
+      resolveHandled()
+    })
+    let client: ReturnType<typeof http2Connect> | undefined
+
+    try {
+      await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+      const { port } = server.address() as AddressInfo
+      client = http2Connect(`http://127.0.0.1:${port}`)
+      const stream = client.request({ ':path': '/' })
+      stream.on('error', () => {})
+      const prefix = new Promise<Buffer>((r) => stream.once('data', r))
+      expect((await withTimeout(prefix, 'response prefix was not received')).toString()).toBe(
+        'prefix'
+      )
+      stream.close(http2Constants.NGHTTP2_CANCEL)
+
+      await withTimeout(cancelled, 'streaming response body was not cancelled')
+      await withTimeout(handled, 'request listener did not finish')
+      expect(cancel).toHaveBeenCalledTimes(1)
+      expect(cancel).toHaveBeenCalledWith(undefined)
+    } finally {
+      client?.destroy()
+      if (server.listening) {
+        await new Promise<void>((r) => server.close(() => r()))
+      }
+    }
+  })
 
   it('should send a complete body without cancelling it', async () => {
     const cancel = vi.fn()
@@ -556,43 +616,70 @@ it('should cancel an HTTP/2 body when the client closes during the native pre-re
   const cancelled = new Promise<void>((r) => {
     resolveCancelled = r
   })
-  const scheduleTimeout = global.setTimeout
-  const timer = vi.spyOn(global, 'setTimeout').mockImplementation((callback, delay, ...args) => {
-    if (delay === undefined) {
-      // Hold the native response's pre-read tick until the real close event has fired.
-      resolvePreRead()
-      return scheduleTimeout(() => void closed.then(() => callback(...args)), 0)
-    }
-    return scheduleTimeout(callback, delay, ...args)
+  let resolveHandled!: () => void
+  const handled = new Promise<void>((r) => {
+    resolveHandled = r
   })
-  const server = createHttp2Server(
-    getRequestListener((_req, { outgoing }) => {
-      outgoing.once('close', resolveClosed)
-      return new GlobalResponse(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode('first chunk'))
-          },
-          cancel: resolveCancelled,
-        })
-      )
+  const cancel = vi.fn(resolveCancelled)
+  const scheduleTimeout = global.setTimeout
+  let restoreTimer = () => {}
+  let assertListenersClean!: () => void
+  const requestListener = getRequestListener((_req, { outgoing }) => {
+    outgoing.once('close', () => {
+      const closeListeners = outgoing.listeners('close')
+      const errorListeners = outgoing.listeners('error')
+      assertListenersClean = () => {
+        expect(outgoing.listeners('close')).toEqual(closeListeners)
+        expect(outgoing.listeners('error')).toEqual(errorListeners)
+      }
+      resolveClosed()
     })
-  )
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
-  const { port } = server.address() as AddressInfo
-  const client = http2Connect(`http://127.0.0.1:${port}`)
+    const response = new GlobalResponse(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('first chunk'))
+        },
+        cancel,
+      })
+    )
+    // Install only after connection setup, and intercept just the first pre-read tick.
+    const timer = vi.spyOn(global, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+      if (delay === undefined) {
+        timer.mockRestore()
+        resolvePreRead()
+        return scheduleTimeout(() => void closed.then(() => callback(...args)), 0)
+      }
+      return scheduleTimeout(callback, delay, ...args)
+    })
+    restoreTimer = () => timer.mockRestore()
+    return response
+  })
+  const server = createHttp2Server(async (req, res) => {
+    await requestListener(req, res)
+    resolveHandled()
+  })
+  let client: ReturnType<typeof http2Connect> | undefined
 
   try {
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+    const { port } = server.address() as AddressInfo
+    client = http2Connect(`http://127.0.0.1:${port}`)
     const stream = client.request({ ':path': '/' })
     stream.on('error', () => {})
     await withTimeout(preRead, 'native response did not reach the pre-read tick')
     stream.close(http2Constants.NGHTTP2_CANCEL)
     await withTimeout(closed, 'response did not close')
     await withTimeout(cancelled, 'response body was not cancelled after the pre-read')
+    await withTimeout(handled, 'request listener did not finish')
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(cancel).toHaveBeenCalledWith(undefined)
+    assertListenersClean()
   } finally {
-    timer.mockRestore()
-    client.destroy()
-    await new Promise<void>((r) => server.close(() => r()))
+    restoreTimer()
+    client?.destroy()
+    if (server.listening) {
+      await new Promise<void>((r) => server.close(() => r()))
+    }
   }
 })
 
