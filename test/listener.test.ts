@@ -12,7 +12,7 @@ import { GlobalHeaders } from '../src/headers'
 import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
-import { requestServer } from './helpers/request'
+import { requestServer, requestServerHttp2 } from './helpers/request'
 
 const withTimeout = async <T>(promise: Promise<T>, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
@@ -454,6 +454,146 @@ describe('Abort request', () => {
       }
     }
   )
+})
+
+describe.each([
+  ['native', GlobalResponse],
+  ['cached', LightweightResponse],
+] as const)('HTTP/2 response body cancellation - %s', (_name, ResponseClass) => {
+  it.each(['stream', 'session'] as const)(
+    'should cancel a body returned after the client closes the %s',
+    async (target) => {
+      let resolveReady!: () => void
+      const ready = new Promise<void>((r) => {
+        resolveReady = r
+      })
+      let resolveCancelled!: () => void
+      const cancelled = new Promise<void>((r) => {
+        resolveCancelled = r
+      })
+      let resolveHandled!: () => void
+      const handled = new Promise<void>((r) => {
+        resolveHandled = r
+      })
+      const cancel = vi.fn(resolveCancelled)
+      const requestListener = getRequestListener(async (_req, { outgoing }) => {
+        // Wait for the actual response close event, not just the client's reset.
+        const closed = new Promise<void>((r) => outgoing.once('close', r))
+        resolveReady()
+        await closed
+        return new ResponseClass(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('first chunk'))
+            },
+            cancel,
+          })
+        )
+      })
+      const server = createHttp2Server(async (req, res) => {
+        await requestListener(req, res)
+        resolveHandled()
+      })
+      await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+      const { port } = server.address() as AddressInfo
+      const client = http2Connect(`http://127.0.0.1:${port}`)
+
+      try {
+        const stream = client.request({ ':path': '/' })
+        stream.on('error', () => {})
+        await withTimeout(ready, 'request did not reach the handler')
+        if (target === 'stream') {
+          stream.close(http2Constants.NGHTTP2_CANCEL)
+        } else {
+          client.destroy()
+        }
+
+        await withTimeout(cancelled, 'late response body was not cancelled')
+        await withTimeout(handled, 'request listener did not finish')
+        expect(cancel).toHaveBeenCalledTimes(1)
+      } finally {
+        client.destroy()
+        await new Promise<void>((r) => server.close(() => r()))
+      }
+    }
+  )
+
+  it('should send a complete body without cancelling it', async () => {
+    const cancel = vi.fn()
+    const server = createHttp2Server(
+      getRequestListener(
+        () =>
+          new ResponseClass(
+            new ReadableStream({
+              async pull(controller) {
+                await new Promise<void>((resolve) => setImmediate(resolve))
+                controller.enqueue(new TextEncoder().encode('complete body'))
+                controller.close()
+              },
+              cancel,
+            })
+          )
+      )
+    )
+
+    const response = await requestServerHttp2(server, { path: '/' })
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('complete body')
+    expect(cancel).not.toHaveBeenCalled()
+  })
+})
+
+it('should cancel an HTTP/2 body when the client closes during the native pre-read', async () => {
+  let resolvePreRead!: () => void
+  const preRead = new Promise<void>((r) => {
+    resolvePreRead = r
+  })
+  let resolveClosed!: () => void
+  const closed = new Promise<void>((r) => {
+    resolveClosed = r
+  })
+  let resolveCancelled!: () => void
+  const cancelled = new Promise<void>((r) => {
+    resolveCancelled = r
+  })
+  const scheduleTimeout = global.setTimeout
+  const timer = vi.spyOn(global, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+    if (delay === undefined) {
+      // Hold the native response's pre-read tick until the real close event has fired.
+      resolvePreRead()
+      return scheduleTimeout(() => void closed.then(() => callback(...args)), 0)
+    }
+    return scheduleTimeout(callback, delay, ...args)
+  })
+  const server = createHttp2Server(
+    getRequestListener((_req, { outgoing }) => {
+      outgoing.once('close', resolveClosed)
+      return new GlobalResponse(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('first chunk'))
+          },
+          cancel: resolveCancelled,
+        })
+      )
+    })
+  )
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+  const { port } = server.address() as AddressInfo
+  const client = http2Connect(`http://127.0.0.1:${port}`)
+
+  try {
+    const stream = client.request({ ':path': '/' })
+    stream.on('error', () => {})
+    await withTimeout(preRead, 'native response did not reach the pre-read tick')
+    stream.close(http2Constants.NGHTTP2_CANCEL)
+    await withTimeout(closed, 'response did not close')
+    await withTimeout(cancelled, 'response body was not cancelled after the pre-read')
+  } finally {
+    timer.mockRestore()
+    client.destroy()
+    await new Promise<void>((r) => server.close(() => r()))
+  }
 })
 
 describe('Abort request - error path', () => {
