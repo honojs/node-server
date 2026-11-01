@@ -1,4 +1,5 @@
 import { Writable } from 'node:stream'
+import { queryObjects } from 'node:v8'
 import {
   buildOutgoingHttpHeaders,
   writeFromReadableStream,
@@ -129,6 +130,49 @@ describe('writeFromReadableStream', () => {
 
     expect(enqueueCalled).toBe(false) // enqueue should not be called
     expect(cancelCalled).toBe(true) // cancel should be called
+  })
+})
+
+describe('writeFromReadableStream with a paced source', () => {
+  it('should not keep a promise for each chunk while the stream is open', async () => {
+    const total = 1000
+    const encode = new TextEncoder()
+    const countPromises = () => queryObjects(Promise, { format: 'count' })
+
+    let sent = 0
+    let baseline = 0
+    let live = 0
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        // let the previous chunk be written and its read be settled before producing the next one
+        await new Promise((resolve) => setImmediate(resolve))
+        if (sent === 100) {
+          baseline = countPromises()
+        }
+        if (sent === total - 1) {
+          live = countPromises()
+        }
+        if (sent++ < total) {
+          controller.enqueue(encode.encode('x'))
+        } else {
+          controller.close()
+        }
+      },
+    })
+
+    // a large highWaterMark keeps `write()` returning `true`, like a socket that never fills up
+    const writable = new Writable({
+      highWaterMark: 1024 * 1024,
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+    })
+
+    await writeFromReadableStream(stream, writable)
+
+    expect(baseline).toBeGreaterThan(0)
+    // before the fix, about one promise per chunk (~900) stayed alive between the two samples
+    expect(live - baseline).toBeLessThan(100)
   })
 })
 
