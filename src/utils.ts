@@ -16,6 +16,12 @@ export function writeFromReadableStreamDefaultReader(
     reader.cancel(error).catch(() => {})
   }
 
+  if (writable.destroyed) {
+    // 'close' may already have been emitted, so cancel now instead of waiting for it.
+    cancel()
+    return reader.closed
+  }
+
   writable.on('close', cancel)
   writable.on('error', cancel)
   ;(currentReadPromise ?? reader.read()).then(flow, handleStreamError)
@@ -55,6 +61,7 @@ export function writeFromReadableStream(stream: ReadableStream<Uint8Array>, writ
   if (stream.locked) {
     throw new TypeError('ReadableStream is locked.')
   } else if (writable.destroyed) {
+    stream.cancel().catch(() => {})
     return
   }
 

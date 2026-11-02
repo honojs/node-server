@@ -2,6 +2,7 @@ import { Writable } from 'node:stream'
 import {
   buildOutgoingHttpHeaders,
   writeFromReadableStream,
+  writeFromReadableStreamDefaultReader,
   readWithoutBlocking,
 } from '../src/utils'
 
@@ -129,6 +130,49 @@ describe('writeFromReadableStream', () => {
 
     expect(enqueueCalled).toBe(false) // enqueue should not be called
     expect(cancelCalled).toBe(true) // cancel should be called
+  })
+
+  it('should cancel the stream if the client has already disconnected', async () => {
+    let cancelCalled = false
+    const stream = new ReadableStream({
+      cancel() {
+        cancelCalled = true
+      },
+    })
+
+    const writable = new Writable()
+    writable.destroy()
+    await new Promise((resolve) => writable.once('close', resolve))
+
+    await writeFromReadableStream(stream, writable)
+
+    expect(cancelCalled).toBe(true)
+  })
+})
+
+describe('writeFromReadableStreamDefaultReader', () => {
+  it('should cancel the reader if the client has already disconnected', async () => {
+    let cancelCalled = false
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('test'))
+      },
+      cancel() {
+        cancelCalled = true
+      },
+    })
+
+    const writable = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+    })
+    writable.destroy()
+    await new Promise((resolve) => writable.once('close', resolve))
+
+    await writeFromReadableStreamDefaultReader(stream.getReader(), writable)
+
+    expect(cancelCalled).toBe(true)
   })
 })
 
