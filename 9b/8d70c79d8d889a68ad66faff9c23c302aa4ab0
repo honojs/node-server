@@ -1,0 +1,23 @@
+src/websocket.ts
+  s_834a4d5e6265c8::t_b96cefcf5298c9 141-143,223-230,256-260,279
+  s_834a4d5e6265c8::t_4b2720a643155b 6,156,159-160,249,251
+test/websocket.test.ts
+  s_834a4d5e6265c8::t_e5f72158066b08 110-176
+  s_834a4d5e6265c8::t_9e12adae30693a 177-273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9b8d70c79d8d889a68ad66faff9c23c302aa4ab0",
+  "prompts": {},
+  "sessions": {
+    "s_834a4d5e6265c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca14b139-18b4-42d3-87c6-fe29ef2f4f0e",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Yusuke Wada <yusuke@kamawada.com>"
+    }
+  }
+}
