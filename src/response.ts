@@ -2,12 +2,14 @@
 // Define lightweight pseudo Response class and replace global.Response with it.
 
 import type { OutgoingHttpHeaders } from 'node:http'
+import { types } from 'node:util'
 
 export const defaultContentType = 'text/plain; charset=UTF-8'
 
 const responseCache = Symbol('responseCache')
 const getResponseCache = Symbol('getResponseCache')
 export const cacheKey = Symbol('cache')
+export const copyHeaders = Symbol.for('hono.response.copyHeaders')
 
 export type InternalCache = [
   number,
@@ -19,12 +21,133 @@ interface LightResponse {
   [cacheKey]?: InternalCache
 }
 
+interface SharedBody {
+  body: string | null
+  members: Response[]
+  sent: boolean
+  materialized: boolean
+}
+
+const materializeSharedBody = (group: SharedBody): void => {
+  if (group.materialized) {
+    return
+  }
+  group.materialized = true
+  let first: globalThis.Response | undefined
+  for (const member of group.members) {
+    const cached = member as LightResponse
+    const [status, , headers] = cached[cacheKey]!
+    const native = new GlobalResponse(first ? first.body : group.body, {
+      status,
+      headers: headers as Headers,
+    })
+    first ||= native
+    cached[responseCache] = native
+    delete cached[cacheKey]
+  }
+  if (group.sent && first?.body) {
+    const reader = first.body.getReader()
+    void reader.read()
+    void reader.read()
+  }
+}
+
+// A second send must observe the same consumed stream as a materialized response.
+export const consumeSharedBody = (response: globalThis.Response): boolean => {
+  const group = Response.sharedBodyFor(response)
+  if (group?.sent) {
+    materializeSharedBody(group)
+    return false
+  }
+  if (group && !group.materialized) {
+    group.sent = true
+  }
+  return true
+}
+
 export const GlobalResponse = global.Response
 export class Response {
   #body?: BodyInit | null
-  #init?: ResponseInit;
+  #init?: ResponseInit
+  #sharedBody?: SharedBody
+
+  static sharedBodyFor(response: object): SharedBody | undefined {
+    return #sharedBody in response ? response.#sharedBody : undefined
+  }
+
+  static [copyHeaders](response: globalThis.Response): globalThis.Response | undefined {
+    if (
+      types.isProxy(response) ||
+      Object.getPrototypeOf(response) !== Response.prototype ||
+      Object.getOwnPropertyNames(response).length !== 0
+    ) {
+      return
+    }
+    const original = response as unknown as Response
+    if (!(#sharedBody in original)) {
+      return
+    }
+    const cache = (original as LightResponse)[cacheKey]
+    if (
+      !cache ||
+      (original as LightResponse)[responseCache] ||
+      !(cache[1] === null || typeof cache[1] === 'string')
+    ) {
+      return
+    }
+    let group = original.#sharedBody
+    if (group?.sent || (group && group.members.length >= 64)) {
+      return
+    }
+    const init = original.#init
+    if (
+      !group &&
+      init &&
+      (types.isProxy(init) ||
+        Object.getPrototypeOf(init) !== Object.prototype ||
+        Reflect.ownKeys(init).some(
+          (key) =>
+            !['status', 'headers', 'statusText'].includes(key as string) ||
+            !Object.hasOwn(Object.getOwnPropertyDescriptor(init, key)!, 'value')
+        ))
+    ) {
+      return
+    }
+    const status = group ? cache[0] : (init?.status ?? 200)
+    if (
+      !group &&
+      (!Number.isInteger(status) ||
+        status < 200 ||
+        status > 599 ||
+        status !== cache[0] ||
+        (init?.statusText !== undefined && init.statusText !== '') ||
+        (cache[1] !== null && [204, 205, 304].includes(status)))
+    ) {
+      return
+    }
+    if (!group) {
+      const headers = new Headers(cache[2] instanceof Headers ? cache[2] : init?.headers)
+      if (cache[1] !== null && !headers.has('content-type')) {
+        headers.set('content-type', 'text/plain;charset=UTF-8')
+      }
+      cache[2] = headers
+      group = { body: cache[1], members: [original], sent: false, materialized: false }
+      original.#sharedBody = group
+    }
+    const replacement = new Response(cache[1], {
+      status,
+      headers: new Headers(cache[2] as Headers),
+    })
+    group.members.push(replacement)
+    replacement.#sharedBody = group
+    return replacement as unknown as globalThis.Response
+  }
 
   [getResponseCache](): globalThis.Response {
+    if (this.#sharedBody) {
+      materializeSharedBody(this.#sharedBody)
+      return (this as LightResponse)[responseCache]!
+    }
     // If `cacheKey` has been populated with a live `Headers` instance, the
     // user (or middleware) may have mutated it after construction. Use those
     // headers so the GlobalResponse reflects the current state.
