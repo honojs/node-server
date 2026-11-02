@@ -242,6 +242,41 @@ describe('Invalid request', () => {
   })
 })
 
+describe('Response body errors - native Response', () => {
+  const requestListener = getRequestListener((req) => {
+    const path = new URL(req.url).pathname
+    return new GlobalResponse(
+      new ReadableStream({
+        start(controller) {
+          if (path === '/after-chunk') {
+            controller.enqueue(new TextEncoder().encode('partial'))
+          }
+          controller.error(new Error('failed'))
+        },
+      })
+    )
+  })
+  const server = createServer(requestListener)
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('Should not send a complete empty 200 when the body fails before its first chunk', async () => {
+    const res = await requestServer(server, { method: 'GET', path: '/' })
+    expect(res.status).toBe(500)
+  })
+
+  it('Should not send a complete partial 200 when the body fails during the early read', async () => {
+    const res = await requestServer(server, { method: 'GET', path: '/after-chunk' })
+    expect(res.status).toBe(500)
+  })
+})
+
 describe('Response headers', () => {
   const requestListener = getRequestListener(() => new Response(null), {
     hostname: 'example.com',

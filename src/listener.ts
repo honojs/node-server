@@ -356,6 +356,7 @@ const responseViaResponseObject = async (
 
     const values: Uint8Array[] = []
     let done = false
+    let readError: { error: unknown } | undefined
     let currentReadPromise: Promise<ReadableStreamReadResult<Uint8Array>> | undefined = undefined
 
     if (resHeaderRecord['transfer-encoding'] !== 'chunked') {
@@ -364,9 +365,11 @@ const responseViaResponseObject = async (
       for (let i = 0; i < maxReadCount; i++) {
         currentReadPromise ||= reader.read()
         const chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
-          console.error(e)
-          done = true
+          readError = { error: e }
         })
+        if (readError) {
+          break
+        }
         if (!chunk) {
           if (i === 1) {
             // XXX: In Node.js v24, some response bodies are not read all the way through until the next task queue,
@@ -376,9 +379,7 @@ const responseViaResponseObject = async (
             continue
           }
 
-          // Error occurred or currentReadPromise is not yet resolved.
-          // If an error occurs, immediately break the loop.
-          // If currentReadPromise is not yet resolved, pass it to writeFromReadableStreamDefaultReader.
+          // currentReadPromise is not yet resolved, so pass it to writeFromReadableStreamDefaultReader.
           break
         }
         currentReadPromise = undefined
@@ -390,6 +391,14 @@ const responseViaResponseObject = async (
           done = true
           break
         }
+      }
+
+      if (readError) {
+        // The body failed before anything was sent, so it must not be reported as a
+        // complete (possibly empty) response.
+        handleResponseError(readError.error, outgoing)
+        ;(outgoing as OutgoingHasOutgoingEnded)[outgoingEnded]?.()
+        return
       }
 
       if (done && !('content-length' in resHeaderRecord)) {
