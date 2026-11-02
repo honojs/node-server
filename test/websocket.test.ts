@@ -174,6 +174,103 @@ describe('WebSocket', () => {
     })
   })
 
+  describe('request-target of the upgrade request', () => {
+    const requestUpgrade = (address: AddressInfo, target: string, origin: string) =>
+      new Promise<string>((resolve, reject) => {
+        const socket = connect(address.port, '127.0.0.1', () => {
+          socket.write(
+            `GET ${target} HTTP/1.1\r\n` +
+              `Host: 127.0.0.1:${address.port}\r\n` +
+              `Origin: ${origin}\r\n` +
+              'Upgrade: websocket\r\n' +
+              'Connection: Upgrade\r\n' +
+              'Sec-WebSocket-Version: 13\r\n' +
+              'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+              '\r\n'
+          )
+        })
+        let response = ''
+        socket.on('data', (chunk) => {
+          response += chunk.toString('utf-8')
+          if (response.includes('\r\n\r\n')) {
+            socket.destroy()
+            resolve(response.split('\r\n')[0])
+          }
+        })
+        socket.once('error', reject)
+        socket.setTimeout(1_000, () => socket.destroy(new Error('upgrade timed out')))
+      })
+
+    const startAppWithOriginCheck = async () => {
+      const app = new Hono()
+      const seenUrls: string[] = []
+      app.use('*', async (c, next) => {
+        seenUrls.push(c.req.url)
+        if (c.req.header('origin') !== new URL(c.req.url).origin) {
+          return c.text('forbidden', 403)
+        }
+        await next()
+      })
+      app.get(
+        '/ws',
+        upgradeWebSocket(() => ({}))
+      )
+      const { server, address } = await startServer(app)
+      return { server, address, seenUrls }
+    }
+
+    it('should keep the host from the Host header for a request-target starting with //', async () => {
+      const { server, address, seenUrls } = await startAppWithOriginCheck()
+      try {
+        const status = await requestUpgrade(
+          address,
+          '//attacker.example/ws',
+          'http://attacker.example'
+        )
+        expect(status).toBe('HTTP/1.1 403 Forbidden')
+        expect(seenUrls).toEqual([`http://127.0.0.1:${address.port}//attacker.example/ws`])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it('should accept a same-origin upgrade request', async () => {
+      const { server, address, seenUrls } = await startAppWithOriginCheck()
+      try {
+        const status = await requestUpgrade(address, '/ws', `http://127.0.0.1:${address.port}`)
+        expect(status).toBe('HTTP/1.1 101 Switching Protocols')
+        expect(seenUrls).toEqual([`http://127.0.0.1:${address.port}/ws`])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it('should still accept an absolute-form request-target', async () => {
+      const { server, address, seenUrls } = await startAppWithOriginCheck()
+      try {
+        const status = await requestUpgrade(
+          address,
+          `http://127.0.0.1:${address.port}/ws`,
+          `http://127.0.0.1:${address.port}`
+        )
+        expect(status).toBe('HTTP/1.1 101 Switching Protocols')
+        expect(seenUrls).toEqual([`http://127.0.0.1:${address.port}/ws`])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it('should reject a request-target that does not start with /', async () => {
+      const { server, address } = await startAppWithOriginCheck()
+      try {
+        const status = await requestUpgrade(address, 'ws', `http://127.0.0.1:${address.port}`)
+        expect(status).toBe('HTTP/1.1 400 Bad Request')
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+  })
+
   it('should connect with upgradeWebSocket without manual injection', async () => {
     const app = new Hono()
 

@@ -5,7 +5,7 @@ import { STATUS_CODES } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { RequestError } from './error'
 import type { FetchCallback, ServerType } from './types'
-import { validateRequestTarget } from './url'
+import { buildUrl, validateRequestTarget } from './url'
 import type { WebSocketData, WebSocketLike, WebSocketServerLike } from './websocket-types'
 
 interface CloseEventInit extends EventInit {
@@ -154,8 +154,16 @@ const rejectUpgradeRequest = (socket: Duplex, status: number, responseHeaders?: 
 const createUpgradeRequest = (request: IncomingMessage): Request => {
   const protocol = (request.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'
   const incomingUrl = request.url ?? '/'
-  validateRequestTarget(incomingUrl)
-  const url = new URL(incomingUrl, `${protocol}://${request.headers.host ?? 'localhost'}`)
+  let url: string
+  if (
+    incomingUrl[0] !== '/' &&
+    (incomingUrl.startsWith('http://') || incomingUrl.startsWith('https://'))
+  ) {
+    validateRequestTarget(incomingUrl)
+    url = new URL(incomingUrl).href
+  } else {
+    url = buildUrl(protocol, request.headers.host ?? 'localhost', incomingUrl)
+  }
   const headers = new Headers()
   for (const key in request.headers) {
     const value = request.headers[key]
