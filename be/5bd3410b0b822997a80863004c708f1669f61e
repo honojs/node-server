@@ -1,0 +1,19 @@
+package.json
+  s_834a4d5e6265c8::t_2aa1e8fb44b0a5 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "be5bd3410b0b822997a80863004c708f1669f61e",
+  "prompts": {},
+  "sessions": {
+    "s_834a4d5e6265c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca14b139-18b4-42d3-87c6-fe29ef2f4f0e",
+        "model": "unknown"
+      },
+      "human_author": "Yusuke Wada <yusuke@kamawada.com>"
+    }
+  }
+}
