@@ -107,6 +107,73 @@ describe('WebSocket', () => {
     }
   })
 
+  describe('socket closed while the application is still running', () => {
+    const upgradeRequest = (port: number) =>
+      'GET /ws HTTP/1.1\r\n' +
+      `Host: 127.0.0.1:${port}\r\n` +
+      'Upgrade: websocket\r\n' +
+      'Connection: Upgrade\r\n' +
+      'Sec-WebSocket-Version: 13\r\n' +
+      'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+      '\r\n'
+
+    const startAppWithAsyncMiddleware = async () => {
+      const app = new Hono()
+      let handled = 0
+      app.use('/ws', async (_c, next) => {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        await next()
+      })
+      app.get(
+        '/ws',
+        upgradeWebSocket(() => ({
+          onOpen() {
+            handled++
+          },
+        }))
+      )
+      const { server, address } = await startServer(app)
+      return { server, address, handled: () => handled }
+    }
+
+    const sendUpgradeThen = (
+      address: AddressInfo,
+      end: (socket: ReturnType<typeof connect>) => void
+    ) =>
+      new Promise<void>((resolve) => {
+        const socket = connect(address.port, '127.0.0.1', () => {
+          socket.write(upgradeRequest(address.port), () => end(socket))
+        })
+        socket.on('error', () => {})
+        socket.on('close', () => resolve())
+      })
+
+    it.each([
+      ['a TCP reset', (socket: ReturnType<typeof connect>) => socket.resetAndDestroy()],
+      ['a graceful close', (socket: ReturnType<typeof connect>) => socket.destroy()],
+    ])('should survive %s during async middleware and keep serving', async (_name, end) => {
+      const { server, address, handled } = await startAppWithAsyncMiddleware()
+
+      try {
+        await sendUpgradeThen(address, end)
+        // let the middleware finish and the upgrade handler resume on the dead socket
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        expect(handled()).toBe(0)
+
+        const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+        await new Promise<void>((resolve, reject) => {
+          ws.on('open', () => resolve())
+          ws.on('error', reject)
+        })
+        ws.close()
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(handled()).toBe(1)
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+  })
+
   it('should connect with upgradeWebSocket without manual injection', async () => {
     const app = new Hono()
 

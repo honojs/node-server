@@ -138,6 +138,9 @@ const appendResponseHeaders = (headers: string[], responseHeaders?: Headers) => 
 }
 
 const rejectUpgradeRequest = (socket: Duplex, status: number, responseHeaders?: Headers) => {
+  if (socket.destroyed) {
+    return
+  }
   const responseLines = ['Connection: close', 'Content-Length: 0']
   appendResponseHeaders(responseLines, responseHeaders)
 
@@ -209,6 +212,14 @@ export const setupWebSocket = (options: {
       return
     }
 
+    // Nothing listens on the socket while the application handles the request. Without
+    // these listeners a connection reset in that window is emitted as an unhandled
+    // 'error' event and crashes the process, and a closed socket leaves its waiter behind.
+    const ignoreSocketError = () => {}
+    const reclaimWaiterOnClose = () => rejectWaiter(request)
+    socket.on('error', ignoreSocketError)
+    socket.once('close', reclaimWaiterOnClose)
+
     const env: UpgradeBindings = {
       incoming: request,
       outgoing: undefined,
@@ -234,6 +245,11 @@ export const setupWebSocket = (options: {
       return
     }
 
+    if (socket.destroyed) {
+      rejectWaiter(request)
+      return
+    }
+
     const waiter = waiterMap.get(request)
 
     if (!waiter || waiter.connectionSymbol !== env[CONNECTION_SYMBOL_KEY]) {
@@ -248,13 +264,11 @@ export const setupWebSocket = (options: {
       appendResponseHeaders(headers, responseHeaders)
     }
 
-    const reclaimWaiterOnClose = () => rejectWaiter(request)
-    socket.once('close', reclaimWaiterOnClose)
-
     wss.on('headers', addResponseHeaders)
     try {
       wss.handleUpgrade(request, socket, head, (ws) => {
         socket.off('close', reclaimWaiterOnClose)
+        socket.off('error', ignoreSocketError)
         wss.emit('connection', ws, request)
       })
     } finally {
