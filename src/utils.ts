@@ -1,4 +1,5 @@
 import type { OutgoingHttpHeaders } from 'node:http'
+import { Http2ServerResponse } from 'node:http2'
 import type { Writable } from 'node:stream'
 
 export async function readWithoutBlocking(
@@ -14,6 +15,15 @@ export function writeFromReadableStreamDefaultReader(
 ) {
   const cancel = (error?: unknown) => {
     reader.cancel(error).catch(() => {})
+  }
+
+  // HTTP/2 responses expose lifecycle state on their backing stream, not the wrapper.
+  if (
+    writable instanceof Http2ServerResponse &&
+    (writable.stream.closed || writable.stream.destroyed)
+  ) {
+    cancel()
+    return reader.closed
   }
 
   writable.on('close', cancel)
