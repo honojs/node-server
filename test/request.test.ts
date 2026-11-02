@@ -154,6 +154,49 @@ describe('Request', () => {
       }).toThrow(RequestError)
     })
 
+    it.each([
+      '/admin\\secret',
+      '/public\\..\\admin/secret',
+      '/public\\%2e%2e\\admin/secret',
+      '/admin\\secret?next=public',
+    ])('Should throw error if the request path contains a raw backslash: %s', (url) => {
+      expect(() => {
+        newRequest({
+          headers: {
+            host: 'localhost',
+          },
+          url,
+        } as IncomingMessage)
+      }).toThrow(RequestError)
+    })
+
+    it.each(['http://localhost/admin\\secret', 'https://localhost/public\\..\\admin/secret'])(
+      'Should throw error if an absolute request-target contains a raw backslash: %s',
+      (url) => {
+        expect(() => {
+          newRequest({
+            headers: {
+              host: 'localhost',
+            },
+            url,
+          } as IncomingMessage)
+        }).toThrow(RequestError)
+      }
+    )
+
+    it.each(['/admin%5Csecret', '/public%5c..%5cadmin/secret', '/public?q=\\admin\\secret'])(
+      'Should keep encoded backslashes and query backslashes: %s',
+      (url) => {
+        const req = newRequest({
+          headers: {
+            host: 'localhost',
+          },
+          url,
+        } as IncomingMessage)
+        expect(req.url).toBe(new URL(url, 'http://localhost').href)
+      }
+    )
+
     it('Should be created request body from `req.rawBody` if it exists', async () => {
       const rawBody = Buffer.from('foo')
       const socket = new Socket()

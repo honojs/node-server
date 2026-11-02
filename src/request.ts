@@ -19,6 +19,16 @@ export class RequestError extends Error {
   }
 }
 
+const validateRequestTarget = (target: string): void => {
+  const backslash = target.indexOf('\\')
+  if (backslash !== -1) {
+    const query = target.indexOf('?')
+    if (query === -1 || backslash < query) {
+      throw new RequestError('Backslash in request path')
+    }
+  }
+}
+
 export const toRequestError = (e: unknown): RequestError => {
   if (e instanceof RequestError) {
     return e
@@ -215,6 +225,7 @@ export const newRequest = (
     }
 
     try {
+      validateRequestTarget(incomingUrl)
       const url = new URL(incomingUrl)
       req[urlKey] = url.href
     } catch (e) {
@@ -242,6 +253,7 @@ export const newRequest = (
     scheme = incoming.socket && (incoming.socket as TLSSocket).encrypted ? 'https' : 'http'
   }
 
+  validateRequestTarget(incomingUrl)
   const url = new URL(`${scheme}://${host}${incomingUrl}`)
 
   // check by length for performance.
