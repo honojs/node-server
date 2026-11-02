@@ -590,12 +590,12 @@ describe('Serve Static Middleware', () => {
       expect(res.status).toBe(404)
     })
 
-    it('Should prevent path traversal attacks with mixed separators', async () => {
+    it('Should reject path traversal attacks with raw backslashes', async () => {
       const res = await requestServer(server, {
         method: 'GET',
         path: '/static/..\\..\\package.json',
       })
-      expect(res.status).toBe(404)
+      expect(res.status).toBe(400)
     })
 
     it('Should prevent path traversal attacks with encoded dots', async () => {

@@ -3,7 +3,9 @@ import { defineWebSocketHelper } from 'hono/ws'
 import type { IncomingMessage } from 'node:http'
 import { STATUS_CODES } from 'node:http'
 import type { Duplex } from 'node:stream'
+import { RequestError } from './error'
 import type { FetchCallback, ServerType } from './types'
+import { validateRequestTarget } from './url'
 import type { WebSocketData, WebSocketLike, WebSocketServerLike } from './websocket-types'
 
 interface CloseEventInit extends EventInit {
@@ -148,7 +150,9 @@ const rejectUpgradeRequest = (socket: Duplex, status: number, responseHeaders?: 
 
 const createUpgradeRequest = (request: IncomingMessage): Request => {
   const protocol = (request.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'
-  const url = new URL(request.url ?? '/', `${protocol}://${request.headers.host ?? 'localhost'}`)
+  const incomingUrl = request.url ?? '/'
+  validateRequestTarget(incomingUrl)
+  const url = new URL(incomingUrl, `${protocol}://${request.headers.host ?? 'localhost'}`)
   const headers = new Headers()
   for (const key in request.headers) {
     const value = request.headers[key]
@@ -223,9 +227,9 @@ export const setupWebSocket = (options: {
         status = response.status
         responseHeaders = response.headers
       }
-    } catch {
+    } catch (error) {
       if (server.listenerCount('upgrade') === 1) {
-        rejectUpgradeRequest(socket, 500)
+        rejectUpgradeRequest(socket, error instanceof RequestError ? 400 : 500)
       }
       return
     }

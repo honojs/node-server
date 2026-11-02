@@ -17,6 +17,96 @@ describe('WebSocket', () => {
     )
   }
 
+  // Send a raw request-target: a WebSocket client would normalize backslashes first.
+  const requestUpgrade = (address: AddressInfo, path: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const socket = connect(address.port, '127.0.0.1', () => {
+        socket.write(
+          `GET ${path} HTTP/1.1\r\n` +
+            `Host: 127.0.0.1:${address.port}\r\n` +
+            'Upgrade: websocket\r\n' +
+            'Connection: Upgrade\r\n' +
+            'Sec-WebSocket-Version: 13\r\n' +
+            'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+            '\r\n'
+        )
+      })
+      let response = ''
+      socket.on('data', (chunk) => {
+        response += chunk.toString('utf-8')
+        if (response.includes('\r\n\r\n')) {
+          socket.destroy()
+          resolve(response.split('\r\n')[0])
+        }
+      })
+      socket.once('error', reject)
+      socket.once('close', () =>
+        reject(new Error('Socket closed before receiving upgrade headers'))
+      )
+      socket.setTimeout(1_000, () => socket.destroy(new Error('WebSocket upgrade timed out')))
+    })
+
+  describe('backslashes in upgrade request-targets', () => {
+    it.each([
+      '/admin\\secret',
+      '/public\\..\\admin/secret',
+      '/public\\%2e%2e\\admin/secret',
+      '/admin\\secret?next=public',
+      '/public%3Fq=\\..\\admin/secret',
+      'http://localhost/admin\\secret',
+    ])('should return 400 before calling the application for %s', async (path) => {
+      const app = new Hono()
+      app.get(
+        '/admin/*',
+        upgradeWebSocket(() => ({}))
+      )
+      const fetchCallback = vi.spyOn(app, 'fetch')
+      const { server, address } = await startServer(app)
+
+      try {
+        expect(await requestUpgrade(address, path)).toBe('HTTP/1.1 400 Bad Request')
+        expect(fetchCallback).not.toHaveBeenCalled()
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it.each(['/admin%5Csecret', '/public%5c..%5cadmin/secret', '/public?q=\\admin\\secret'])(
+      'should allow encoded backslashes and query backslashes in %s',
+      async (path) => {
+        const app = new Hono()
+        app.get(
+          '*',
+          upgradeWebSocket(() => ({}))
+        )
+        const fetchCallback = vi.spyOn(app, 'fetch')
+        const { server, address } = await startServer(app)
+
+        try {
+          expect(await requestUpgrade(address, path)).toBe('HTTP/1.1 101 Switching Protocols')
+          expect(fetchCallback).toHaveBeenCalledOnce()
+          expect(fetchCallback.mock.calls[0][0].url).toBe(`http://127.0.0.1:${address.port}${path}`)
+        } finally {
+          await new Promise<void>((resolve) => server.close(() => resolve()))
+        }
+      }
+    )
+  })
+
+  it('should still return 500 when the fetch callback throws an unexpected error', async () => {
+    const app = new Hono()
+    vi.spyOn(app, 'fetch').mockImplementation(() => {
+      throw new Error('Unexpected application error')
+    })
+    const { server, address } = await startServer(app)
+
+    try {
+      expect(await requestUpgrade(address, '/ws')).toBe('HTTP/1.1 500 Internal Server Error')
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
   it('should connect with upgradeWebSocket without manual injection', async () => {
     const app = new Hono()
 

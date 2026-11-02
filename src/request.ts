@@ -9,7 +9,7 @@ import type { TLSSocket } from 'node:tls'
 import { RequestError } from './error'
 import { newHeadersFromIncoming } from './headers'
 import type { GlobalHeaders } from './headers'
-import { buildUrl } from './url'
+import { buildUrl, validateRequestTarget } from './url'
 
 export { RequestError }
 
@@ -756,6 +756,7 @@ export const newRequest = (
     }
 
     try {
+      validateRequestTarget(incomingUrl)
       const url = new URL(incomingUrl)
       req[urlKey] = url.href
     } catch (e) {

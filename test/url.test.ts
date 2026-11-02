@@ -2,6 +2,43 @@ import { RequestError } from '../src/error'
 import { buildUrl } from '../src/url'
 
 describe('buildUrl', () => {
+  it.each(['/', '/api/users?page=2&limit=20'])(
+    'should build a fast-path URL without invoking the URL parser: %s',
+    (path) => {
+      const urlConstructor = vi.spyOn(globalThis, 'URL')
+      try {
+        expect(buildUrl('http', 'localhost:3000', path)).toBe(`http://localhost:3000${path}`)
+        expect(urlConstructor).not.toHaveBeenCalled()
+      } finally {
+        urlConstructor.mockRestore()
+      }
+    }
+  )
+
+  describe.each(['localhost:3000', 'LOCALHOST', 'localhost:80', '[::1]:3000'])(
+    'request path validation with host %s',
+    (host) => {
+      it.each([
+        '/admin\\secret',
+        '/public\\..\\admin/secret',
+        '/public\\%2e%2e\\admin/secret',
+        '/admin\\secret?next=public',
+        '/public%3Fq=\\..\\admin/secret',
+      ])('should reject a raw backslash in the path: %s', (path) => {
+        expect(() => buildUrl('http', host, path)).toThrow(RequestError)
+      })
+
+      it.each([
+        '/admin%5Csecret',
+        '/public%5c..%5cadmin/secret',
+        '/public?q=\\admin\\secret',
+        '/public?q=one?two\\three',
+      ])('should preserve encoded backslashes and query backslashes: %s', (path) => {
+        expect(buildUrl('http', host, path)).toBe(new URL(path, `http://${host}`).href)
+      })
+    }
+  )
+
   describe('IPv6 host', () => {
     it('Should throw error for unmatched closing bracket in host', async () => {
       expect(() => {
@@ -25,7 +62,6 @@ describe('buildUrl', () => {
       ['https', 'localhost', '/foo_bar'],
       ['https', 'localhost', '/foo//bar'],
       ['https', 'localhost', '/static/%2e%2e/foo.txt'],
-      ['https', 'localhost', '/static\\..\\foo.txt'],
       ['https', 'localhost', '/..'],
       ['https', 'localhost', '/foo/.'],
       ['https', 'localhost', '/foo/bar/..'],
