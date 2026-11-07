@@ -739,7 +739,7 @@ describe('Response body stream erroring before the first chunk', () => {
             start(controller) {
               controller.error(new Error('failed'))
             },
-          }),
+          })
         ),
       { overrideGlobalObjects: false }
     )
