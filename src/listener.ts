@@ -356,6 +356,7 @@ const responseViaResponseObject = async (
 
     const values: Uint8Array[] = []
     let done = false
+    let readError: unknown
     let currentReadPromise: Promise<ReadableStreamReadResult<Uint8Array>> | undefined = undefined
 
     if (resHeaderRecord['transfer-encoding'] !== 'chunked') {
@@ -364,10 +365,15 @@ const responseViaResponseObject = async (
       for (let i = 0; i < maxReadCount; i++) {
         currentReadPromise ||= reader.read()
         const chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
-          console.error(e)
-          done = true
+          // An errored body must not be answered as a complete, empty 200:
+          // record the error and keep `done` false so the streaming path
+          // below tears the connection down instead.
+          readError = e
         })
         if (!chunk) {
+          if (readError) {
+            break
+          }
           if (i === 1) {
             // XXX: In Node.js v24, some response bodies are not read all the way through until the next task queue,
             // so wait a moment and retry. (e.g. new Blob([new Uint8Array(contents)]) )

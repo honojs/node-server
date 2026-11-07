@@ -14,6 +14,10 @@ import { GlobalRequest, Request as LightweightRequest, RequestError } from '../s
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
 import { requestServer, requestServerHttp2 } from './helpers/request'
 
+// The `overrideGlobalObjects` block further down mutates globalThis.Response, so capture the
+// native constructor here for tests that need it.
+const NativeResponse = Response
+
 const withTimeout = async <T>(promise: Promise<T>, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
 
@@ -799,5 +803,23 @@ describe('overrideGlobalObjects', () => {
       expect(global.Request).toBe(GlobalRequest)
       expect(global.Response).toBe(GlobalResponse)
     })
+  })
+})
+
+describe('Response body stream erroring before the first chunk', () => {
+  it('Should cut the connection rather than return a complete empty 200 with overrideGlobalObjects: false', async () => {
+    const requestListener = getRequestListener(
+      () =>
+        new NativeResponse(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new Error('failed'))
+            },
+          })
+        ),
+      { overrideGlobalObjects: false }
+    )
+    const server = createServer(requestListener)
+    await expect(requestServer(server, { method: 'GET', path: '/' })).rejects.toThrow('aborted')
   })
 })
