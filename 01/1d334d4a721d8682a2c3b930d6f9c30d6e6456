@@ -1,0 +1,19 @@
+test/serve-static.test.ts
+  s_05a24c0b15804f::t_c8552568c082f8 750
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "011d334d4a721d8682a2c3b930d6f9c30d6e6456",
+  "prompts": {},
+  "sessions": {
+    "s_05a24c0b15804f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4881fba3-9093-4c67-a222-6534a9cf86dc",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Yusuke Wada <yusuke@kamawada.com>"
+    }
+  }
+}
