@@ -1124,6 +1124,17 @@ describe('Request', () => {
       expect(req).toBeInstanceOf(GlobalRequest)
     })
 
+    it('should allow native GlobalRequest to be instance of Request', () => {
+      const globalReq = new GlobalRequest('http://localhost/')
+      expect(globalReq).toBeInstanceOf(Request)
+
+      class NextRequest extends Request {}
+      expect(globalReq).not.toBeInstanceOf(NextRequest)
+      expect(new Request('http://localhost/')).not.toBeInstanceOf(NextRequest)
+      expect(new NextRequest('http://localhost/')).toBeInstanceOf(NextRequest)
+      expect(new NextRequest('http://localhost/')).toBeInstanceOf(Request)
+    })
+
     it('should be success to create instance from old light weight instance', async () => {
       const req = newRequest({
         method: 'GET',

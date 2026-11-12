@@ -55,10 +55,12 @@ describe('Response', () => {
 
     // response prototype chain not changed
     expect(new Response()).toBeInstanceOf(GlobalResponse)
+    expect(new GlobalResponse()).toBeInstanceOf(Response)
 
     // `fetch()` and `Response` are not changed
     const fetchRes = await fetch(`http://localhost:${port}`)
     expect(new Response()).toBeInstanceOf(fetchRes.constructor)
+    expect(fetchRes).toBeInstanceOf(Response)
     const resJson = await fetchRes.json()
     expect(fetchRes.headers.get('content-type')).toEqual('application/json charset=UTF-8')
     expect(resJson).toEqual({ status: 'ok' })
@@ -76,6 +78,8 @@ describe('Response', () => {
 
     // support other class to extends from Response
     expect(new NextResponse()).toBeInstanceOf(Response)
+    expect(new GlobalResponse()).not.toBeInstanceOf(NextResponse)
+    expect(new Response()).not.toBeInstanceOf(NextResponse)
   })
 
   it('Should not lose header data', async () => {
