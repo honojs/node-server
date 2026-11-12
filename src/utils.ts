@@ -42,14 +42,17 @@ export function writeFromReadableStreamDefaultReader(
     reader.read().then(flow, handleStreamError)
   }
 
-  function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void | Promise<void> {
+  function flow({ done, value }: ReadableStreamReadResult<Uint8Array>): void {
     try {
       if (done) {
         writable.end()
       } else if (!writable.write(value)) {
         writable.once('drain', onDrain)
       } else {
-        return reader.read().then(flow, handleStreamError)
+        // Do not return this promise. Returning it makes the promise of the current `then` wait for
+        // the next read, so while `write()` keeps returning `true` every chunk adds a promise to a
+        // chain that is only released when the stream ends.
+        reader.read().then(flow, handleStreamError)
       }
     } catch (e) {
       handleStreamError(e)

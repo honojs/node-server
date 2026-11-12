@@ -186,6 +186,7 @@ describe('various response body types', () => {
     const largeText = 'a'.repeat(1024 * 1024 * 10)
     let server: ServerType
     let resolveReadableStreamPromise: () => void
+    let resolveReadableStreamSecondChunkPromise: () => void
     let resolveEventStreamPromise: () => void
     let resolveEventStreamWithoutTransferEncodingPromise: () => void
     beforeAll(() => {
@@ -223,11 +224,15 @@ describe('various response body types', () => {
       const readableStreamPromise = new Promise<void>((resolve) => {
         resolveReadableStreamPromise = resolve
       })
+      const readableStreamSecondChunkPromise = new Promise<void>((resolve) => {
+        resolveReadableStreamSecondChunkPromise = resolve
+      })
       app.get('/readable-stream', () => {
         const stream = new ReadableStream({
           async start(controller) {
             await readableStreamPromise
             controller.enqueue('Hello!')
+            await readableStreamSecondChunkPromise
             controller.enqueue(' Node!')
             controller.close()
           },
@@ -375,6 +380,11 @@ describe('various response body types', () => {
             // response header should be sent before sending data.
             expect(headers.get('transfer-encoding')).toBe('chunked')
             resolveReadableStreamPromise()
+          },
+          onChunk: (_chunk, index) => {
+            if (index === 0) {
+              resolveReadableStreamSecondChunkPromise()
+            }
           },
         }
       )

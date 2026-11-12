@@ -590,12 +590,12 @@ describe('Serve Static Middleware', () => {
       expect(res.status).toBe(404)
     })
 
-    it('Should prevent path traversal attacks with mixed separators', async () => {
+    it('Should reject path traversal attacks with raw backslashes', async () => {
       const res = await requestServer(server, {
         method: 'GET',
         path: '/static/..\\..\\package.json',
       })
-      expect(res.status).toBe(404)
+      expect(res.status).toBe(400)
     })
 
     it('Should prevent path traversal attacks with encoded dots', async () => {
@@ -735,6 +735,29 @@ describe('Serve Static Middleware', () => {
       expect(rewriteRequestPath).not.toHaveBeenCalled()
       expect(await res.text()).not.toBe('secret')
     })
+
+    it.each([
+      '/static/%%36%31dmin/secret.txt',
+      '/static/%6%31dmin/secret.txt',
+      '/static/%%361dmin/secret.txt',
+    ])(
+      'Should not bypass authentication through a second decode when percent signs are allowed - %s',
+      async (url) => {
+        const protectedApp = new Hono()
+        protectedApp.use('/static/admin/*', async (c) => c.text('Unauthorized', 401))
+        protectedApp.use(
+          '/static/*',
+          serveStatic({ root: './test/assets', allowPercentInPath: true })
+        )
+
+        const res = await requestServer(createAdaptorServer(protectedApp), {
+          method: 'GET',
+          path: url,
+        })
+        expect(res.status).toBe(404)
+        expect(await res.text()).not.toBe('secret')
+      }
+    )
 
     it('Should pass the routed path and context to onNotFound, then continue', async () => {
       const fileApp = new Hono()
