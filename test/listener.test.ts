@@ -488,6 +488,38 @@ describe('Abort request', () => {
     await expect(req).rejects.toThrow()
   })
 
+  it('should cancel the response body when the client disconnects before the response', async () => {
+    let resolveCancelled!: () => void
+    const cancelled = new Promise<void>((r) => {
+      resolveCancelled = r
+    })
+
+    const server = createServer(
+      getRequestListener(async (req: Request) => {
+        await new Promise((r) => req.signal.addEventListener('abort', r))
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('data: first\n\n'))
+            },
+            cancel() {
+              resolveCancelled()
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } }
+        )
+      })
+    )
+
+    await requestServer(server, {
+      method: 'GET',
+      path: '/abort',
+      signal: AbortSignal.timeout(50),
+    }).catch(() => {})
+
+    await withTimeout(cancelled, 'response body was not cancelled')
+  })
+
   it.each(['stream', 'session'] as const)(
     'should emit an abort event when an HTTP/2 client closes the %s',
     async (target) => {
