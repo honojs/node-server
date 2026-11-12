@@ -3,7 +3,9 @@ import { defineWebSocketHelper } from 'hono/ws'
 import type { IncomingMessage } from 'node:http'
 import { STATUS_CODES } from 'node:http'
 import type { Duplex } from 'node:stream'
+import { RequestError } from './error'
 import type { FetchCallback, ServerType } from './types'
+import { buildUrl, validateRequestTarget } from './url'
 import type { WebSocketData, WebSocketLike, WebSocketServerLike } from './websocket-types'
 
 interface CloseEventInit extends EventInit {
@@ -136,6 +138,9 @@ const appendResponseHeaders = (headers: string[], responseHeaders?: Headers) => 
 }
 
 const rejectUpgradeRequest = (socket: Duplex, status: number, responseHeaders?: Headers) => {
+  if (socket.destroyed) {
+    return
+  }
   const responseLines = ['Connection: close', 'Content-Length: 0']
   appendResponseHeaders(responseLines, responseHeaders)
 
@@ -148,7 +153,17 @@ const rejectUpgradeRequest = (socket: Duplex, status: number, responseHeaders?: 
 
 const createUpgradeRequest = (request: IncomingMessage): Request => {
   const protocol = (request.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http'
-  const url = new URL(request.url ?? '/', `${protocol}://${request.headers.host ?? 'localhost'}`)
+  const incomingUrl = request.url ?? '/'
+  let url: string
+  if (
+    incomingUrl[0] !== '/' &&
+    (incomingUrl.startsWith('http://') || incomingUrl.startsWith('https://'))
+  ) {
+    validateRequestTarget(incomingUrl)
+    url = new URL(incomingUrl).href
+  } else {
+    url = buildUrl(protocol, request.headers.host ?? 'localhost', incomingUrl)
+  }
   const headers = new Headers()
   for (const key in request.headers) {
     const value = request.headers[key]
@@ -205,6 +220,14 @@ export const setupWebSocket = (options: {
       return
     }
 
+    // Nothing listens on the socket while the application handles the request. Without
+    // these listeners a connection reset in that window is emitted as an unhandled
+    // 'error' event and crashes the process, and a closed socket leaves its waiter behind.
+    const ignoreSocketError = () => {}
+    const reclaimWaiterOnClose = () => rejectWaiter(request)
+    socket.on('error', ignoreSocketError)
+    socket.once('close', reclaimWaiterOnClose)
+
     const env: UpgradeBindings = {
       incoming: request,
       outgoing: undefined,
@@ -223,10 +246,15 @@ export const setupWebSocket = (options: {
         status = response.status
         responseHeaders = response.headers
       }
-    } catch {
+    } catch (error) {
       if (server.listenerCount('upgrade') === 1) {
-        rejectUpgradeRequest(socket, 500)
+        rejectUpgradeRequest(socket, error instanceof RequestError ? 400 : 500)
       }
+      return
+    }
+
+    if (socket.destroyed) {
+      rejectWaiter(request)
       return
     }
 
@@ -244,13 +272,11 @@ export const setupWebSocket = (options: {
       appendResponseHeaders(headers, responseHeaders)
     }
 
-    const reclaimWaiterOnClose = () => rejectWaiter(request)
-    socket.once('close', reclaimWaiterOnClose)
-
     wss.on('headers', addResponseHeaders)
     try {
       wss.handleUpgrade(request, socket, head, (ws) => {
         socket.off('close', reclaimWaiterOnClose)
+        socket.off('error', ignoreSocketError)
         wss.emit('connection', ws, request)
       })
     } finally {

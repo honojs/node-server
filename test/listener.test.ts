@@ -12,7 +12,7 @@ import { GlobalHeaders } from '../src/headers'
 import { getRequestListener } from '../src/listener'
 import { GlobalRequest, Request as LightweightRequest, RequestError } from '../src/request'
 import { GlobalResponse, Response as LightweightResponse } from '../src/response'
-import { requestServer } from './helpers/request'
+import { requestServer, requestServerHttp2 } from './helpers/request'
 
 const withTimeout = async <T>(promise: Promise<T>, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
@@ -59,6 +59,75 @@ const runRequestAndCollectOutgoingEvents = async (
 }
 
 describe('Invalid request', () => {
+  describe.each([
+    {
+      protocol: 'HTTP/1.1',
+      createServer: (listener: ReturnType<typeof getRequestListener>) => createServer(listener),
+      request: requestServer,
+    },
+    {
+      protocol: 'HTTP/2',
+      createServer: (listener: ReturnType<typeof getRequestListener>) =>
+        createHttp2Server(listener),
+      request: requestServerHttp2,
+    },
+  ])('backslashes over $protocol', ({ createServer, request }) => {
+    it.each([
+      '/admin\\secret',
+      '/public\\..\\admin/secret',
+      '/public\\%2e%2e\\admin/secret',
+      '/admin\\secret?next=public',
+    ])('should return 400 before calling the application for %s', async (path) => {
+      const fetchCallback = vi.fn(() => new Response('admin handler reached'))
+      const server = createServer(getRequestListener(fetchCallback))
+
+      const res = await request(server, { method: 'GET', path })
+
+      expect(res.status).toBe(400)
+      expect(fetchCallback).not.toHaveBeenCalled()
+    })
+
+    it.each(['/admin%5Csecret', '/public?q=\\admin\\secret'])(
+      'should preserve encoded backslashes and query backslashes in %s',
+      async (path) => {
+        const server = createServer(getRequestListener((req) => new Response(req.url)))
+
+        const res = await request(server, { method: 'GET', path })
+
+        expect(res.status).toBe(200)
+        const url = new URL(await res.text())
+        expect(url.pathname + url.search).toBe(path)
+      }
+    )
+  })
+
+  describe('backslashes in absolute-form request-targets', () => {
+    it.each(['http://localhost/admin\\secret', 'https://localhost/public\\..\\admin/secret'])(
+      'should return 400 before calling the application for %s',
+      async (path) => {
+        const fetchCallback = vi.fn(() => new Response('admin handler reached'))
+        const server = createServer(getRequestListener(fetchCallback))
+
+        const res = await requestServer(server, { method: 'GET', path })
+
+        expect(res.status).toBe(400)
+        expect(fetchCallback).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each(['http://localhost/admin%5Csecret', 'https://localhost/public?q=\\admin\\secret'])(
+      'should preserve encoded backslashes and query backslashes in %s',
+      async (path) => {
+        const server = createServer(getRequestListener((req) => new Response(req.url)))
+
+        const res = await requestServer(server, { method: 'GET', path })
+
+        expect(res.status).toBe(200)
+        expect(await res.text()).toBe(path)
+      }
+    )
+  })
+
   describe('default error handler', () => {
     const requestListener = getRequestListener(vi.fn())
     const server = createServer(requestListener)
@@ -94,6 +163,13 @@ describe('Invalid request', () => {
       },
     })
     const server = createServer(requestListener)
+
+    it('should report a path backslash as a RequestError', async () => {
+      const res = await requestServer(server, { method: 'GET', path: '/admin\\secret' })
+
+      expect(res.status).toBe(400)
+      expect(await res.text()).toBe('Backslash in request path')
+    })
 
     it('Should return server error for a request w/o host header', async () => {
       const res = await requestServer(server, {

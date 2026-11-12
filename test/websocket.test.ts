@@ -17,6 +17,260 @@ describe('WebSocket', () => {
     )
   }
 
+  // Send a raw request-target: a WebSocket client would normalize backslashes first.
+  const requestUpgrade = (address: AddressInfo, path: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const socket = connect(address.port, '127.0.0.1', () => {
+        socket.write(
+          `GET ${path} HTTP/1.1\r\n` +
+            `Host: 127.0.0.1:${address.port}\r\n` +
+            'Upgrade: websocket\r\n' +
+            'Connection: Upgrade\r\n' +
+            'Sec-WebSocket-Version: 13\r\n' +
+            'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+            '\r\n'
+        )
+      })
+      let response = ''
+      socket.on('data', (chunk) => {
+        response += chunk.toString('utf-8')
+        if (response.includes('\r\n\r\n')) {
+          socket.destroy()
+          resolve(response.split('\r\n')[0])
+        }
+      })
+      socket.once('error', reject)
+      socket.once('close', () =>
+        reject(new Error('Socket closed before receiving upgrade headers'))
+      )
+      socket.setTimeout(1_000, () => socket.destroy(new Error('WebSocket upgrade timed out')))
+    })
+
+  describe('backslashes in upgrade request-targets', () => {
+    it.each([
+      '/admin\\secret',
+      '/public\\..\\admin/secret',
+      '/public\\%2e%2e\\admin/secret',
+      '/admin\\secret?next=public',
+      '/public%3Fq=\\..\\admin/secret',
+      'http://localhost/admin\\secret',
+    ])('should return 400 before calling the application for %s', async (path) => {
+      const app = new Hono()
+      app.get(
+        '/admin/*',
+        upgradeWebSocket(() => ({}))
+      )
+      const fetchCallback = vi.spyOn(app, 'fetch')
+      const { server, address } = await startServer(app)
+
+      try {
+        expect(await requestUpgrade(address, path)).toBe('HTTP/1.1 400 Bad Request')
+        expect(fetchCallback).not.toHaveBeenCalled()
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it.each(['/admin%5Csecret', '/public%5c..%5cadmin/secret', '/public?q=\\admin\\secret'])(
+      'should allow encoded backslashes and query backslashes in %s',
+      async (path) => {
+        const app = new Hono()
+        app.get(
+          '*',
+          upgradeWebSocket(() => ({}))
+        )
+        const fetchCallback = vi.spyOn(app, 'fetch')
+        const { server, address } = await startServer(app)
+
+        try {
+          expect(await requestUpgrade(address, path)).toBe('HTTP/1.1 101 Switching Protocols')
+          expect(fetchCallback).toHaveBeenCalledOnce()
+          expect(fetchCallback.mock.calls[0][0].url).toBe(`http://127.0.0.1:${address.port}${path}`)
+        } finally {
+          await new Promise<void>((resolve) => server.close(() => resolve()))
+        }
+      }
+    )
+  })
+
+  it('should still return 500 when the fetch callback throws an unexpected error', async () => {
+    const app = new Hono()
+    vi.spyOn(app, 'fetch').mockImplementation(() => {
+      throw new Error('Unexpected application error')
+    })
+    const { server, address } = await startServer(app)
+
+    try {
+      expect(await requestUpgrade(address, '/ws')).toBe('HTTP/1.1 500 Internal Server Error')
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
+  describe('socket closed while the application is still running', () => {
+    const upgradeRequest = (port: number) =>
+      'GET /ws HTTP/1.1\r\n' +
+      `Host: 127.0.0.1:${port}\r\n` +
+      'Upgrade: websocket\r\n' +
+      'Connection: Upgrade\r\n' +
+      'Sec-WebSocket-Version: 13\r\n' +
+      'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+      '\r\n'
+
+    const startAppWithAsyncMiddleware = async () => {
+      const app = new Hono()
+      let handled = 0
+      app.use('/ws', async (_c, next) => {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        await next()
+      })
+      app.get(
+        '/ws',
+        upgradeWebSocket(() => ({
+          onOpen() {
+            handled++
+          },
+        }))
+      )
+      const { server, address } = await startServer(app)
+      return { server, address, handled: () => handled }
+    }
+
+    const sendUpgradeThen = (
+      address: AddressInfo,
+      end: (socket: ReturnType<typeof connect>) => void
+    ) =>
+      new Promise<void>((resolve) => {
+        const socket = connect(address.port, '127.0.0.1', () => {
+          socket.write(upgradeRequest(address.port), () => end(socket))
+        })
+        socket.on('error', () => {})
+        socket.on('close', () => resolve())
+      })
+
+    it.each([
+      ['a TCP reset', (socket: ReturnType<typeof connect>) => socket.resetAndDestroy()],
+      ['a graceful close', (socket: ReturnType<typeof connect>) => socket.destroy()],
+    ])('should survive %s during async middleware and keep serving', async (_name, end) => {
+      const { server, address, handled } = await startAppWithAsyncMiddleware()
+
+      try {
+        await sendUpgradeThen(address, end)
+        // let the middleware finish and the upgrade handler resume on the dead socket
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        expect(handled()).toBe(0)
+
+        const ws = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+        await new Promise<void>((resolve, reject) => {
+          ws.on('open', () => resolve())
+          ws.on('error', reject)
+        })
+        ws.close()
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(handled()).toBe(1)
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+  })
+
+  describe('request-target of the upgrade request', () => {
+    const requestUpgrade = (address: AddressInfo, target: string, origin: string) =>
+      new Promise<string>((resolve, reject) => {
+        const socket = connect(address.port, '127.0.0.1', () => {
+          socket.write(
+            `GET ${target} HTTP/1.1\r\n` +
+              `Host: 127.0.0.1:${address.port}\r\n` +
+              `Origin: ${origin}\r\n` +
+              'Upgrade: websocket\r\n' +
+              'Connection: Upgrade\r\n' +
+              'Sec-WebSocket-Version: 13\r\n' +
+              'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+              '\r\n'
+          )
+        })
+        let response = ''
+        socket.on('data', (chunk) => {
+          response += chunk.toString('utf-8')
+          if (response.includes('\r\n\r\n')) {
+            socket.destroy()
+            resolve(response.split('\r\n')[0])
+          }
+        })
+        socket.once('error', reject)
+        socket.setTimeout(1_000, () => socket.destroy(new Error('upgrade timed out')))
+      })
+
+    const startAppWithOriginCheck = async () => {
+      const app = new Hono()
+      const seenUrls: string[] = []
+      app.use('*', async (c, next) => {
+        seenUrls.push(c.req.url)
+        if (c.req.header('origin') !== new URL(c.req.url).origin) {
+          return c.text('forbidden', 403)
+        }
+        await next()
+      })
+      app.get(
+        '/ws',
+        upgradeWebSocket(() => ({}))
+      )
+      const { server, address } = await startServer(app)
+      return { server, address, seenUrls }
+    }
+
+    it('should keep the host from the Host header for a request-target starting with //', async () => {
+      const { server, address, seenUrls } = await startAppWithOriginCheck()
+      try {
+        const status = await requestUpgrade(
+          address,
+          '//attacker.example/ws',
+          'http://attacker.example'
+        )
+        expect(status).toBe('HTTP/1.1 403 Forbidden')
+        expect(seenUrls).toEqual([`http://127.0.0.1:${address.port}//attacker.example/ws`])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it('should accept a same-origin upgrade request', async () => {
+      const { server, address, seenUrls } = await startAppWithOriginCheck()
+      try {
+        const status = await requestUpgrade(address, '/ws', `http://127.0.0.1:${address.port}`)
+        expect(status).toBe('HTTP/1.1 101 Switching Protocols')
+        expect(seenUrls).toEqual([`http://127.0.0.1:${address.port}/ws`])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it('should still accept an absolute-form request-target', async () => {
+      const { server, address, seenUrls } = await startAppWithOriginCheck()
+      try {
+        const status = await requestUpgrade(
+          address,
+          `http://127.0.0.1:${address.port}/ws`,
+          `http://127.0.0.1:${address.port}`
+        )
+        expect(status).toBe('HTTP/1.1 101 Switching Protocols')
+        expect(seenUrls).toEqual([`http://127.0.0.1:${address.port}/ws`])
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it('should reject a request-target that does not start with /', async () => {
+      const { server, address } = await startAppWithOriginCheck()
+      try {
+        const status = await requestUpgrade(address, 'ws', `http://127.0.0.1:${address.port}`)
+        expect(status).toBe('HTTP/1.1 400 Bad Request')
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+  })
+
   it('should connect with upgradeWebSocket without manual injection', async () => {
     const app = new Hono()
 
