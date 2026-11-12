@@ -1,4 +1,5 @@
 import type { OutgoingHttpHeaders } from 'node:http'
+import type { Http2ServerResponse } from 'node:http2'
 import type { Writable } from 'node:stream'
 
 export async function readWithoutBlocking(
@@ -16,8 +17,8 @@ export function writeFromReadableStreamDefaultReader(
     reader.cancel(error).catch(() => {})
   }
 
-  if (writable.destroyed) {
-    // 'close' may already have been emitted, so cancel now instead of waiting for it.
+  const stream = (writable as unknown as Partial<Http2ServerResponse>).stream
+  if (writable.destroyed || stream?.closed || stream?.destroyed) {
     cancel()
     return reader.closed
   }
