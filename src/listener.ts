@@ -363,10 +363,7 @@ const responseViaResponseObject = async (
       let maxReadCount = 2
       for (let i = 0; i < maxReadCount; i++) {
         currentReadPromise ||= reader.read()
-        const chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
-          console.error(e)
-          done = true
-        })
+        const chunk = await readWithoutBlocking(currentReadPromise)
         if (!chunk) {
           if (i === 1) {
             // XXX: In Node.js v24, some response bodies are not read all the way through until the next task queue,
@@ -376,9 +373,7 @@ const responseViaResponseObject = async (
             continue
           }
 
-          // Error occurred or currentReadPromise is not yet resolved.
-          // If an error occurs, immediately break the loop.
-          // If currentReadPromise is not yet resolved, pass it to writeFromReadableStreamDefaultReader.
+          // currentReadPromise is not yet resolved, pass it to writeFromReadableStreamDefaultReader.
           break
         }
         currentReadPromise = undefined
