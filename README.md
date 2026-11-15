@@ -112,6 +112,15 @@ serve({
 })
 ```
 
+### `hostname`
+
+```ts
+serve({
+  fetch: app.fetch,
+  hostname: '0.0.0.0', // Hostname or IP to listen on, default is undefined
+})
+```
+
 ### `createServer`
 
 ```ts
@@ -432,6 +441,25 @@ const socketPath = '/tmp/example.sock'
 const server = createAdaptorServer(app)
 server.listen(socketPath, () => {
   console.log(`Listening on ${socketPath}`)
+})
+```
+
+## Custom server with `getRequestListener`
+
+If you want to use Node's native `http.createServer()` or integrate with testing tools, use `getRequestListener` to get a standard Node request listener callback `(incoming, outgoing) => Promise<void>`.
+
+```ts
+import { createServer } from 'node:http'
+import { getRequestListener } from '@hono/node-server'
+import { Hono } from 'hono'
+
+const app = new Hono()
+app.get('/', (c) => c.text('Hello from Hono!'))
+
+const server = createServer(getRequestListener(app.fetch))
+
+server.listen(3000, () => {
+  console.log('Listening on http://localhost:3000')
 })
 ```
 
