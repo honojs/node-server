@@ -289,6 +289,13 @@ export const setupWebSocket = (options: {
   })
 }
 
+/**
+ * Upgrade an incoming HTTP request to a WebSocket connection.
+ *
+ * @param createEvents Callback defining WebSocket event handlers
+ * @param options Optional WebSocket upgrade options
+ * @returns Hono middleware handler
+ */
 export const upgradeWebSocket: UpgradeWebSocket<WebSocketLike, UpgradeWebSocketOptions> =
   defineWebSocketHelper(async (c, events, options) => {
     if (c.req.header('upgrade')?.toLowerCase() !== 'websocket') {

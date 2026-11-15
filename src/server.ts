@@ -4,6 +4,12 @@ import { getRequestListener } from './listener'
 import type { Options, ServerType } from './types'
 import { setupWebSocket } from './websocket'
 
+/**
+ * Create a Node.js server instance for a Hono application without starting to listen.
+ *
+ * @param options Server configuration options
+ * @returns Node.js server instance
+ */
 export const createAdaptorServer = (options: Options): ServerType => {
   const fetchCallback = options.fetch
   const requestListener = getRequestListener(fetchCallback, {
@@ -23,6 +29,13 @@ export const createAdaptorServer = (options: Options): ServerType => {
   return server
 }
 
+/**
+ * Create and start listening on a Node.js server for a Hono application.
+ *
+ * @param options Server configuration options
+ * @param listeningListener Optional callback invoked when the server starts listening
+ * @returns Running Node.js server instance
+ */
 export const serve = (
   options: Options,
   listeningListener?: (info: AddressInfo) => void

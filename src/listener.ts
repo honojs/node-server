@@ -414,6 +414,13 @@ const responseViaResponseObject = async (
   ;(outgoing as OutgoingHasOutgoingEnded)[outgoingEnded]?.()
 }
 
+/**
+ * Create a standard Node.js request listener callback for a fetch callback.
+ *
+ * @param fetchCallback Fetch callback, such as `app.fetch`
+ * @param options Optional listener configuration
+ * @returns Node.js request listener callback `(incoming, outgoing) => Promise<void>`
+ */
 export const getRequestListener = (
   fetchCallback: FetchCallback,
   options: {

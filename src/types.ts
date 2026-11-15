@@ -21,11 +21,17 @@ import type {
 } from 'node:https'
 import type { WebSocketServerLike } from './websocket-types'
 
+/**
+ * Bindings available in `c.env` when running under HTTP/1.1.
+ */
 export type HttpBindings = {
   incoming: IncomingMessage
   outgoing: HttpServerResponse
 }
 
+/**
+ * Bindings available in `c.env` when running under HTTP/2.
+ */
 export type Http2Bindings = {
   incoming: Http2ServerRequest
   outgoing: Http2ServerResponse
@@ -69,11 +75,29 @@ export type ServerOptions =
   | createSecureHttp2Options
 
 export type Options = {
+  /**
+   * The fetch handler callback, such as `app.fetch`.
+   */
   fetch: FetchCallback
+  /**
+   * Rewrite global Request and Response with lightweight alternatives. Defaults to true.
+   */
   overrideGlobalObjects?: boolean
+  /**
+   * Automatically destroy unconsumed incoming request streams. Defaults to true.
+   */
   autoCleanupIncoming?: boolean
+  /**
+   * Port number to listen on. Defaults to 3000.
+   */
   port?: number
+  /**
+   * Hostname or IP address to bind to.
+   */
   hostname?: string
+  /**
+   * WebSocket server options to enable WebSocket upgrades.
+   */
   websocket?: {
     server: WebSocketServerLike
   }
