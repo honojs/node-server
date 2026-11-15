@@ -727,6 +727,79 @@ describe('Request', () => {
       await expect(req.text()).rejects.toBeInstanceOf(TypeError)
     })
 
+    it('should set bodyUsed and reject clone() after direct bytes() read', async () => {
+      const req = newRequest({
+        method: 'POST',
+        headers: {
+          host: 'localhost',
+          'content-type': 'application/octet-stream',
+        },
+        rawHeaders: ['host', 'localhost', 'content-type', 'application/octet-stream'],
+        rawBody: Buffer.from([1, 2, 3]),
+        url: '/foo.txt',
+      } as IncomingMessage & { rawBody: Buffer })
+
+      const bytes = await req.bytes()
+      expect(bytes).toEqual(new Uint8Array([1, 2, 3]))
+      expect(bytes instanceof Uint8Array).toBe(true)
+      expect(req.bodyUsed).toBe(true)
+      expect(() => req.clone()).toThrow(TypeError)
+      await expect(req.text()).rejects.toBeInstanceOf(TypeError)
+    })
+
+    it('should reject second direct bytes() read even after accessing signal', async () => {
+      const req = newRequest({
+        method: 'POST',
+        headers: {
+          host: 'localhost',
+          'content-type': 'text/plain',
+        },
+        rawHeaders: ['host', 'localhost', 'content-type', 'text/plain'],
+        rawBody: Buffer.from('foo'),
+        url: '/foo.txt',
+      } as IncomingMessage & { rawBody: Buffer })
+
+      await expect(req.bytes()).resolves.toEqual(new TextEncoder().encode('foo'))
+      expect(req.signal.aborted).toBe(false)
+      await expect(req.bytes()).rejects.toBeInstanceOf(TypeError)
+    })
+
+    it('should read streamed body as bytes', async () => {
+      const socket = new Socket()
+      const incomingMessage = new IncomingMessage(socket)
+      incomingMessage.method = 'POST'
+      incomingMessage.headers = {
+        host: 'localhost',
+        'content-type': 'text/plain',
+      }
+      incomingMessage.rawHeaders = ['host', 'localhost', 'content-type', 'text/plain']
+      incomingMessage.url = '/foo.txt'
+      const req = newRequest(incomingMessage)
+
+      incomingMessage.push('hello ')
+      incomingMessage.push('world')
+      incomingMessage.push(null)
+
+      const bytes = await req.bytes()
+      expect(bytes).toEqual(new TextEncoder().encode('hello world'))
+      expect(bytes instanceof Uint8Array).toBe(true)
+      expect(req.bodyUsed).toBe(true)
+      await expect(req.bytes()).rejects.toBeInstanceOf(TypeError)
+    })
+
+    it('should return empty Uint8Array for GET request bytes()', async () => {
+      const req = newRequest({
+        method: 'GET',
+        headers: {
+          host: 'localhost',
+        },
+        rawHeaders: ['host', 'localhost'],
+        url: '/foo.txt',
+      } as IncomingMessage)
+
+      expect(await req.bytes()).toEqual(new Uint8Array())
+    })
+
     it('should preserve content type in blob() result', async () => {
       const req = newRequest({
         method: 'POST',

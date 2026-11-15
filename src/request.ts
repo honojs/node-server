@@ -45,6 +45,16 @@ export class Request extends GlobalRequest {
   }
 }
 
+if (!('bytes' in GlobalRequest.prototype)) {
+  Object.defineProperty(Request.prototype, 'bytes', {
+    value: function (): Promise<Uint8Array> {
+      return this.arrayBuffer().then((ab: ArrayBuffer) => new Uint8Array(ab))
+    },
+    writable: true,
+    configurable: true,
+  })
+}
+
 export type IncomingMessageWithWrapBodyStream = IncomingMessage & { [wrapBodyStream]: boolean }
 export const wrapBodyStream = Symbol('wrapBodyStream')
 
@@ -290,7 +300,7 @@ const contentType = (request: Record<string | symbol, any>): string => {
   )
 }
 
-type DirectBodyReadMethod = 'text' | 'arrayBuffer' | 'blob'
+type DirectBodyReadMethod = 'text' | 'arrayBuffer' | 'blob' | 'bytes'
 
 const methodTokenRegExp = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 
@@ -358,7 +368,11 @@ const readBodyWithFastPath = <T>(
 
   const methodName = request.method as string
   if (methodName === 'GET' || methodName === 'HEAD') {
-    return request[getRequestCache]()[method]()
+    const cached = request[getRequestCache]() as any
+    if (typeof cached[method] === 'function') {
+      return cached[method]()
+    }
+    return cached.arrayBuffer().then((ab: ArrayBuffer) => new Uint8Array(ab))
   }
 
   const methodValidationError = validateDirectReadMethod(methodName)
@@ -370,8 +384,11 @@ const readBodyWithFastPath = <T>(
     // Keep TRACE direct-read behavior stable even if non-body properties
     // created requestCache earlier (e.g. signal access).
     if (methodName !== 'TRACE') {
-      const cachedRequest = request[requestCache] as Request
-      return cachedRequest[method]() as Promise<T>
+      const cachedRequest = request[requestCache] as any
+      if (typeof cachedRequest[method] === 'function') {
+        return cachedRequest[method]() as Promise<T>
+      }
+      return cachedRequest.arrayBuffer().then((ab: ArrayBuffer) => new Uint8Array(ab)) as Promise<T>
     }
   }
 
@@ -632,7 +649,7 @@ const requestPrototype: Record<string | symbol, any> = {
     const request = this[getRequestCache]()
     if (!this[bodyLockReaderKey] && request.body) {
       // Web standard requires body.locked === true when bodyUsed === true.
-      // After direct consumption (text/json/arrayBuffer/blob), getRequestCache() returns
+      // After direct consumption (text/json/arrayBuffer/blob/bytes), getRequestCache() returns
       // a Request with an empty ReadableStream body. We lock it here so that
       // body.locked reflects the consumed state correctly.
       this[bodyLockReaderKey] = request.body.getReader()
@@ -688,7 +705,7 @@ Object.defineProperty(requestPrototype, 'signal', {
   })
 })
 
-// Direct body reading for text/arrayBuffer/blob/json: bypass getRequestCache()
+// Direct body reading for text/arrayBuffer/blob/bytes/json: bypass getRequestCache()
 // → new AbortController() → newHeadersFromIncoming() → new Request(url, init)
 // → Readable.toWeb() chain for common body parsing cases.
 Object.defineProperty(requestPrototype, 'text', {
@@ -699,6 +716,11 @@ Object.defineProperty(requestPrototype, 'text', {
 Object.defineProperty(requestPrototype, 'arrayBuffer', {
   value: function (): Promise<ArrayBuffer> {
     return readBodyWithFastPath(this, 'arrayBuffer', (buf) => toArrayBuffer(buf))
+  },
+})
+Object.defineProperty(requestPrototype, 'bytes', {
+  value: function (): Promise<Uint8Array> {
+    return readBodyWithFastPath(this, 'bytes', (buf) => new Uint8Array(toArrayBuffer(buf)))
   },
 })
 Object.defineProperty(requestPrototype, 'blob', {
