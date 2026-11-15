@@ -160,6 +160,49 @@ describe('Response', () => {
     expect(await childResponse.text()).toEqual('HONO')
   })
 
+  describe('Response.bytes', () => {
+    it.each<[string, BodyInit | null, Uint8Array]>([
+      ['string', 'hello', new TextEncoder().encode('hello')],
+      ['binary', new Uint8Array([0, 128, 255]), new Uint8Array([0, 128, 255])],
+      ['null', null, new Uint8Array()],
+    ])('should read a %s body as bytes', async (_, body, expected) => {
+      const res = new Response(body)
+
+      expect(await res.bytes()).toEqual(expected)
+    })
+
+    it('should read a streamed body as bytes', async () => {
+      const expected = new TextEncoder().encode('hello')
+      const res = new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(expected)
+            controller.close()
+          },
+        })
+      )
+
+      expect(await res.bytes()).toEqual(expected)
+    })
+
+    it('should consume the body and reject subsequent reads', async () => {
+      const res = new Response('hello')
+
+      expect(res.bodyUsed).toBe(false)
+      expect(await res.bytes()).toEqual(new TextEncoder().encode('hello'))
+      expect(res.bodyUsed).toBe(true)
+      await expect(res.bytes()).rejects.toBeInstanceOf(TypeError)
+      await expect(res.text()).rejects.toBeInstanceOf(TypeError)
+    })
+
+    it('should reject when another reader has already consumed the body', async () => {
+      const res = new Response('hello')
+
+      expect(await res.text()).toBe('hello')
+      await expect(res.bytes()).rejects.toBeInstanceOf(TypeError)
+    })
+  })
+
   describe('Response.json', () => {
     it('should return 200 with application/json content-type by default', () => {
       const res = Response.json({ hello: 'world' })
