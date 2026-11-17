@@ -135,8 +135,10 @@ const readBodyBufferedBeforeDisconnect = (
     result = newBodyUnusableError()
   } else {
     const bodyChunks = chunks ?? []
-    const chunk = incoming.read() as Buffer | string | null
-    if (chunk !== null) {
+    // Drain everything still buffered: on a destroyed stream some Node versions
+    // (26+) return only the first buffered chunk per read() call.
+    let chunk: Buffer | string | null
+    while ((chunk = incoming.read() as Buffer | string | null) !== null) {
       bodyChunks.push(toBufferChunk(chunk, incoming.readableEncoding))
     }
     const buffer = bodyChunks.length === 1 ? bodyChunks[0] : Buffer.concat(bodyChunks)
