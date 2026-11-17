@@ -22,7 +22,17 @@ interface LightResponse {
 export const GlobalResponse = global.Response
 export class Response {
   #body?: BodyInit | null
-  #init?: ResponseInit;
+  #init?: ResponseInit
+
+  static [Symbol.hasInstance](this: unknown, instance: unknown): boolean {
+    if (this === Response) {
+      return (
+        instance instanceof GlobalResponse ||
+        Function.prototype[Symbol.hasInstance].call(this, instance)
+      )
+    }
+    return Function.prototype[Symbol.hasInstance].call(this, instance)
+  }
 
   [getResponseCache](): globalThis.Response {
     // If `cacheKey` has been populated with a live `Headers` instance, the
@@ -54,7 +64,7 @@ export class Response {
         this[getResponseCache]()
         return
       }
-      this.#init = init instanceof Response ? init.#init : init
+      this.#init = #init in init ? init.#init : init
       headers = new Headers(init.headers)
     } else {
       this.#init = init

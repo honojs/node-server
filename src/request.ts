@@ -22,6 +22,16 @@ export const toRequestError = (e: unknown): RequestError => {
 
 export const GlobalRequest = global.Request
 export class Request extends GlobalRequest {
+  static [Symbol.hasInstance](this: unknown, instance: unknown): boolean {
+    if (this === Request) {
+      return (
+        instance instanceof GlobalRequest ||
+        Function.prototype[Symbol.hasInstance].call(this, instance)
+      )
+    }
+    return Function.prototype[Symbol.hasInstance].call(this, instance)
+  }
+
   constructor(input: string | Request, options?: RequestInit) {
     if (typeof input === 'object' && getRequestCache in input) {
       // Match native Request behavior:
