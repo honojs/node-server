@@ -160,6 +160,15 @@ describe('Response', () => {
     expect(await childResponse.text()).toEqual('HONO')
   })
 
+  describe('Response.bytes', () => {
+    it('should return the body as Uint8Array', async () => {
+      const res = new LightweightResponse('hello')
+      const bytes = await (res as unknown as { bytes(): Promise<Uint8Array> }).bytes()
+      expect(bytes).toBeInstanceOf(Uint8Array)
+      expect(new TextDecoder().decode(bytes)).toBe('hello')
+    })
+  })
+
   describe('Response.json', () => {
     it('should return 200 with application/json content-type by default', () => {
       const res = Response.json({ hello: 'world' })
