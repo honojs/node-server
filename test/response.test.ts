@@ -82,6 +82,17 @@ describe('Response', () => {
     expect(new Response()).not.toBeInstanceOf(NextResponse)
   })
 
+  it('Should use a native Response from fetch() as init', async () => {
+    const fetchRes = await fetch(`http://localhost:${port}`)
+    const res = new Response('body', fetchRes)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('application/json charset=UTF-8')
+    expect(await res.text()).toBe('body')
+
+    const created = new Response('body', new GlobalResponse(null, { status: 201 }))
+    expect(created.status).toBe(201)
+  })
+
   it('Should not lose header data', async () => {
     const parentResponse = new Response('OK', {
       headers: {
