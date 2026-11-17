@@ -712,6 +712,11 @@ Object.defineProperty(requestPrototype, 'blob', {
     })
   },
 })
+Object.defineProperty(requestPrototype, 'bytes', {
+  value: function (): Promise<Uint8Array<ArrayBuffer>> {
+    return this.arrayBuffer().then((buf: ArrayBuffer) => new Uint8Array(buf))
+  },
+})
 // json() reuses text() fast path to keep body consumption logic centralized.
 Object.defineProperty(requestPrototype, 'json', {
   value: function (): Promise<any> {

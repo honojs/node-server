@@ -104,7 +104,7 @@ export class Response {
     },
   })
 })
-;['arrayBuffer', 'blob', 'clone', 'formData', 'json', 'text'].forEach((k) => {
+;['arrayBuffer', 'blob', 'bytes', 'clone', 'formData', 'json', 'text'].forEach((k) => {
   Object.defineProperty(Response.prototype, k, {
     value: function () {
       return this[getResponseCache]()[k]()

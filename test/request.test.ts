@@ -727,6 +727,25 @@ describe('Request', () => {
       await expect(req.text()).rejects.toBeInstanceOf(TypeError)
     })
 
+    it('should read the body with bytes() and mark it as used', async () => {
+      const req = newRequest({
+        method: 'POST',
+        headers: {
+          host: 'localhost',
+          'content-type': 'application/octet-stream',
+        },
+        rawHeaders: ['host', 'localhost', 'content-type', 'application/octet-stream'],
+        rawBody: Buffer.from([1, 2, 3]),
+        url: '/foo.txt',
+      } as IncomingMessage & { rawBody: Buffer })
+
+      const bytes = await req.bytes()
+      expect(bytes).toBeInstanceOf(Uint8Array)
+      expect(bytes).toEqual(new Uint8Array([1, 2, 3]))
+      expect(req.bodyUsed).toBe(true)
+      await expect(req.bytes()).rejects.toBeInstanceOf(TypeError)
+    })
+
     it('should preserve content type in blob() result', async () => {
       const req = newRequest({
         method: 'POST',
