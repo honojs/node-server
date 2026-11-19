@@ -3,6 +3,7 @@ import type { ServerHttp2Stream } from 'node:http2'
 import { Http2ServerRequest } from 'node:http2'
 import { Socket } from 'node:net'
 import { Duplex } from 'node:stream'
+import { queryObjects } from 'node:v8'
 import {
   abortRequest,
   newRequest,
@@ -121,6 +122,79 @@ describe('Request', () => {
 
       expect(req[getAbortController]()).toBeDefined()
       expect(req[abortControllerKey]).toBeDefined() // initialized
+    })
+
+    it('should not retain the request when a listener on request.signal references it', async () => {
+      // undici keeps the signal passed to `new Request(url, { signal })` alive in a FinalizationRegistry
+      // until the native Request's own AbortController is collected. If `request.signal` were that very
+      // signal, any listener reaching the request would keep the native Request (and so the signal)
+      // reachable forever: the request, its IncomingMessage and its body would never be released.
+      const countRequests = () => queryObjects(GlobalRequest, { format: 'count' }) as number
+      const settle = async () => {
+        for (let i = 0; i < 5; i++) {
+          await new Promise((resolve) => setImmediate(resolve))
+          // queryObjects() collects garbage first, which lets the FinalizationRegistry callbacks run
+          countRequests()
+        }
+      }
+
+      await settle()
+      const baseline = countRequests()
+      const total = 50
+      for (let i = 0; i < total; i++) {
+        const req = newRequest({
+          method: 'GET',
+          url: '/',
+          headers: { host: 'localhost' },
+          rawHeaders: ['host', 'localhost'],
+        } as IncomingMessage)
+        // a router, a body parser or a streaming encoder that never removes its listener
+        req.signal.addEventListener('abort', () => req.url)
+        // creates the native Request, which the adapter builds with its own signal
+        await req.arrayBuffer()
+      }
+      await settle()
+
+      expect(countRequests() - baseline).toBeLessThan(total / 5)
+    })
+
+    it('should not create the native Request when request.signal is accessed', async () => {
+      const req = newRequest({
+        method: 'GET',
+        url: '/',
+        headers: { host: 'localhost' },
+        rawHeaders: ['host', 'localhost'],
+      } as IncomingMessage)
+
+      const { inspect } = require('node:util')
+
+      expect(req.signal.aborted).toBe(false)
+      expect(inspect(req)).toContain('nativeRequest: undefined')
+
+      req[abortRequest]('Client connection prematurely closed.')
+      expect(req.signal.aborted).toBe(true)
+      expect(inspect(req)).toContain('nativeRequest: undefined')
+    })
+
+    it('should abort both request.signal and the native Request when the request is aborted', async () => {
+      const req = newRequest({
+        method: 'GET',
+        url: '/',
+        headers: { host: 'localhost' },
+        rawHeaders: ['host', 'localhost'],
+      } as IncomingMessage)
+      const signal = req.signal
+      const onAbort = vi.fn()
+      signal.addEventListener('abort', onAbort)
+      const native = req.clone() // creates the native Request, built with the internal signal
+
+      req[abortRequest]('Client connection prematurely closed.')
+
+      expect(signal.aborted).toBe(true)
+      expect(signal.reason).toBe('Client connection prematurely closed.')
+      expect(onAbort).toHaveBeenCalledTimes(1)
+      expect(req.signal).toBe(signal)
+      expect(native.signal.aborted).toBe(true)
     })
 
     it('should apply abort state lazily when signal is accessed after json() body read', async () => {
