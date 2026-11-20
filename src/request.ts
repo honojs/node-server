@@ -264,6 +264,7 @@ const urlKey = Symbol('urlKey')
 const methodKey = Symbol('methodKey')
 const headersKey = Symbol('headersKey')
 export const abortControllerKey = Symbol('abortControllerKey')
+const signalControllerKey = Symbol('signalControllerKey')
 export const getAbortController = Symbol('getAbortController')
 export const abortRequest = Symbol('abortRequest')
 const bodyBufferKey = Symbol('bodyBuffer')
@@ -578,9 +579,12 @@ const requestPrototype: Record<string | symbol, any> = {
     if (this[abortReasonKey] === undefined) {
       this[abortReasonKey] = reason
     }
-    const abortController = this[abortControllerKey] as AbortController | undefined
-    if (abortController && !abortController.signal.aborted) {
-      abortController.abort(reason)
+    // `abortControllerKey` belongs to the native Request, `signalControllerKey` to `request.signal`
+    for (const key of [abortControllerKey, signalControllerKey]) {
+      const abortController = this[key] as AbortController | undefined
+      if (abortController && !abortController.signal.aborted) {
+        abortController.abort(reason)
+      }
     }
   },
 
@@ -663,9 +667,21 @@ const requestPrototype: Record<string | symbol, any> = {
   },
 }
 
+// `request.signal` is NOT the signal given to the native Request (`abortControllerKey`).
+// undici keeps the signal passed to `new Request(url, { signal })` alive, strongly, in a
+// FinalizationRegistry until the native Request's own AbortController is collected. A listener on
+// that signal which reaches the request (routers, body parsers and streaming encoders add them and
+// often never remove them) would make the native Request reachable from the registry, so it would
+// never be collected and the request, its IncomingMessage and its body would leak. Exposing a
+// separate signal keeps the registry's one free of user listeners, and `request.signal` still does
+// not create the native Request.
 Object.defineProperty(requestPrototype, 'signal', {
   get() {
-    return this[getAbortController]().signal
+    const abortController = (this[signalControllerKey] ||= new AbortController()) as AbortController
+    if (this[abortReasonKey] !== undefined && !abortController.signal.aborted) {
+      abortController.abort(this[abortReasonKey])
+    }
+    return abortController.signal
   },
 })
 ;[
