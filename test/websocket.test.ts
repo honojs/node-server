@@ -391,6 +391,57 @@ describe('WebSocket', () => {
     }
   })
 
+  describe('upgrade requests for other protocols', () => {
+    const requestUpgrade = (address: AddressInfo) =>
+      new Promise<{ statusLine: string; closed: boolean }>((resolve, reject) => {
+        const socket = connect(address.port, '127.0.0.1', () => {
+          socket.write(
+            'GET / HTTP/1.1\r\n' +
+              `Host: 127.0.0.1:${address.port}\r\n` +
+              'Connection: Upgrade, HTTP2-Settings\r\n' +
+              'Upgrade: h2c\r\n' +
+              'HTTP2-Settings: AAMAAABkAAQCAAAAAAIAAAAA\r\n' +
+              '\r\n'
+          )
+        })
+        let response = ''
+        socket.on('data', (chunk) => {
+          response += chunk.toString('utf-8')
+        })
+        socket.once('error', reject)
+        socket.once('close', () => resolve({ statusLine: response.split('\r\n')[0], closed: true }))
+        socket.setTimeout(1_000, () => {
+          socket.destroy()
+          reject(new Error('the server kept the socket open'))
+        })
+      })
+
+    it('should reject the request and close the socket', async () => {
+      const app = new Hono()
+      const { server, address } = await startServer(app)
+      try {
+        const result = await requestUpgrade(address)
+        expect(result).toEqual({ statusLine: 'HTTP/1.1 400 Bad Request', closed: true })
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
+    it('should leave the request to another upgrade listener', async () => {
+      const app = new Hono()
+      const { server, address } = await startServer(app)
+      server.on('upgrade', (_request, socket) => {
+        socket.end('HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\n\r\n')
+      })
+      try {
+        const result = await requestUpgrade(address)
+        expect(result).toEqual({ statusLine: 'HTTP/1.1 426 Upgrade Required', closed: true })
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+  })
+
   it('should not block other upgrade listeners', async () => {
     const app = new Hono()
     const { server, address } = await startServer(app)

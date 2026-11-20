@@ -217,6 +217,9 @@ export const setupWebSocket = (options: {
 
   server.on('upgrade', async (request, socket: Duplex, head) => {
     if (request.headers.upgrade?.toLowerCase() !== 'websocket') {
+      if (server.listenerCount('upgrade') === 1) {
+        rejectUpgradeRequest(socket, 400)
+      }
       return
     }
 
