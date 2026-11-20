@@ -216,6 +216,12 @@ export const setupWebSocket = (options: {
   }
 
   server.on('upgrade', async (request, socket: Duplex, head) => {
+    // Nothing listens on the socket once Node hands it to this listener. Without an error
+    // listener a connection reset is emitted as an unhandled 'error' event and crashes the
+    // process, so attach it before anything is written to or awaited on the socket.
+    const ignoreSocketError = () => {}
+    socket.on('error', ignoreSocketError)
+
     if (request.headers.upgrade?.toLowerCase() !== 'websocket') {
       if (server.listenerCount('upgrade') === 1) {
         rejectUpgradeRequest(socket, 400)
@@ -223,12 +229,8 @@ export const setupWebSocket = (options: {
       return
     }
 
-    // Nothing listens on the socket while the application handles the request. Without
-    // these listeners a connection reset in that window is emitted as an unhandled
-    // 'error' event and crashes the process, and a closed socket leaves its waiter behind.
-    const ignoreSocketError = () => {}
+    // A closed socket leaves its waiter behind while the application handles the request.
     const reclaimWaiterOnClose = () => rejectWaiter(request)
-    socket.on('error', ignoreSocketError)
     socket.once('close', reclaimWaiterOnClose)
 
     const env: UpgradeBindings = {

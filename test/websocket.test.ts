@@ -427,6 +427,30 @@ describe('WebSocket', () => {
       }
     })
 
+    it('should survive a connection reset right after the request', async () => {
+      const app = new Hono()
+      const { server, address } = await startServer(app)
+      const onError = vi.fn()
+      process.once('uncaughtException', onError)
+      try {
+        for (const delay of [0, 1, 50]) {
+          const socket = connect(address.port, '127.0.0.1')
+          socket.on('error', () => {})
+          await new Promise<void>((resolve) => socket.once('connect', resolve))
+          socket.write(
+            'GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n'
+          )
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          socket.resetAndDestroy()
+          await new Promise((resolve) => setTimeout(resolve, 50))
+        }
+        expect(onError).not.toHaveBeenCalled()
+      } finally {
+        process.removeListener('uncaughtException', onError)
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    })
+
     it('should leave the request to another upgrade listener', async () => {
       const app = new Hono()
       const { server, address } = await startServer(app)
