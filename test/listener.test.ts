@@ -906,6 +906,15 @@ describe('Abort request - cacheable response path', () => {
     }
   )
 
+  it('should use the type of a Blob body as the default Content-Type', async () => {
+    const { response } = await runRequestAndCollectOutgoingEvents(
+      () => new Response(new Blob(['blob-body'], { type: 'image/png' }))
+    )
+
+    expect(response.headers.get('content-type')).toBe('image/png')
+    expect(await response.text()).toBe('blob-body')
+  })
+
   it('should attach a close listener and send the body for sync Blob responses', async () => {
     const { closeListenerCount, response } = await runRequestAndCollectOutgoingEvents(
       () =>

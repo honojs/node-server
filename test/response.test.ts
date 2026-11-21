@@ -281,6 +281,18 @@ describe('Response', () => {
     })
   })
 
+  describe('Blob body', () => {
+    it('Should fall back to GlobalResponse for a typed Blob so its type is the default content-type', () => {
+      const res = new Response(new Blob(['x'], { type: 'image/png' }))
+      expect(cacheKey in res).toBe(false)
+      expect(res.headers.get('content-type')).toBe('image/png')
+    })
+
+    it('Should keep the lightweight fast path for an untyped Blob', () => {
+      expect(cacheKey in new Response(new Blob(['x']))).toBe(true)
+    })
+  })
+
   describe('util.inspect', () => {
     it('should show a lightweight response summary before native Response creation', () => {
       const { inspect } = require('node:util')

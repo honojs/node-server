@@ -74,7 +74,8 @@ export class Response {
       body == null ||
       typeof body === 'string' ||
       typeof (body as ReadableStream)?.getReader !== 'undefined' ||
-      body instanceof Blob ||
+      // a typed Blob supplies its own default content-type, which only the native Response applies
+      (body instanceof Blob && !body.type) ||
       body instanceof Uint8Array
     ) {
       ;(this as any)[cacheKey] = [init?.status || 200, body ?? null, headers || init?.headers]
