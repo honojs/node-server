@@ -4,6 +4,7 @@ import type { IncomingMessage } from 'node:http'
 import { STATUS_CODES } from 'node:http'
 import type { Duplex } from 'node:stream'
 import { RequestError } from './error'
+import { newHeadersFromIncoming } from './headers'
 import type { FetchCallback, ServerType } from './types'
 import { buildUrl, validateRequestTarget } from './url'
 import type { WebSocketData, WebSocketLike, WebSocketServerLike } from './websocket-types'
@@ -164,14 +165,7 @@ const createUpgradeRequest = (request: IncomingMessage): Request => {
   } else {
     url = buildUrl(protocol, request.headers.host ?? 'localhost', incomingUrl)
   }
-  const headers = new Headers()
-  for (const key in request.headers) {
-    const value = request.headers[key]
-    if (!value) {
-      continue
-    }
-    headers.append(key, Array.isArray(value) ? value[0] : value)
-  }
+  const headers = newHeadersFromIncoming(request)
   return new Request(url, {
     headers,
   })
